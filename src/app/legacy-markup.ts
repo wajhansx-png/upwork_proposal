@@ -105,10 +105,6 @@ export const LEGACY_MARKUP = `
           <svg class="spark spark-d" viewBox="0 0 24 24" fill="#17915A"><path d="M12 1.5 14 9.5 22 12l-8 2.5L12 22.5 10 14.5 2 12l8-2.5z"/></svg>
         </div>
         <div class="emsg">Paste a job post and your proposal<br>lands here in about two seconds.</div>
-        <button class="cta" onclick="openFloating()">
-          <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 15 19 5M19 5h-5M19 5v5"/></svg>
-          Open the floating box
-        </button>
       </div>
 
       <div class="skel hide" id="outLoading">
