@@ -399,23 +399,23 @@ textarea#output{
 .empty > *{position:relative;}
 .empty .ring{
   position:relative;
-  width:160px;height:160px;border-radius:50%;margin-bottom:22px;
+  width:220px;height:220px;border-radius:50%;margin-bottom:30px;
   background:radial-gradient(circle,rgba(23,145,90,.18) 0%,rgba(23,145,90,.08) 55%,transparent 80%);
   display:grid;place-items:center;
   box-shadow:none;
 }
-.empty .ring .doc{width:78px;height:88px;filter:drop-shadow(0 3px 6px rgba(23,145,90,.15));}
+.empty .ring .doc{width:108px;height:122px;filter:drop-shadow(0 4px 8px rgba(23,145,90,.15));}
 .empty .cta{
-  margin-top:22px;height:54px;padding:0 34px;
+  margin-top:30px;height:64px;padding:0 42px;
   background:var(--btn-grad);color:#fff;border:none;border-radius:999px;
-  font-size:16px;font-weight:700;cursor:pointer;
+  font-size:19px;font-weight:700;cursor:pointer;
   box-shadow:var(--btn-shadow);
   transition:transform .14s ease,box-shadow .16s ease;
 }
 .empty .cta:hover{transform:translateY(-1px);box-shadow:var(--btn-shadow-hover);}
-.empty .cta .btn-ic{width:19px;height:19px;}
+.empty .cta .btn-ic{width:23px;height:23px;}
 .empty .sub{margin-top:14px;font-size:15px;color:var(--muted);max-width:38ch;line-height:1.55;}
-.empty .emsg{font-size:19px;font-weight:600;letter-spacing:-.2px;color:var(--ink);line-height:1.45;max-width:40ch;}
+.empty .emsg{font-size:26px;font-weight:600;letter-spacing:-.3px;color:var(--ink);line-height:1.4;max-width:40ch;}
 /* Trust cue - anxiety-reducer for first-time visitors. Sits quietly below
    the CTA so it reads as "reassurance", not "instruction". */
 .empty .trust{margin-top:22px;font-size:11.5px;color:var(--muted);opacity:.75;
@@ -1244,8 +1244,8 @@ html.dark .bias-x{background:rgba(255,255,255,.06);border-color:rgba(255,255,255
 html.dark .bias-x:hover{background:rgba(255,255,255,.12);color:var(--ink);}
 
 .empty .ring .spark{position:absolute;color:var(--green);}
-.empty .ring .spark-a{top:6px;left:2px;width:26px;height:26px;}
-.empty .ring .spark-b{top:34px;left:-10px;width:16px;height:16px;}
-.empty .ring .spark-c{top:24px;right:-4px;width:20px;height:20px;}
-.empty .ring .spark-d{bottom:14px;right:-2px;width:22px;height:22px;}
+.empty .ring .spark-a{top:8px;left:4px;width:36px;height:36px;}
+.empty .ring .spark-b{top:47px;left:-16px;width:22px;height:22px;}
+.empty .ring .spark-c{top:33px;right:-8px;width:28px;height:28px;}
+.empty .ring .spark-d{bottom:19px;right:-4px;width:30px;height:30px;}
 html.dark .empty .ring{background:radial-gradient(circle,rgba(47,217,142,.16) 0%,rgba(47,217,142,.05) 62%,transparent 100%);}
