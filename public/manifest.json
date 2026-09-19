@@ -1,0 +1,23 @@
+{
+  "name": "Proposal Studio",
+  "short_name": "Proposals",
+  "description": "Paste an Upwork job post, get a proposal that sounds like you.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#E6ECE0",
+  "theme_color": "#17915A",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    }
+  ]
+}

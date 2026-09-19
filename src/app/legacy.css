@@ -1,0 +1,1185 @@
+/* Inter everywhere - the proposal reads like the job post above it, not a "styled" letter. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root{
+  --bg:#E6ECE0;
+  --surface:#F5F8EF;
+  --input:#FAFCF4;
+  --line:#D3DDCD;
+  --ink:#1E3227;
+  --muted:#77857B;
+  --green:#17915A;
+  --green-dark:#0E6F44;
+  --green-deep:#117F4D;
+  --chip:#EEF3E7;
+  --mint:#E3F1E5;
+  --amber:#9A6A24;
+  --red:#B4402F;
+  /* Two-layer soft shadow with a green undertone - cards read as paper on
+     a desk instead of tiles on a screen. Kept small so nothing "floats". */
+  --shadow-card:0 1px 2px rgba(30,50,39,.04), 0 12px 32px rgba(30,50,39,.06);
+  --shadow-card-hover:0 4px 10px rgba(30,50,39,.07), 0 22px 48px rgba(30,50,39,.11);
+  /* Warm inner glow layer for the CTA - the button feels tactile, not flat. */
+  --btn-grad:linear-gradient(180deg,#1CA268 0%,#148552 100%);
+  --btn-grad-hover:linear-gradient(180deg,#1FAE6E 0%,#0E6F44 100%);
+  --btn-shadow:0 1px 0 rgba(0,0,0,.03), 0 8px 20px rgba(23,145,90,.28);
+  --btn-shadow-hover:0 1px 0 rgba(0,0,0,.03), 0 12px 26px rgba(23,145,90,.34);
+  /* Ambient drift blobs - light mode: lime top-left, warm peach top-right. */
+  --blobA:rgba(196,232,120,.34);
+  --blobB:rgba(232,203,158,.22);
+  --grain-opacity:.025;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;height:100%;height:100dvh;}
+html{background:var(--bg);}
+
+/* ---- ambient life: two slow-drifting blobs + film grain, frozen under prefers-reduced-motion ---- */
+html::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity:var(--grain-opacity);
+  mix-blend-mode:overlay;
+  pointer-events:none;
+  z-index:1;
+}
+body{
+  position:relative;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  font-size:15px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+  overflow:hidden;
+}
+/* #app (see page.tsx) fills one viewport as a flex column, so .grid shrinks to fit instead of scrolling */
+#app{height:100%;display:flex;flex-direction:column;overflow:hidden;}
+body::before,body::after{
+  content:'';
+  position:fixed;
+  border-radius:50%;
+  filter:blur(70px);
+  pointer-events:none;
+  z-index:0;
+  will-change:transform;
+}
+body::before{
+  width:56vmax;height:56vmax;left:-18vmax;top:-22vmax;
+  background:radial-gradient(circle, var(--blobA) 0%, transparent 72%);
+  animation:drift-a 30s ease-in-out infinite alternate;
+}
+body::after{
+  width:46vmax;height:46vmax;right:-16vmax;top:-14vmax;
+  background:radial-gradient(circle, var(--blobB) 0%, transparent 72%);
+  animation:drift-b 36s ease-in-out infinite alternate;
+}
+@keyframes drift-a{
+  from{transform:translate(0,0) scale(1);}
+  to{transform:translate(5vmax,4vmax) scale(1.1);}
+}
+@keyframes drift-b{
+  from{transform:translate(0,0) scale(1);}
+  to{transform:translate(-4vmax,5vmax) scale(1.06);}
+}
+.topbar,.page,.overlay,.toast{position:relative;z-index:2;}
+
+button,textarea,input{font-family:inherit;}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px;}
+.hide{display:none !important;}
+
+/* ---- entrance: topbar, tip banner, then each card stagger in on first paint (~500ms, once) ---- */
+@keyframes page-in{
+  from{opacity:0;transform:translateY(10px);}
+  to{opacity:1;transform:none;}
+}
+.topbar{animation:page-in .5s cubic-bezier(.2,.8,.3,1) both;}
+.bias{animation:page-in .5s cubic-bezier(.2,.8,.3,1) .08s both;}
+#workView>.card:nth-child(1){animation:page-in .5s cubic-bezier(.2,.8,.3,1) .16s both;}
+#workView>.card:nth-child(2){animation:page-in .5s cubic-bezier(.2,.8,.3,1) .24s both;}
+
+/* ---------------- top bar: 59px + 1px border ---------------- */
+.topbar{
+  background:var(--surface);
+  border-bottom:1px solid var(--line);
+  height:60px;
+  position:sticky;top:0;z-index:40;
+}
+.tb-inner{
+  height:59px;padding:0 36px;
+  display:flex;align-items:center;gap:16px;
+}
+.brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0;}
+.logo{
+  width:30px;height:30px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(140deg,#1FA666 0%,#117F4D 100%);
+  display:grid;place-items:center;
+}
+.logo svg{width:18px;height:18px;display:block;}
+.bname{font-size:17px;letter-spacing:-.01em;white-space:nowrap;}
+.bname b{font-weight:700;color:var(--ink);}
+.bname span{font-weight:600;color:var(--green-dark);}
+
+.nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;}
+.nb{
+  height:30px;padding:0 14px;
+  background:var(--chip);
+  border:1px solid var(--line);
+  border-radius:9px;
+  color:var(--ink);
+  font-size:13px;font-weight:600;
+  display:inline-flex;align-items:center;gap:7px;
+  cursor:pointer;white-space:nowrap;
+  transition:background .14s,border-color .14s,color .14s,transform .14s,box-shadow .14s;
+}
+.nb:hover{background:#E7EEDE;border-color:#C2CFBA;}
+/* Small lift on hover - the whole navbar stops reading as flat, static
+   chrome and feels like it responds to you, same language as the cards. */
+@media (hover:hover) and (pointer:fine){
+  .nb:hover{transform:translateY(-1px);box-shadow:0 4px 10px rgba(30,50,39,.10);}
+  .nb:active{transform:translateY(0);box-shadow:none;}
+}
+.nb.ic{width:33px;padding:0;justify-content:center;}
+.nb.ic svg{width:15px;height:15px;display:block;}
+/* a distinct glyph per nav button breaks up what would read as one grey text blur */
+.nb .nbi{width:14px;height:14px;flex-shrink:0;display:block;opacity:.85;}
+
+/* autopilot switch button */
+.nb.auto{background:var(--surface);border-color:var(--line);color:var(--ink);}
+.nb.auto .sw{
+  width:30px;height:16px;border-radius:999px;flex-shrink:0;
+  background:#C8D2C2;position:relative;transition:background .16s;
+}
+.nb.auto .sw i{
+  position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;
+  background:#fff;transition:left .16s;
+}
+.nb.auto.on{background:var(--mint);border-color:var(--green);color:var(--green-dark);}
+.nb.auto.on .sw{background:var(--green);}
+.nb.auto.on .sw i{left:16px;}
+
+/* active tab (Your work / Recent) - previously toggled a class with no
+   styling at all, so there was zero indication of which view you were in. */
+.nb.on{background:var(--mint);border-color:var(--green);color:var(--green-dark);}
+.nb.on .nbi{opacity:1;}
+.nb.on:hover{background:var(--mint);border-color:var(--green);}
+
+/* ---------------- page ---------------- */
+.page{padding:12px 36px 14px;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;}
+
+/* bias banner - pulsing dot + a story-style progress bar synced to the JS rotation interval */
+.bias{
+  position:relative;
+  overflow:hidden;
+  width:100%;
+  border-radius:14px;
+  background:linear-gradient(90deg,rgba(218,235,221,.7) 0%,rgba(237,246,215,.7) 60%,rgba(229,242,199,.55) 100%);
+  display:flex;align-items:center;gap:12px;flex-shrink:0;
+  padding:13px 18px 15px;margin-bottom:14px;
+}
+.bias-dot{
+  flex-shrink:0;width:7px;height:7px;border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 0 0 rgba(23,145,90,.4);
+  animation:bias-pulse 2.6s ease-in-out infinite;
+}
+@keyframes bias-pulse{
+  0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(23,145,90,.4);}
+  50%{opacity:.7;box-shadow:0 0 0 5px rgba(23,145,90,0);}
+}
+.bias-chip{
+  flex-shrink:0;
+  background:#fff;border:1px solid rgba(211,221,205,.7);
+  color:var(--green-dark);
+  font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  padding:4px 11px;border-radius:999px;
+  display:inline-flex;align-items:center;line-height:1;
+}
+/* nowrap/ellipsis guarantees exactly one line - a two-line tip stops the "glance and go" read */
+.bias-text{
+  flex:1;min-width:0;
+  font-size:16px;font-weight:600;color:var(--ink);line-height:1.4;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+/* Cross-fade between rotating tips - .swapping (toggled from JS mid-swap) hides the old text */
+.bias-chip,.bias-text{transition:opacity .3s ease;}
+.bias.swapping .bias-chip,.bias.swapping .bias-text{opacity:0;}
+/* progress fill - JS resets to width:0, forces a reflow, then transitions to 100% over 14s */
+.bias-bar{
+  position:absolute;left:0;bottom:0;height:2.5px;width:0%;
+  background:linear-gradient(90deg,var(--green) 0%,var(--green-dark) 100%);
+  border-radius:0 2px 2px 0;
+}
+.bias-bar.filling{transition:width 14s linear;}
+
+/* ---------------- cards ---------------- */
+.grid{
+  display:grid;grid-template-columns:2fr 3fr;gap:15px;
+  flex:1;min-height:0;
+}
+/* Paper-on-desk feel: warmer surface, soft 2-layer shadow, gentle radius. */
+.card{
+  background:var(--surface);
+  border-radius:16px;
+  box-shadow:var(--shadow-card);
+  padding:18px;
+  display:flex;flex-direction:column;min-height:0;
+  transition:box-shadow .22s ease,transform .22s ease;
+}
+/* Fine-pointer-only hover lift - the surface responds to a cursor the way
+   a physical card would. Skipped on touch so nothing sticks on tap. */
+@media (hover:hover) and (pointer:fine){
+  .card:hover{box-shadow:var(--shadow-card-hover);transform:translateY(-2px);}
+}
+.chead{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  margin-bottom:13px;line-height:20px;
+}
+.chead h2{margin:0;font-size:15.5px;font-weight:700;color:var(--ink);letter-spacing:-.01em;line-height:20px;}
+.chead-actions{display:flex;align-items:center;gap:10px;}
+/* mobile-only: closes #jobCard's full-screen sheet (see the max-width:1000px block below).
+   #jobCardClose (id, not .jobcard-x) so this "off" state always beats .x's own
+   display:grid regardless of which rule the cascade sees last. */
+.jobcard-x{width:24px;height:24px;font-size:11px;}
+#jobCardClose{display:none;}
+/* mobile-only: the "first line + tap to view job post" bar shown once #jobCard is closed */
+.jobctx{
+  display:none;align-items:center;gap:10px;cursor:pointer;
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:11px 14px;margin-bottom:10px;
+}
+.jobctx-ic{width:16px;height:16px;flex-shrink:0;color:var(--green-dark);}
+.jobctx span{font-size:13px;color:var(--ink);font-weight:600;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.link{
+  background:none;border:none;padding:0;
+  color:var(--green-dark);font-size:14px;font-weight:600;cursor:pointer;
+}
+.link:hover{text-decoration:underline;}
+/* explicit "back" beats relying on someone to notice the navbar tab while scrolled into a list */
+.back{
+  display:inline-flex;align-items:center;gap:6px;
+  background:none;border:none;padding:0;margin-bottom:14px;
+  color:var(--green-dark);font-size:13.5px;font-weight:700;cursor:pointer;
+}
+.back svg{width:14px;height:14px;flex-shrink:0;}
+.back:hover{text-decoration:underline;}
+/* Word count reads as a real chip - integrated with the card, not floating. */
+.wc{font-size:12.5px;color:var(--muted);
+  background:var(--chip);border:1px solid rgba(211,221,205,.6);
+  padding:3px 10px;border-radius:999px;font-weight:600;letter-spacing:.01em;
+  display:inline-flex;align-items:center;gap:4px;line-height:1;}
+.wc.warn{color:var(--amber);background:#FBF1E0;border-color:#F0D5A8;}
+/* Sweet-spot chip (110-150 words = highest reply rate). Positive feedback
+   lands harder than avoiding warnings - brains chase the checkmark. */
+.wc.ok{color:var(--green-dark);background:var(--mint);border-color:#BEE0C5;font-weight:700;}
+
+textarea.box{
+  flex:1;min-height:0;width:100%;
+  background:var(--input);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:15px 16px;
+  font-size:15px;line-height:22.5px;color:var(--ink);
+  resize:none;outline:none;
+  transition:border-color .14s,box-shadow .14s;
+}
+textarea.box::placeholder{color:#9AA79D;}
+textarea.box:focus{border-color:var(--green);box-shadow:0 0 0 4px rgba(23,145,90,.12);}
+
+/* Same plain sans-serif as the job post box above it - the proposal
+   should read like a normal message, not a styled "letter". */
+textarea#output{
+  font-family:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  font-size:15px;line-height:22.5px;color:#1B2E22;
+  padding:18px 20px;
+}
+
+.worth{margin-top:14px;font-size:13.5px;line-height:18px;color:var(--green);
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--mint);padding:5px 12px;border-radius:999px;align-self:flex-start;}
+.worth b{font-weight:700;color:var(--green-dark);}
+
+/* Gradient CTA with a warm shadow and a 1px hover-lift. Tactile, obvious,
+   and hover-affordant without being loud. */
+.btn{
+  height:42px;width:100%;
+  background:var(--btn-grad);color:#fff;
+  border:none;border-radius:12px;
+  font-size:14.5px;font-weight:700;letter-spacing:.005em;
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  cursor:pointer;
+  box-shadow:var(--btn-shadow);
+  transition:transform .14s ease,box-shadow .16s ease,background .16s ease,opacity .14s;
+}
+.btn:hover:not(:disabled){background:var(--btn-grad-hover);box-shadow:var(--btn-shadow-hover);transform:translateY(-1px);}
+.btn:active:not(:disabled){transform:translateY(0);box-shadow:var(--btn-shadow);}
+.btn:disabled{opacity:.7;cursor:default;box-shadow:none;}
+.card > .btn{margin-top:10px;}
+
+/* .genrow pairs "Write my proposal" with a secondary "Add proposal" (float-on-top)
+   button. On desktop only the primary button shows, full width, as before. */
+.genrow{margin-top:10px;}
+.genrow .btn{margin-top:0;}
+#floatBtnJob{display:none;}
+.btn-ghost{background:var(--mint);color:var(--green-dark);box-shadow:none;}
+.btn-ghost:hover:not(:disabled){background:var(--mint);box-shadow:none;opacity:.85;}
+.btn-ic{width:15px;height:15px;flex-shrink:0;}
+
+/* the hint line doubles as the status line, so nothing shifts when a message appears */
+.hintwrap{position:relative;margin-top:10px;height:16px;}
+.hint,.status{
+  position:absolute;inset:0;text-align:center;
+  font-size:13px;line-height:16px;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.status{color:var(--muted);}
+.status.err{color:var(--red);}
+.status.ok{color:var(--green-dark);}
+.status:not(:empty) + .hint{visibility:hidden;}
+
+/* fix row = a checklist of pills; an all-clear affirmation replaces it when everything passes */
+.fix{margin-top:14px;font-size:13px;line-height:1.4;color:var(--ink);
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;}
+.fix .item{display:inline-flex;align-items:center;gap:6px;color:var(--ink);
+  background:#FBF4E6;border:1px solid #EBDDBF;
+  padding:5px 10px 5px 8px;border-radius:999px;font-weight:500;}
+/* Glyphs beat prose for a scannable checklist: brain reads a ✓ or × in ~150ms
+   vs. 400ms for words. Amber × pulls the eye without alarming. */
+.fix .g{width:15px;height:15px;border-radius:50%;display:inline-grid;place-items:center;
+  font-size:9.5px;font-weight:800;flex-shrink:0;line-height:1;}
+.fix .g.no{background:#F1D9AF;color:var(--amber);}
+.fix .g.yes{background:var(--mint);color:var(--green-dark);}
+.fix .allclear{color:var(--green-dark);font-weight:700;font-size:13px;
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--mint);border:1px solid #BEE0C5;
+  padding:5px 12px;border-radius:999px;}
+.fix .add{
+  background:none;border:none;padding:0;margin-left:auto;
+  color:var(--green-dark);font-size:13px;font-weight:700;cursor:pointer;
+}
+.fix .add:hover{text-decoration:underline;}
+
+.actions{display:flex;align-items:center;gap:16px;margin-top:8px;}
+.actions .btn{flex:1;}
+.actions .link{flex-shrink:0;}
+
+/* output states — the empty card is real estate. Larger icon, more air,
+   the trust line integrated as part of the visual family. */
+.empty{
+  flex:1;min-height:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  color:var(--muted);font-size:14.5px;line-height:1.6;
+  background:radial-gradient(120% 90% at 50% 0%, #FBFDF7 0%, var(--input) 60%);
+  border:1px solid var(--line);border-radius:14px;
+  padding:32px 24px;
+}
+.empty .ring{
+  width:56px;height:56px;border-radius:50%;margin-bottom:16px;
+  background:var(--mint);display:grid;place-items:center;
+  box-shadow:0 0 0 8px rgba(227,241,229,.55);
+}
+.empty .ring svg{width:24px;height:24px;}
+.empty .cta{
+  margin-top:20px;height:40px;padding:0 22px;
+  background:var(--btn-grad);color:#fff;border:none;border-radius:12px;
+  font-size:14.5px;font-weight:700;cursor:pointer;
+  box-shadow:var(--btn-shadow);
+  transition:transform .14s ease,box-shadow .16s ease;
+}
+.empty .cta:hover{transform:translateY(-1px);box-shadow:var(--btn-shadow-hover);}
+.empty .sub{margin-top:10px;font-size:13px;color:var(--muted);max-width:34ch;}
+/* Trust cue - anxiety-reducer for first-time visitors. Sits quietly below
+   the CTA so it reads as "reassurance", not "instruction". */
+.empty .trust{margin-top:22px;font-size:11.5px;color:var(--muted);opacity:.75;
+  letter-spacing:.03em;text-transform:none;}
+
+/* Peak-end rule: the moment the draft appears is the emotional peak.
+   320ms fade-and-rise makes it feel earned instead of dumped in. */
+#outReady{animation:draft-in .32s cubic-bezier(.2,.8,.3,1) both;}
+@keyframes draft-in{
+  from{opacity:0;transform:translateY(6px);}
+  to{opacity:1;transform:none;}
+}
+
+/* WCAG 2.3.3 - honor prefers-reduced-motion: keep the opacity fade, drop every transform */
+@media (prefers-reduced-motion: reduce){
+  #outReady{animation:none;}
+  .btn,.empty .cta{transition:none;}
+  .btn:hover:not(:disabled),.empty .cta:hover{transform:none;}
+  .btn:active:not(:disabled){transform:none;}
+  .skl{animation:none;background:var(--chip);}
+  .spinner{animation:none;border-top-color:rgba(255,255,255,.85);}
+  .nb.auto .sw,.nb.auto .sw i{transition:none;}
+  .card,.card:hover{transition:none;transform:none;}
+  .loadhint{transition:none;}
+  .toast{transition:opacity .01s;transform:translateX(-50%);}
+  .toast.show{transform:translateX(-50%);}
+  .bias-chip,.bias-text{transition:none;}
+  .bias.swapping .bias-chip,.bias.swapping .bias-text{opacity:1;}
+  /* freeze the drifting blobs, entrance stagger, and pulsing dots */
+  html::before{display:none;}
+  body::before,body::after{animation:none;}
+  .topbar,.bias,#workView>.card{animation:none;opacity:1;transform:none;}
+  .bias-dot{animation:none;}
+  .bias-bar.filling{transition:none;}
+}
+
+.skel{
+  flex:1;min-height:0;
+  background:var(--input);border:1px solid var(--line);border-radius:8px;
+  padding:14px;
+  display:flex;flex-direction:column;
+}
+.skl{
+  height:13px;border-radius:6px;margin-bottom:9px;
+  background:linear-gradient(90deg,#E8EEE2 25%,#F2F6EC 50%,#E8EEE2 75%);
+  background-size:200% 100%;animation:sheen 1.2s infinite;
+}
+/* Labor-illusion line: rotating short sentences during the ~1-2s wait cut
+   perceived latency roughly 40% vs. a silent skeleton. Sits below the skel bars. */
+.loadhint{margin-top:auto;padding-top:12px;font-size:13px;line-height:18px;color:var(--muted);
+  font-style:italic;min-height:18px;transition:opacity .2s;}
+@keyframes sheen{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.spinner{
+  width:15px;height:15px;border-radius:50%;
+  border:2px solid rgba(255,255,255,.45);border-top-color:#fff;
+  animation:spin .7s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+#outReady{flex:1;min-height:0;display:flex;flex-direction:column;}
+
+/* recent view - same "fill what's left" sizing as .grid above */
+#recentView{flex:1;min-height:0;display:flex;flex-direction:column;}
+#recentView .card{flex:1;min-height:0;}
+.stats{
+  display:flex;gap:16px;flex-wrap:wrap;
+  font-size:13.5px;color:var(--muted);font-weight:600;
+  padding-bottom:13px;margin-bottom:13px;border-bottom:1px solid var(--line);
+}
+.rlist{display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:0;}
+.ritem{
+  background:var(--input);border:1px solid var(--line);border-radius:8px;
+  padding:12px 14px;cursor:pointer;transition:border-color .14s;
+}
+.ritem:hover{border-color:var(--green);}
+.ritem .rj{font-size:14px;font-weight:700;color:var(--ink);margin-bottom:3px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.ritem .rp{font-size:13px;color:var(--muted);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rempty{text-align:center;padding:44px 16px;color:var(--muted);font-size:14px;}
+
+/* portfolio modal */
+.overlay{
+  position:fixed;inset:0;z-index:60;background:rgba(30,50,39,.42);
+  display:grid;place-items:center;padding:22px;
+}
+.modal{
+  background:var(--surface);border-radius:12px;width:min(720px,100%);
+  max-height:min(86vh,760px);display:flex;flex-direction:column;
+  box-shadow:0 20px 50px rgba(30,50,39,.28);
+}
+.mhead{padding:18px 20px 14px;border-bottom:1px solid var(--line);display:flex;gap:14px;align-items:flex-start;}
+.mhead h3{margin:0 0 3px;font-size:17px;font-weight:700;}
+.mhead p{margin:0;font-size:13.5px;color:var(--muted);}
+.x{
+  margin-left:auto;width:30px;height:30px;border-radius:9px;flex-shrink:0;
+  border:1px solid var(--line);background:var(--chip);color:var(--muted);
+  cursor:pointer;display:grid;place-items:center;font-size:14px;
+}
+.x:hover{color:var(--ink);}
+.mbody{padding:16px 20px 20px;overflow-y:auto;}
+.mfoot{padding:13px 20px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px;}
+.mfoot .count{font-size:13px;color:var(--muted);margin-right:auto;}
+.mfoot .btn{width:auto;padding:0 26px;}
+.frow{display:flex;gap:10px;}
+@media (max-width:560px){.frow{flex-direction:column;}}
+.inp{
+  width:100%;background:var(--input);border:1px solid var(--line);border-radius:8px;
+  padding:10px 12px;font-size:14px;color:var(--ink);outline:none;
+}
+.inp:focus{border-color:var(--green);}
+.lbl{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:5px;}
+.addbtn{
+  background:var(--green);color:#fff;border:none;border-radius:8px;
+  padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;
+}
+.drop{
+  margin-top:8px;border:1.5px dashed var(--line);border-radius:10px;
+  padding:20px;text-align:center;cursor:pointer;background:var(--input);
+}
+.drop:hover,.drop.over{border-color:var(--green);}
+.drop b{display:block;font-size:14px;margin-bottom:3px;}
+.drop span{font-size:13px;color:var(--muted);}
+.sect{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.07em;margin:20px 0 9px;}
+.sect:first-child{margin-top:0;}
+.items{display:flex;flex-direction:column;gap:8px;}
+.item{display:flex;align-items:center;gap:12px;border:1px solid var(--line);
+  border-radius:8px;padding:9px 11px;background:var(--input);}
+.item .av{width:36px;height:36px;border-radius:8px;flex-shrink:0;object-fit:cover;
+  background:var(--chip);display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--muted);}
+.item .meta{min-width:0;flex:1;}
+.item .t{font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.item .s{font-size:12.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.del{border:none;background:none;color:var(--muted);cursor:pointer;padding:6px;border-radius:6px;}
+.del:hover{color:var(--red);}
+.eitems{text-align:center;padding:24px;color:var(--muted);font-size:13.5px;
+  border:1px dashed var(--line);border-radius:10px;}
+
+.toast{
+  position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(12px);
+  background:var(--ink);color:#fff;padding:10px 18px;border-radius:999px;
+  font-size:13.5px;font-weight:500;opacity:0;pointer-events:none;
+  transition:opacity .2s,transform .2s;z-index:80;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+.filewarn{
+  background:#FFF3E0;border-bottom:1px solid #F0D5A8;padding:14px 24px;
+  text-align:center;color:#7A4F10;font-size:13.5px;
+}
+.filewarn b{display:block;font-size:15px;margin-bottom:2px;}
+.filewarn a{display:inline-block;margin-top:8px;background:var(--green);color:#fff;
+  padding:8px 18px;border-radius:10px;text-decoration:none;font-weight:700;font-size:13px;}
+
+/* ---- dark: neutral tokens are cool near-black (no green tint) so #2FD98E is the only green ---- */
+html.dark body{
+  /* Cool neutral near-black — no green. Faint blue undertone reads "premium". */
+  --bg:#0C0D10;
+  --surface:#16181C;
+  --input:#111316;
+  /* White hairline borders — neutral, not green. */
+  --line:rgba(255,255,255,.08);
+  --ink:#F0F0F4;
+  --muted:#7A7A88;
+  /* Mint stays green — it's the only green, so it pops immediately. */
+  --green:#2FD98E;
+  --green-dark:#6EEDB8;
+  --chip:#1C1E23;
+  --mint:#0A2219;
+  --amber:#F0B84A;
+  --red:#F28080;
+  --grain-opacity:.04;
+  /* Blobs: one green whisper, one faint indigo — dual-tone atmosphere. */
+  --blobA:rgba(47,217,142,.07);
+  --blobB:rgba(100,120,255,.05);
+  /* Ring-border card: a 1px white ring catches light like a physical surface.
+     Deep shadow creates real separation from the bg. */
+  --shadow-card:0 0 0 1px rgba(255,255,255,.07), 0 4px 12px rgba(0,0,0,.4), 0 20px 48px rgba(0,0,0,.55);
+  --shadow-card-hover:0 0 0 1px rgba(255,255,255,.11), 0 6px 20px rgba(0,0,0,.45), 0 28px 64px rgba(0,0,0,.62);
+  --btn-grad:linear-gradient(180deg,#2FD98E 0%,#1DB878 100%);
+  --btn-grad-hover:linear-gradient(180deg,#3AE89B 0%,#20C785 100%);
+  --btn-shadow:0 1px 0 rgba(255,255,255,.14) inset, 0 8px 24px rgba(47,217,142,.3);
+  --btn-shadow-hover:0 1px 0 rgba(255,255,255,.18) inset, 0 12px 32px rgba(47,217,142,.4);
+}
+/* Glass topbar — neutral, translucent, blurs the blobs behind it. */
+html.dark .topbar{
+  background:rgba(12,13,16,.82);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom-color:rgba(255,255,255,.07);
+}
+html.dark .bname b{color:var(--ink);}
+html.dark .bname span{color:var(--green-dark);}
+html.dark .nb{background:var(--chip);border-color:rgba(255,255,255,.09);}
+html.dark .nb:hover{background:#232529;border-color:rgba(255,255,255,.14);}
+html.dark .nb.auto.on{color:var(--green-dark);}
+html.dark .nb.on{background:rgba(47,217,142,.12);border-color:rgba(47,217,142,.35);color:var(--green-dark);}
+html.dark .nb.on:hover{background:rgba(47,217,142,.16);border-color:rgba(47,217,142,.4);}
+html.dark .skl{background:linear-gradient(90deg,#1C1E23 25%,#26282E 50%,#1C1E23 75%);background-size:200% 100%;}
+/* Tip banner: subtle dark glass with a single-pixel green-tinted border.
+   Low opacity so the accent green in the dot/chip reads as the signal. */
+html.dark .bias{
+  background:rgba(22,24,28,.7);
+  border:1px solid rgba(47,217,142,.18);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04), 0 2px 12px rgba(0,0,0,.3);
+}
+html.dark .bias-chip{background:rgba(47,217,142,.12);border-color:rgba(47,217,142,.25);color:#5EFBB8;}
+/* Brighter than the default --muted grey - this line is the whole point of
+   the banner and was getting lost against the dark surface. */
+html.dark .bias-text{color:#E4E4EC;}
+html.dark textarea#output{color:#ECECE8;}
+html.dark textarea.box{background:var(--input);border-color:rgba(255,255,255,.09);color:var(--ink);}
+html.dark textarea.box::placeholder{color:#4A4A58;}
+html.dark textarea.box:focus{border-color:rgba(47,217,142,.5);box-shadow:0 0 0 4px rgba(47,217,142,.12);}
+html.dark .fix .item{background:#201D14;border-color:rgba(242,184,74,.2);color:#E8C97A;}
+html.dark .fix .g.no{background:rgba(242,184,74,.15);color:var(--amber);}
+html.dark .fix .allclear{background:rgba(47,217,142,.1);border-color:rgba(47,217,142,.25);color:var(--green-dark);}
+html.dark .wc{background:var(--chip);border-color:rgba(255,255,255,.09);}
+html.dark .wc.ok{background:rgba(47,217,142,.1);border-color:rgba(47,217,142,.25);color:var(--green-dark);}
+html.dark .wc.warn{background:rgba(242,184,74,.1);border-color:rgba(242,184,74,.2);color:var(--amber);}
+/* Empty state: faint green glow at top-center = light from behind (depth cue),
+   dark neutral fill below it — not the old "green smear on green bg". */
+html.dark .empty{
+  background:radial-gradient(110% 80% at 50% 0%, rgba(47,217,142,.08) 0%, var(--input) 65%);
+  border-color:rgba(255,255,255,.07);
+}
+html.dark .empty .ring{background:rgba(47,217,142,.14);box-shadow:0 0 0 8px rgba(47,217,142,.06);}
+html.dark .empty .ring svg stroke{color:var(--green);}
+html.dark .worth{background:rgba(47,217,142,.1);border:1px solid rgba(47,217,142,.2);color:var(--green-dark);}
+html.dark .worth b{color:#8EF8CB;}
+html.dark .overlay{background:rgba(0,0,0,.72);}
+html.dark .modal{background:var(--surface);border:1px solid rgba(255,255,255,.08);box-shadow:0 32px 80px rgba(0,0,0,.7);}
+html.dark .x{background:var(--chip);border-color:rgba(255,255,255,.09);}
+html.dark .inp{background:var(--input);border-color:rgba(255,255,255,.09);color:var(--ink);}
+html.dark .drop{background:var(--input);border-color:rgba(255,255,255,.1);}
+html.dark .item{background:var(--input);border-color:rgba(255,255,255,.08);}
+html.dark .toast{background:#1E2026;color:var(--ink);border:1px solid rgba(255,255,255,.1);box-shadow:0 8px 32px rgba(0,0,0,.6);}
+html.dark .ritem{background:var(--input);border-color:rgba(255,255,255,.07);}
+html.dark .ritem:hover{border-color:rgba(47,217,142,.4);background:#131518;}
+html.dark .link{color:var(--green-dark);}
+html.dark .addbtn{background:var(--green);}
+html.dark .empty .cta{box-shadow:var(--btn-shadow);}
+
+/* ---- light: white cards on the sage bg. Scoped to html:not(.dark) or it'd override dark's own ---- */
+html:not(.dark) .card{background:#FFFFFF;}
+html:not(.dark) .skel{background:#F8F9F6;border-color:var(--line);}
+html:not(.dark) textarea.box{background:#FAFBF8;}
+html:not(.dark) textarea#output{background:#FAFBF8;}
+html:not(.dark) .empty{background:radial-gradient(110% 80% at 50% 0%, #F4FCF6 0%, #F8F9F6 60%);}
+
+/* ---------------- responsive ---------------- */
+@media (max-width:1000px){
+  /* brand + nav as their own centered rows, not a right-aligned wrap */
+  .tb-inner{
+    flex-direction:column;
+    align-items:center;
+    padding:14px 18px;
+    height:auto;min-height:0;
+    gap:10px;
+  }
+  /* z-index:auto too - a flex item with a real z-index forms a stacking
+     context even at position:static, which was letting the navbar's z:40
+     beat #jobCard's full-screen sheet regardless of its own z-index. */
+  .topbar{height:auto;position:static;z-index:auto;}
+  .brand{margin-right:0;}
+  .nav{justify-content:center;width:100%;}
+  .page{padding:14px 18px 20px;}
+  .bias{width:100%;min-width:0;padding:12px 14px;flex-wrap:wrap;gap:10px;}
+  /* One screen at a time on mobile: Your proposal is the only normal grid
+     item; #jobCard becomes a full-screen sheet (below) that covers it while
+     open, and collapses to the #jobctx bar above once closed. */
+  .grid{grid-template-columns:1fr;gap:10px;}
+  .card{min-height:0;padding:13px;}
+  #jobCard{position:fixed;inset:0;z-index:55;border-radius:0;}
+  #jobCard.mobclosed{display:none;}
+  #jobCardClose{display:grid;}
+  .jobctx{display:flex;}
+  #workView .card textarea.box{font-size:13.5px;padding:12px 14px;}
+  /* Add proposal (float-on-top) + Write my proposal (generate) as two bars side by side */
+  .genrow{display:flex;gap:8px;}
+  .genrow .btn{width:auto;flex:1;}
+  #floatBtnJob{display:flex;}
+}
+/* Below ~640px a halved column has no room for two side-by-side action
+   bars at readable size - stack them instead of shrinking text to illegible. */
+@media (max-width:640px){
+  .genrow{flex-direction:column;gap:6px;}
+  .genrow .btn{width:100%;font-size:13.5px;padding:0 8px;}
+}
+/* narrow phones truncated the tip to 2-3 words - let it wrap to 2 lines instead */
+@media (max-width:480px){
+  .bias{flex-wrap:wrap;row-gap:8px;padding-bottom:20px;}
+  .bias-text{
+    white-space:normal;overflow:visible;text-overflow:clip;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+    flex-basis:100%;font-size:14.5px;
+  }
+  /* extra padding-bottom above gives the wrapped second line clearance from the progress bar */
+  .bias-bar{bottom:4px;}
+  /* let genrow button labels wrap to 2 lines instead of clipping at phone width */
+  .genrow .btn{height:auto;min-height:42px;padding:8px 6px;font-size:12.5px;white-space:normal;line-height:1.2;text-align:center;}
+}
+/* pointer:coarse = real touchscreens only, so a resized desktop window keeps the compact bar */
+@media (pointer:coarse){
+  .nb{height:40px;padding:0 15px;}
+  .nb.ic{width:40px;}
+}
+/* Phone flow: one calm compose screen. A pasted job still starts generation
+automatically, but the visible button makes that action obvious and gives
+people a dependable manual fallback. The finished proposal is copied to the
+clipboard, so there is no second card or page scroll to manage. */
+@media (max-width:700px){
+  html,body,#app{height:100dvh;overflow:hidden;}
+  .topbar,.bias,.jobctx,#workView > .card:not(#jobCard),#recentView{display:none !important;}
+  .page{height:100%;padding:0;display:block;overflow:hidden;}
+  .grid,#workView{display:block;height:100%;}
+  #jobCard,#jobCard.mobclosed{
+    position:static;inset:auto;z-index:auto;display:flex;
+    height:100dvh;min-height:100dvh;border-radius:0;padding:16px;
+    box-shadow:none;
+  }
+  #jobCard .chead,#jobCardClose,#floatBtnJob,.worth{display:none !important;}
+  #jobPost{font-size:16px;line-height:1.5;}
+  .genrow{display:block;margin-top:12px;}
+  .genrow #genBtn{height:52px;font-size:15px;}
+  .hintwrap{height:18px;margin-top:8px;}
+}
+
+/* Validated proposals stay short enough to fit the desktop output card. */
+@media (min-width:1001px){
+  #outReady{overflow:hidden;}
+  textarea#output{overflow:hidden;font-size:14px;line-height:21px;}
+}
+/* Compact navigation for phone-sized screens. */
+@media (max-width:700px){
+  .bias,.jobctx,#workView > .card:not(#jobCard),#recentView{display:none !important;}
+  .topbar{display:block;height:52px;position:static;border-bottom:1px solid var(--line);}
+  .tb-inner{height:52px;min-height:52px;padding:7px 8px;display:block;}
+  .brand{display:none;}
+  .nav{display:grid;width:100%;grid-template-columns:1.35fr 1.1fr 1fr .9fr 38px;gap:5px;align-items:stretch;}
+  .nb,.nb.ic{width:auto;height:36px;padding:0 5px;justify-content:center;font-size:10px;gap:4px;border-radius:8px;}
+  .nb.ic{padding:0;}.nb .nbi{width:12px;height:12px;}.nb.auto .sw{width:24px;height:14px;}.nb.auto .sw i{width:10px;height:10px;}.nb.auto.on .sw i{left:12px;}
+  .page{height:calc(100dvh - 52px);padding:0;display:block;overflow:hidden;}
+  #jobCard,#jobCard.mobclosed{height:100%;min-height:100%;padding:14px 16px;}
+  #jobPost{font-size:15px;line-height:1.45;}.genrow{margin-top:10px;}.genrow #genBtn{height:48px;font-size:14px;}.hintwrap{height:16px;margin-top:7px;}
+}
+
+
+/* Mobile and tablet: show the path and keep the main action easy to reach. */
+@media (max-width:700px){
+  html,body,#app{height:100dvh;overflow:hidden;}
+  .bias,.jobctx,#workView > .card:not(#jobCard),#recentView{display:none !important;}
+  .topbar{display:block;height:94px;position:static;border-bottom:1px solid var(--line);}
+  .tb-inner{height:94px;min-height:94px;padding:7px 12px 8px;display:flex;flex-direction:column;gap:6px;align-items:stretch;}
+  .brand{display:flex;align-self:flex-start;margin:0;}.logo{width:26px;height:26px;border-radius:8px;}.logo svg{width:16px;height:16px;}.bname{font-size:15px;}
+  .nav{display:flex;width:100%;gap:5px;align-items:stretch;justify-content:flex-start;overflow-x:auto;scrollbar-width:none;padding-bottom:1px;}.nav::-webkit-scrollbar{display:none;}
+  .nb,.nb.ic{width:auto;min-width:max-content;height:34px;padding:0 9px;justify-content:center;font-size:10.5px;gap:4px;border-radius:8px;flex:0 0 auto;}.nb.ic{padding:0;}.nb .nbi{width:12px;height:12px;}.nb.auto .sw{width:24px;height:14px;}.nb.auto .sw i{width:10px;height:10px;}.nb.auto.on .sw i{left:12px;}
+  .page{height:calc(100dvh - 94px);padding:0;display:block;overflow:hidden;}.grid,#workView{display:block;height:100%;}
+  #jobCard,#jobCard.mobclosed{position:static;inset:auto;z-index:auto;display:flex;height:100%;min-height:100%;border-radius:0;padding:12px 14px;box-shadow:none;}
+  #jobCard .chead,#jobCardClose,#floatBtnJob,.worth{display:none !important;}
+  #jobCard::before{content:"COPY A JOB → COME BACK HERE\A Autopilot pastes it, writes it, and copies your proposal. Tap Paste or Copy if asked.";white-space:pre-line;display:block;flex:0 0 auto;margin:0 0 10px;padding:10px 12px;border:1px solid #BEE0C5;border-radius:12px;background:linear-gradient(135deg,#EFF8F0,#E3F1E5);color:var(--green-dark);font-size:12px;font-weight:800;line-height:1.65;letter-spacing:-.01em;}
+  #jobPost{font-size:15px;line-height:1.45;}.genrow{display:block;margin-top:10px;}.genrow #genBtn{height:48px;font-size:14px;border-radius:12px;}.hintwrap{height:16px;margin-top:7px;}
+}
+@media (min-width:701px) and (max-width:1000px){
+  .topbar{height:60px;position:sticky;top:0;z-index:40;}.tb-inner{height:59px;min-height:59px;flex-direction:row;padding:0 20px;gap:12px;}.brand{margin-right:auto;}.nav{width:auto;flex-wrap:nowrap;justify-content:flex-end;gap:5px;}.nb{padding:0 9px;font-size:11px;}.page{padding:12px 16px 14px;}.grid{grid-template-columns:minmax(260px,.9fr) minmax(330px,1.1fr);gap:12px;}#jobCard{position:static;inset:auto;z-index:auto;height:auto;min-height:0;border-radius:16px;}#jobCard.mobclosed{display:flex;}#jobCardClose,.jobctx{display:none !important;}#floatBtnJob{display:none;}
+}
+
+/* Mobile Recent remains available through the visible navigation. */
+@media (max-width:700px){#recentView{display:flex !important;}#recentView.hide{display:none !important;}}
+
+
+/* Final responsive composition: the task stays above its action. */
+textarea#output{
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+  font-size:14px;
+  line-height:1.45;
+}
+#outReady{overflow:visible!important;}
+
+@media (max-width:1000px){
+  html,body,#app{height:auto!important;min-height:100dvh;overflow-y:auto!important;}
+  .page{height:auto!important;min-height:calc(100dvh - 72px);overflow-y:auto!important;}
+  #jobCard,#jobCard.mobclosed{
+    position:static!important;
+    display:block!important;
+    height:auto!important;
+    min-height:0!important;
+    padding:16px!important;
+    border-radius:18px!important;
+  }
+  #jobCard .chead{display:flex!important;}
+  #jobCardClose{display:none!important;}
+  #jobPost{
+    display:block!important;
+    flex:none!important;
+    min-height:210px!important;
+    height:clamp(210px,34vh,320px)!important;
+  }
+  .genrow{display:block!important;margin-top:12px!important;}
+  .genrow #genBtn,#genBtn{width:100%!important;height:50px!important;}
+  #floatBtnJob{display:none!important;}
+}
+
+@media (max-width:700px){
+  .topbar{height:auto!important;min-height:64px!important;padding:10px 14px!important;}
+  .brand{font-size:18px!important;}
+  .nav{display:flex!important;gap:6px!important;overflow-x:auto!important;max-width:100%;}
+  .nav button{flex:0 0 auto!important;min-height:38px!important;padding:8px 10px!important;font-size:12px!important;}
+  #jobCard{margin:12px 0!important;}
+  #jobPost{height:230px!important;min-height:230px!important;}
+}
+
+/* The floating window is a simple, centred write-and-act flow. */
+.m-wrap{justify-content:center!important;gap:12px!important;padding:16px!important;}
+.m-box{flex:none!important;height:clamp(220px,43vh,360px)!important;min-height:0!important;}
+.m-box textarea{overflow-y:auto!important;}
+
+
+/* Gentle visual polish for the small floating workspace. */
+.m-wrap{background:radial-gradient(circle at 12% 0%,#eef8e9 0,transparent 34%),linear-gradient(180deg,#f7fbf3,#e8f1e2)!important;}
+.m-box{background:#fff!important;border:1px solid #d4e0cf!important;border-radius:18px!important;box-shadow:0 10px 28px rgba(24,50,36,.09)!important;}
+.m-box:focus-within{border-color:#11995b!important;box-shadow:0 0 0 3px rgba(17,153,91,.12),0 12px 30px rgba(24,50,36,.11)!important;}
+
+/* Gentle feedback without delaying actions or moving the layout. */
+.nb,.btn,.cta,.copy,.rewrite,.link,.back{transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease;}
+#workView:not(.hide),#recentView:not(.hide),.overlay:not(.hide) .modal{animation:ps-enter .2s ease-out;}
+.ps-welcome-panel{animation:ps-enter .2s ease-out;}
+@keyframes ps-enter{from{opacity:.3;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){#workView,#recentView,.modal,.ps-welcome-panel{animation:none!important}.nb,.btn,.cta,.copy,.rewrite,.link,.back{transition:none!important}}
+
+/* Visual polish only: original content, layout, visibility and behavior retained. */
+:root {
+  --bg:#f0f4ee;
+  --surface:#fbfcf8;
+  --input:#fafcf9;
+  --line:#dce5d8;
+  --ink:#223c30;
+  --muted:#64776a;
+  --green:#138557;
+  --green-dark:#086a43;
+  --green-deep:#0d7249;
+  --chip:#f0f5eb;
+  --mint:#e9f4e9;
+  --blobA:rgba(202,224,170,.23);
+  --blobB:rgba(232,225,198,.16);
+  --grain-opacity:.012;
+  --shadow-card:0 1px 3px rgba(29,58,38,.025),0 12px 36px rgba(29,58,38,.065);
+  --shadow-card-hover:0 2px 4px rgba(29,58,38,.03),0 14px 38px rgba(29,58,38,.075);
+  --btn-grad:linear-gradient(180deg,#159762 0%,#107e51 100%);
+  --btn-grad-hover:linear-gradient(180deg,#138b59 0%,#086a43 100%);
+  --btn-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 5px 13px rgba(17,126,81,.16);
+  --btn-shadow-hover:inset 0 1px 0 rgba(255,255,255,.18),0 7px 17px rgba(17,126,81,.20);
+}
+.topbar {background:rgba(251,252,248,.96);border-bottom-color:#dce5d8;box-shadow:0 1px 0 rgba(255,255,255,.8)}
+.bname {letter-spacing:-.65px;color:#203a2d}
+.logo {box-shadow:inset 0 1px 0 rgba(255,255,255,.20),0 4px 10px rgba(17,126,81,.12);border-radius:13px}
+.nb {border-radius:12px;transition:background .18s,border-color .18s,box-shadow .18s}
+.nb:hover {box-shadow:0 2px 6px rgba(31,71,45,.055)}
+.bias {background:linear-gradient(110deg,#e4efde,#f1f4df);border:1px solid rgba(184,205,164,.28);border-radius:17px;box-shadow:inset 0 1px 0 rgba(255,255,255,.65)}
+.bias-chip {background:#ffffffeb;box-shadow:0 1px 3px rgba(38,76,45,.035);letter-spacing:.65px}
+.bias-text {color:#2f4937;line-height:1.5}
+.bias-bar {background:linear-gradient(90deg,#159762,#81b06d);height:3px}
+.card {border:1px solid rgba(214,225,208,.65);border-radius:23px;box-shadow:var(--shadow-card)}
+.chead h2 {letter-spacing:-.45px;color:#263e30}
+.box {background:#fbfcfa;border-color:#d7e2d2;border-radius:17px;box-shadow:inset 0 1px 3px rgba(28,63,37,.025);transition:border-color .18s,box-shadow .18s}
+.box:focus {border-color:#199762;outline:none;box-shadow:0 0 0 4px rgba(24,145,89,.075),inset 0 1px 2px rgba(28,63,37,.02)}
+.box::placeholder {color:#7e9182;opacity:1}
+.empty {background:linear-gradient(150deg,#f5faf4,#fbfcf8);border-color:#d7e2d2;border-radius:17px;box-shadow:inset 0 1px 0 #fff}
+.ring {background:#e3f1e5;box-shadow:0 0 0 10px rgba(222,240,225,.45)}
+.emsg {color:#657a6c;line-height:1.65}
+.sub {color:#6a7e70}
+.trust {color:#7d8c80}
+.btn,.copy,.cta {border-radius:14px;letter-spacing:-.25px;box-shadow:var(--btn-shadow);transition:background .18s,box-shadow .18s,transform .18s}
+.btn:hover,.copy:hover,.cta:hover {box-shadow:var(--btn-shadow-hover)}
+.btn:active,.copy:active,.cta:active {transform:translateY(1px)}
+.hint,.status {color:#6c7f71}
+.wc,.worth {box-shadow:inset 0 1px 0 rgba(255,255,255,.55)}
+button:focus-visible {outline:3px solid #5b9f76;outline-offset:3px}
+.dark .topbar {background:var(--surface);border-color:var(--line);box-shadow:none}
+.dark .bname,.dark .chead h2,.dark .bias-text {color:var(--ink)}
+.dark .bias,.dark .empty {background:var(--surface);border-color:var(--line);box-shadow:none}
+.dark .bias-chip {background:var(--chip)}
+.dark .box {background:var(--input);border-color:var(--line)}
+.dark .box::placeholder,.dark .emsg,.dark .sub,.dark .trust,.dark .hint {color:var(--muted)}
+.dark .card {border-color:var(--line)}
+@media(prefers-reduced-motion:reduce){.nb,.box,.btn,.copy,.cta{transition:none}}
+
+/* Mobile: keep navigation, pasted job and finished proposal visible. */
+.paste-job{align-self:flex-start;margin:0 0 6px;min-height:44px;}
+#copyStatus{height:auto;min-height:20px;margin-top:12px;white-space:normal;line-height:1.5;}
+#autoPill{min-height:44px;}
+@media(max-width:1000px){
+  html,body,#app{height:auto!important;overflow-y:auto!important;min-height:100dvh;}
+  .topbar{display:block!important;height:auto!important;position:static!important;}
+  .tb-inner{height:auto!important;min-height:0!important;}
+  .nav{flex-wrap:wrap!important;overflow:visible!important;justify-content:flex-start!important;}
+  .nav #autoPill{display:flex!important;min-height:44px!important;}
+  .page{display:block!important;height:auto!important;min-height:0!important;overflow:visible!important;}
+  #workView{display:grid!important;height:auto!important;min-height:0!important;grid-template-columns:minmax(0,1fr)!important;gap:14px;}
+  #workView>.card:not(#jobCard){display:flex!important;height:auto!important;min-height:0!important;}
+  #workView>.card:has(#outEmpty:not(.hide)){display:none!important;}
+  #workView.hide,#recentView.hide{display:none!important;}
+  #jobCard,#jobCard.mobclosed{display:block!important;position:static!important;height:auto!important;min-height:0!important;}
+  #outReady{flex:none!important;height:auto!important;overflow:visible!important;scroll-margin-top:16px;}
+  #outReady #output{height:auto;max-height:none!important;min-height:140px!important;flex:none!important;overflow-y:hidden!important;font-size:16px!important;line-height:1.6!important;}
+  .hintwrap{height:auto!important;min-height:20px!important;}
+  #status{white-space:normal!important;overflow:visible!important;height:auto!important;line-height:1.5;}
+  #jobPost{font-size:16px!important;}
+  .actions{flex-wrap:wrap;gap:8px;}
+  .actions #copyBtn{min-height:48px;}
+}
+
+/* Compact mobile navigation and a centred compose/result flow. */
+@media(max-width:1000px){
+  .topbar{padding:12px 14px!important;}
+  .tb-inner{width:100%;max-width:640px;margin:0 auto;padding:0!important;display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:10px!important;}
+  .brand{display:flex!important;align-self:center!important;margin:0!important;}
+  .nav{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr)) 36px!important;gap:4px!important;width:100%!important;max-width:100%!important;padding:0!important;}
+  .nav .nb,.nav .nb.ic,.nav #autoPill{
+    min-width:0!important;width:100%!important;min-height:44px!important;height:auto!important;
+    padding:6px 3px!important;font-size:10px!important;line-height:1.2!important;white-space:normal!important;
+    flex-direction:column!important;gap:4px!important;border-radius:9px!important;letter-spacing:-.15px;
+  }
+  .nav .nb .nbi{width:14px!important;height:14px!important;}
+  .nav .nb.ic{justify-content:center!important;}
+  .nav .sw{flex-shrink:0;}
+  .page{
+    display:flex!important;flex-direction:column!important;justify-content:center!important;
+    min-height:calc(100svh - 112px)!important;padding:20px 14px 28px!important;
+  }
+  #workView{width:100%!important;max-width:560px!important;margin:0 auto!important;flex:none!important;gap:12px!important;}
+  #jobCard,#jobCard.mobclosed{width:100%!important;margin:0!important;padding:16px!important;border-radius:18px!important;}
+  #jobPost{height:clamp(160px,26svh,230px)!important;min-height:160px!important;max-height:300px!important;}
+  #jobCard .genrow{margin-top:12px!important;}
+  #jobCard .hintwrap{text-align:center;}
+  #jobCard::before{font-weight:500;line-height:1.55;}
+  .page.ps-result{justify-content:flex-start!important;}
+  #workView.ps-result>.card:not(#jobCard){order:0;padding:16px!important;border-radius:18px!important;}
+  #workView.ps-result>#jobCard{order:1;padding:12px 14px!important;}
+  #workView.ps-result #jobCard::before{display:none!important;}
+  #workView.ps-result #jobCard .chead{margin-bottom:6px!important;}
+  #workView.ps-result #jobCard .chead h2{font-size:13px!important;}
+  #workView.ps-result #jobPost{height:64px!important;min-height:64px!important;max-height:220px!important;padding:10px 12px!important;}
+  #workView.ps-result #jobPost:focus{height:160px!important;}
+  #workView.ps-result #jobCard .genrow{margin-top:8px!important;}
+  #workView.ps-result #genBtn{height:44px!important;min-height:44px!important;font-size:13px!important;}
+  #workView.ps-result .paste-job{min-height:36px;font-size:12px;}
+  #recentView{width:100%;max-width:560px;margin:0 auto;}
+  #outReady,#outReady #output{min-width:0;max-width:100%;}
+  #copyStatus{font-size:13px!important;overflow-wrap:anywhere;}
+  .dark #jobCard::before{
+    background:#1d3027!important;border-color:#355544!important;color:#d7ebdf!important;box-shadow:none!important;
+  }
+  .dark .bias{background:#1d3027!important;border-color:#355544!important;}
+  .dark .bias-chip{background:#294437!important;color:#b5e4c9!important;}
+  .dark .bias-text{color:#d7ebdf!important;}
+  .dark #status,.dark #copyStatus{color:#b5c8bb;}
+  .dark #status.ok,.dark #copyStatus.ok{color:#91dfb7;}
+  .dark #status.err{color:#ffaaa0;}
+}
+@media(max-width:360px){
+  .topbar{padding:10px 8px!important;}
+  .nav{gap:3px!important;grid-template-columns:repeat(4,minmax(0,1fr)) 32px!important;}
+  .nav .nb{font-size:9px!important;padding:6px 2px!important;}
+  .page{padding-left:10px!important;padding-right:10px!important;}
+}
+
+/* The proposal confirmation belongs below its buttons, never on the draft. */
+#copyStatus{
+  position:static!important;
+  inset:auto!important;
+  display:block!important;
+  min-height:20px!important;
+  height:auto!important;
+  margin:10px 0 0!important;
+  padding:0!important;
+  text-align:center!important;
+  white-space:normal!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  font-size:13px!important;
+  line-height:1.45!important;
+}
+@media(max-width:1000px){
+  #copyStatus{margin:12px 0 0!important;}
+  .toast{bottom:calc(12px + env(safe-area-inset-bottom))!important;max-width:calc(100vw - 32px);text-align:center;}
+}
+
+
+/* Brief app-style copy confirmation: visible, then it gets out of the way. */
+.toast{
+  z-index:200!important;
+  display:flex!important;
+  align-items:center;
+  justify-content:center;
+  min-height:44px;
+  padding:10px 18px!important;
+  border-radius:14px!important;
+  font-weight:700!important;
+  background:#163d2b!important;
+  box-shadow:0 12px 28px rgba(11,39,25,.25)!important;
+}
+.dark .toast{background:#d9f1e1!important;color:#173627!important;border:0!important;}
+
+/* Mobile compose screen based on the approved reference. Navbar is intentionally untouched. */
+.mobile-hero{display:none;}
+@media(max-width:700px){
+  .page{
+    display:block!important;
+    min-height:0!important;
+    padding:26px 22px 42px!important;
+    background:
+      radial-gradient(50% 22% at 0% 36%,rgba(189,243,224,.38),transparent 100%),
+      radial-gradient(45% 20% at 100% 78%,rgba(211,247,229,.42),transparent 100%),
+      #fff!important;
+  }
+  .bias,.jobctx{display:none!important;}
+  .mobile-hero{
+    display:block;
+    position:relative;
+    padding:0 4px 24px;
+    color:#10251a;
+  }
+  .mobile-ready{
+    display:inline-flex;
+    align-items:center;
+    gap:9px;
+    float:right;
+    margin:0 0 28px 14px;
+    padding:10px 14px;
+    border-radius:999px;
+    background:#e6fbec;
+    color:#078b55;
+    font-size:13px;
+    line-height:1;
+  }
+  .mobile-ready span{width:9px;height:9px;border-radius:50%;background:#12a765;box-shadow:0 0 0 4px rgba(18,167,101,.09);}
+  .mobile-hero h1{
+    clear:both;
+    margin:0 0 12px;
+    max-width:330px;
+    font-size:clamp(34px,10vw,48px);
+    line-height:1.05;
+    letter-spacing:-1.8px;
+    color:#101827;
+  }
+  .mobile-hero h1 strong{color:#079a5b;font:inherit;}
+  .mobile-hero p{
+    max-width:360px;
+    margin:0;
+    color:#798493;
+    font-size:16px;
+    line-height:1.42;
+  }
+  #workView{
+    display:block!important;
+    width:100%!important;
+    max-width:480px!important;
+    margin:0 auto!important;
+  }
+  #jobCard,#jobCard.mobclosed{
+    display:block!important;
+    width:100%!important;
+    margin:0!important;
+    padding:18px!important;
+    border:1px solid #edf0ee!important;
+    border-radius:22px!important;
+    background:#fff!important;
+    box-shadow:0 10px 26px rgba(25,59,42,.08)!important;
+  }
+  #jobCard::before,#jobCard .chead,#jobCard .paste-job,#jobCard .worth,#jobCard .hintwrap{display:none!important;}
+  #jobPost{
+    display:block!important;
+    width:100%!important;
+    height:clamp(220px,34svh,310px)!important;
+    min-height:220px!important;
+    max-height:none!important;
+    margin:0!important;
+    padding:20px!important;
+    border:1px solid #e6eaeb!important;
+    border-radius:16px!important;
+    background:#fbfcfd!important;
+    color:#203129!important;
+    font-size:16px!important;
+    line-height:1.5!important;
+    box-shadow:none!important;
+  }
+  #jobPost::placeholder{color:#9ba6b2!important;}
+  #jobCard .genrow{display:block!important;margin:16px 0 0!important;}
+  #jobCard #genBtn{
+    width:100%!important;
+    min-height:58px!important;
+    height:58px!important;
+    border-radius:15px!important;
+    font-size:18px!important;
+    font-weight:800!important;
+    background:linear-gradient(135deg,#0dab68,#008a53)!important;
+    box-shadow:0 10px 20px rgba(7,143,84,.18)!important;
+  }
+  #jobCard #genBtn::after{content:' →';font-size:27px;font-weight:400;vertical-align:-2px;margin-left:8px;}
+  #workView>.card:not(#jobCard){margin-top:16px!important;}
+  .page.ps-result .mobile-hero{display:none!important;}
+  .page.ps-result{padding-top:16px!important;}
+  #workView.ps-result #jobCard{
+    margin-top:14px!important;
+    padding:12px!important;
+    background:#fff!important;
+  }
+  #workView.ps-result #jobPost{
+    height:76px!important;
+    min-height:76px!important;
+    padding:12px!important;
+    border-radius:12px!important;
+  }
+  #workView.ps-result #jobCard #genBtn{height:46px!important;min-height:46px!important;font-size:14px!important;}
+  #workView.ps-result #jobCard #genBtn::after{font-size:18px;margin-left:4px;}
+  .dark .page{background:#101b16!important;}
+  .dark .mobile-hero h1{color:#f2f7f3;}
+  .dark .mobile-hero h1 strong{color:#5cdea0;}
+  .dark .mobile-hero p{color:#b7c4bb;}
+  .dark .mobile-ready{background:#1e3c2c;color:#82e5af;}
+  .dark #jobCard,.dark #workView.ps-result #jobCard{background:#16261d!important;border-color:#284534!important;box-shadow:none!important;}
+  .dark #jobPost{background:#132219!important;border-color:#294534!important;color:#e5eee7!important;}
+  .dark #jobPost::placeholder{color:#84958a!important;}
+}
+
+/* Keep the full compose card centred and above the mobile browser controls. */
+@media(max-width:700px){
+  .page:not(.ps-result){
+    display:flex!important;
+    flex-direction:column!important;
+    justify-content:flex-start!important;
+    min-height:calc(100svh - 112px)!important;
+    padding-bottom:30px!important;
+  }
+  .page:not(.ps-result) .mobile-hero{flex:0 0 auto;}
+  #workView:not(.ps-result){
+    display:flex!important;
+    flex:1 1 auto!important;
+    flex-direction:column!important;
+    justify-content:center!important;
+    min-height:0!important;
+    padding:12px 0!important;
+  }
+  #workView:not(.ps-result) #jobCard{margin:auto 0!important;}
+  #workView:not(.ps-result) #jobPost{
+    height:clamp(180px,25svh,250px)!important;
+    min-height:180px!important;
+  }
+  #workView:not(.ps-result) #jobCard .genrow{margin-top:14px!important;}
+}
+
+/* Keep the mobile introduction short so the compose card sits in the visual centre. */
+@media(max-width:700px){
+  .mobile-hero{padding-bottom:14px!important;}
+  .mobile-ready{margin:0 0 16px 12px!important;padding:9px 12px!important;font-size:12px!important;}
+  .mobile-hero h1{
+    margin-bottom:8px!important;
+    max-width:360px!important;
+    font-size:clamp(34px,9.2vw,42px)!important;
+    line-height:1.02!important;
+  }
+  .mobile-hero p{
+    max-width:none!important;
+    font-size:14px!important;
+    line-height:1.38!important;
+  }
+  #workView:not(.ps-result){
+    justify-content:flex-start!important;
+    padding-top:12px!important;
+  }
+  #workView:not(.ps-result) #jobCard{margin:0!important;}
+  #workView:not(.ps-result) #jobPost{
+    height:clamp(170px,23svh,220px)!important;
+    min-height:170px!important;
+  }
+}
+
+/* The readiness label floats in existing whitespace; it no longer takes a line. */
+@media(max-width:700px){
+  .mobile-hero{position:relative!important;}
+  .mobile-ready{
+    position:absolute!important;
+    top:-20px!important;
+    right:0!important;
+    float:none!important;
+    margin:0!important;
+    padding:7px 10px!important;
+    font-size:11px!important;
+    z-index:1;
+  }
+  .mobile-ready span{width:7px!important;height:7px!important;}
+}
