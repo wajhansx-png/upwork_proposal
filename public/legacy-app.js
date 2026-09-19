@@ -128,6 +128,11 @@ function pickBias(){
   restartBiasBar();
   startBiasRotation();
 }
+function closeBias(){
+  const el=document.querySelector('.bias');
+  if(el) el.classList.add('hide');
+  clearInterval(biasTimer);
+}
 
 /* ---------- loader hint rotator: labor-illusion lines cut perceived wait vs. a silent skeleton ---------- */
 const LOAD_HINTS=[

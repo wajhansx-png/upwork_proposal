@@ -1183,3 +1183,48 @@ button:focus-visible {outline:3px solid #5b9f76;outline-offset:3px}
   }
   .mobile-ready span{width:7px!important;height:7px!important;}
 }
+
+/* ---- Pill CTAs with inline icons, a plain "Paste job" label, a dismissible
+   tip banner, and a softer empty-state icon - matches the approved mockup. ---- */
+.btn,.empty .cta{
+  border-radius:999px;
+  gap:10px;
+}
+.empty .cta{display:inline-flex;align-items:center;justify-content:center;gap:9px;}
+#genBtn:has(.spinner) .btn-ic-left{display:none;}
+
+.paste-job{
+  color:var(--muted);
+  font-weight:500;
+  font-size:13px;
+}
+.paste-job:hover{color:var(--muted);}
+
+.bias-x{
+  flex-shrink:0;
+  width:22px;height:22px;padding:0;
+  border-radius:50%;
+  background:rgba(255,255,255,.6);
+  border:1px solid rgba(184,205,164,.4);
+  color:var(--muted);
+  font-size:11px;line-height:1;
+  display:grid;place-items:center;
+  cursor:pointer;
+  transition:background .14s,color .14s;
+}
+.bias-x:hover{background:#fff;color:var(--ink);}
+html.dark .bias-x{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1);color:var(--muted);}
+html.dark .bias-x:hover{background:rgba(255,255,255,.12);color:var(--ink);}
+
+.empty .ring{
+  position:relative;
+  width:76px;height:76px;
+  background:radial-gradient(circle,rgba(23,145,90,.14) 0%,rgba(23,145,90,.05) 62%,transparent 100%);
+  box-shadow:none;
+}
+.empty .ring svg:first-child{width:30px;height:30px;}
+.empty .ring .spark{position:absolute;width:13px;height:13px;color:var(--green);}
+.empty .ring .spark-a{top:-4px;left:-8px;}
+.empty .ring .spark-b{bottom:2px;right:-10px;width:9px;height:9px;}
+.empty .ring .spark-c{top:14px;right:-14px;width:10px;height:10px;}
+html.dark .empty .ring{background:radial-gradient(circle,rgba(47,217,142,.16) 0%,rgba(47,217,142,.05) 62%,transparent 100%);}

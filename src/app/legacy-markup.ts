@@ -44,6 +44,7 @@ export const LEGACY_MARKUP = `
     <span class="bias-dot"></span>
     <span class="bias-chip" id="biasChip">Illusory superiority</span>
     <span class="bias-text" id="biasText">Everyone thinks their proposal is different. Test it: does your first line only work for this client?</span>
+    <button class="bias-x" onclick="closeBias()" aria-label="Dismiss tip">&#10005;</button>
     <span class="bias-bar" id="biasBar"></span>
   </div>
 
@@ -70,7 +71,11 @@ export const LEGACY_MARKUP = `
           <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><rect x="12.5" y="10.5" width="7.5" height="5.5" rx="1" fill="currentColor" stroke="none"/></svg>
           Add proposal
         </button>
-        <button class="btn" id="genBtn" onclick="generate()"><span id="genLabel">Paste & generate proposal</span></button>
+        <button class="btn" id="genBtn" onclick="generate()">
+          <svg class="btn-ic btn-ic-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 3 11 7l4 1.5L11 10l-1.5 4L8 10l-4-1.5L8 7z"/><path d="M18 13l.9 2.1L21 16l-2.1.9L18 19l-.9-2.1L15 16l2.1-.9z"/></svg>
+          <span id="genLabel">Paste & generate proposal</span>
+          <svg class="btn-ic btn-ic-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
       </div>
       <div class="hintwrap">
         <div class="status" id="status" role="status" aria-live="polite"></div>
@@ -86,12 +91,18 @@ export const LEGACY_MARKUP = `
 
       <div class="empty" id="outEmpty">
         <div class="ring">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#17915A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#17915A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/>
           </svg>
+          <svg class="spark spark-a" viewBox="0 0 24 24" fill="#17915A"><path d="M12 2l1.6 4.8L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.2z"/></svg>
+          <svg class="spark spark-b" viewBox="0 0 24 24" fill="#17915A"><path d="M12 2l1.6 4.8L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.2z"/></svg>
+          <svg class="spark spark-c" viewBox="0 0 24 24" fill="#17915A"><path d="M12 2l1.6 4.8L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.2z"/></svg>
         </div>
         <div class="emsg">Paste a job post and your proposal<br>lands here in about two seconds.</div>
-        <button class="cta" onclick="openFloating()">Open the floating box</button>
+        <button class="cta" onclick="openFloating()">
+          <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 15 19 5M19 5h-5M19 5v5"/></svg>
+          Open the floating box
+        </button>
         <div class="sub">Upwork stays full screen. Copy the job, click once, paste it back.</div>
         <div class="trust">No signup &middot; no card &middot; nothing leaves your browser</div>
       </div>
