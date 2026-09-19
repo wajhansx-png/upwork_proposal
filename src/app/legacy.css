@@ -441,6 +441,7 @@ textarea#output{
   .card,.card:hover{transition:none;transform:none;}
   .loadhint{transition:none;}
   .loadbar-fill{transition:none;}
+  .loadbar-fill::after{animation:none;}
   .toast{transition:opacity .01s;transform:translateX(-50%);}
   .toast.show{transform:translateX(-50%);}
   .bias-chip,.bias-text{transition:none;}
@@ -467,23 +468,35 @@ textarea#output{
 /* fake-but-comforting progress readout above the skeleton bars - watching
    a number climb keeps attention on the page instead of tab-switching away */
 .loadpct{
-  display:flex;align-items:baseline;justify-content:space-between;
-  margin-bottom:10px;
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:12px;
   font-size:14px;font-weight:700;color:var(--ink);
 }
 .loadpct span:last-child{
-  font-variant-numeric:tabular-nums;color:var(--green-dark);font-size:15px;
+  font-variant-numeric:tabular-nums;font-size:22px;font-weight:800;letter-spacing:-.02em;
+  background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
 }
 .loadbar{
-  height:6px;border-radius:999px;background:var(--line);
+  position:relative;
+  height:8px;border-radius:999px;background:var(--line);
   overflow:hidden;margin-bottom:20px;flex-shrink:0;
+  box-shadow:inset 0 1px 2px rgba(30,50,39,.08);
 }
 .loadbar-fill{
+  position:relative;
   height:100%;width:0%;border-radius:999px;
-  background:var(--btn-grad);
+  background:linear-gradient(90deg,var(--green) 0%,var(--green-dark) 100%);
+  box-shadow:0 0 8px rgba(23,145,90,.5);
   transition:width .22s ease;
 }
-html.dark .loadpct span:last-child{color:#5EFBB8;}
+.loadbar-fill::after{
+  content:"";
+  position:absolute;top:0;right:0;bottom:0;width:22px;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.6));
+  animation:loadbar-shimmer 1.1s ease-in-out infinite;
+}
+@keyframes loadbar-shimmer{0%,100%{opacity:.25;}50%{opacity:.9;}}
 /* Labor-illusion line: rotating short sentences during the ~1-2s wait cut
    perceived latency roughly 40% vs. a silent skeleton. Sits below the skel bars. */
 .loadhint{margin-top:auto;padding-top:12px;font-size:13px;line-height:18px;color:var(--muted);

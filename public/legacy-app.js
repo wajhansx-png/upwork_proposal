@@ -163,35 +163,29 @@ function stopLoaderHints(){
 
 /* ---------- fake-but-honest progress readout: climbs toward 92%, never
    promises a finish time it can't back up, snaps to 100% only on success ---------- */
-let loadPctTimer;
-function startLoadPct(){
+let loadPctTimer, loadPct=0;
+function paintLoadPct(pct){
   const numEl=document.getElementById('loadPctNum');
   const fillEl=document.getElementById('loadBarFill');
-  if(!numEl||!fillEl) return;
-  let pct=0;
-  numEl.textContent='0%';
-  fillEl.style.width='0%';
+  if(!numEl||!fillEl) return false;
+  numEl.textContent=Math.round(pct)+'%';
+  fillEl.style.width=pct+'%';
+  return true;
+}
+function startLoadPct(){
+  loadPct=0;
   clearInterval(loadPctTimer);
+  if(!paintLoadPct(0)) return;
   loadPctTimer=setInterval(()=>{
-    pct+=Math.max(0.4,(92-pct)*0.09);
-    if(pct>92) pct=92;
-    numEl.textContent=Math.round(pct)+'%';
-    fillEl.style.width=pct+'%';
+    loadPct+=Math.max(0.4,(92-loadPct)*0.09);
+    paintLoadPct(Math.min(loadPct,92));
   },180);
 }
+function stopLoadPct(){ clearInterval(loadPctTimer); }
 function finishLoadPct(){
-  return new Promise(resolve=>{
-    clearInterval(loadPctTimer);
-    const numEl=document.getElementById('loadPctNum');
-    const fillEl=document.getElementById('loadBarFill');
-    if(!numEl||!fillEl){ resolve(); return; }
-    numEl.textContent='100%';
-    fillEl.style.width='100%';
-    setTimeout(resolve,220);
-  });
-}
-function stopLoadPct(){
-  clearInterval(loadPctTimer);
+  stopLoadPct();
+  paintLoadPct(100);
+  return new Promise(resolve=>setTimeout(resolve,220));
 }
 function clearJob(){
   jobEl.value='';
