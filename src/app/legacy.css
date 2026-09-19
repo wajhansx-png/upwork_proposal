@@ -415,7 +415,7 @@ textarea#output{
 .empty .cta:hover{transform:translateY(-1px);box-shadow:var(--btn-shadow-hover);}
 .empty .cta .btn-ic{width:19px;height:19px;}
 .empty .sub{margin-top:14px;font-size:15px;color:var(--muted);max-width:38ch;line-height:1.55;}
-.empty .emsg{font-size:19px;font-weight:600;color:var(--ink);line-height:1.45;max-width:40ch;}
+.empty .emsg{font-size:19px;font-weight:600;letter-spacing:-.2px;color:var(--ink);line-height:1.45;max-width:40ch;}
 /* Trust cue - anxiety-reducer for first-time visitors. Sits quietly below
    the CTA so it reads as "reassurance", not "instruction". */
 .empty .trust{margin-top:22px;font-size:11.5px;color:var(--muted);opacity:.75;
@@ -885,7 +885,7 @@ textarea#output{
 .box::placeholder {color:#7e9182;opacity:1}
 .empty {background:linear-gradient(150deg,#f5faf4,#fbfcf8);border-color:#d7e2d2;border-radius:17px;box-shadow:inset 0 1px 0 #fff}
 .ring {background:#e3f1e5;box-shadow:0 0 0 10px rgba(222,240,225,.45)}
-.emsg {color:#657a6c;line-height:1.65}
+.emsg {color:#223c30;line-height:1.5}
 .sub {color:#6a7e70}
 .trust {color:#7d8c80}
 .btn,.copy,.cta {border-radius:14px;letter-spacing:-.25px;box-shadow:var(--btn-shadow);transition:background .18s,box-shadow .18s,transform .18s}
@@ -899,7 +899,8 @@ button:focus-visible {outline:3px solid #5b9f76;outline-offset:3px}
 .dark .bias,.dark .empty {background:var(--surface);border-color:var(--line);box-shadow:none}
 .dark .bias-chip {background:var(--chip)}
 .dark .box {background:var(--input);border-color:var(--line)}
-.dark .box::placeholder,.dark .emsg,.dark .sub,.dark .trust,.dark .hint {color:var(--muted)}
+.dark .box::placeholder,.dark .sub,.dark .trust,.dark .hint {color:var(--muted)}
+.dark .emsg {color:var(--ink)}
 .dark .card {border-color:var(--line)}
 @media(prefers-reduced-motion:reduce){.nb,.box,.btn,.copy,.cta{transition:none}}
 
