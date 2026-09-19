@@ -823,6 +823,11 @@ function wireMini(doc,win){
   pollClipboard(); setTimeout(pollClipboard,220);
 }
 async function openFloating(){
+  /* Floating windows are a desktop feature. On phones, show a small inline notice instead of opening a popup. */
+  if(window.matchMedia && window.matchMedia('(max-width: 700px)').matches){
+    toast('Float on top is for desktop. Use this screen on mobile.');
+    return;
+  }
   if(window.documentPictureInPicture){
     try{
       const w=await documentPictureInPicture.requestWindow({width:400,height:540});
