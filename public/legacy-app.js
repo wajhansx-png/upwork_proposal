@@ -160,6 +160,39 @@ function stopLoaderHints(){
   const el=document.getElementById('loadHint');
   if(el) el.textContent='';
 }
+
+/* ---------- fake-but-honest progress readout: climbs toward 92%, never
+   promises a finish time it can't back up, snaps to 100% only on success ---------- */
+let loadPctTimer;
+function startLoadPct(){
+  const numEl=document.getElementById('loadPctNum');
+  const fillEl=document.getElementById('loadBarFill');
+  if(!numEl||!fillEl) return;
+  let pct=0;
+  numEl.textContent='0%';
+  fillEl.style.width='0%';
+  clearInterval(loadPctTimer);
+  loadPctTimer=setInterval(()=>{
+    pct+=Math.max(0.4,(92-pct)*0.09);
+    if(pct>92) pct=92;
+    numEl.textContent=Math.round(pct)+'%';
+    fillEl.style.width=pct+'%';
+  },180);
+}
+function finishLoadPct(){
+  return new Promise(resolve=>{
+    clearInterval(loadPctTimer);
+    const numEl=document.getElementById('loadPctNum');
+    const fillEl=document.getElementById('loadBarFill');
+    if(!numEl||!fillEl){ resolve(); return; }
+    numEl.textContent='100%';
+    fillEl.style.width='100%';
+    setTimeout(resolve,220);
+  });
+}
+function stopLoadPct(){
+  clearInterval(loadPctTimer);
+}
 function clearJob(){
   jobEl.value='';
   document.getElementById('worthRow').classList.add('hide');
@@ -922,6 +955,7 @@ async function generate(){
   document.getElementById('fixRow').classList.add('hide');
   setStatus('');
   startLoaderHints();
+  startLoadPct();
 
   /* hold the loading state a minimum beat so a fast response doesn't flicker */
   const loadStart=Date.now();
@@ -933,6 +967,7 @@ async function generate(){
     if(elapsed<MIN_LOAD_MS) await new Promise(r=>setTimeout(r,MIN_LOAD_MS-elapsed));
     if(!ok){
       stopLoaderHints();
+      stopLoadPct();
       document.getElementById('outLoading').classList.add('hide');
       document.getElementById('outEmpty').classList.remove('hide');
       setStatus(data.error||('Something went wrong ('+status+').'),'err');
@@ -941,6 +976,7 @@ async function generate(){
     }
     const text=(data.text||'').trim();
     stopLoaderHints();
+    await finishLoadPct();
     document.getElementById('outLoading').classList.add('hide');
     document.getElementById('outReady').classList.remove('hide');
     document.getElementById('output').value=text;
@@ -954,6 +990,7 @@ async function generate(){
     await autoCopy(text);
   }catch(err){
     stopLoaderHints();
+    stopLoadPct();
     document.getElementById('outLoading').classList.add('hide');
     document.getElementById('outEmpty').classList.remove('hide');
     setStatus('Could not reach the server. Check your connection.','err');

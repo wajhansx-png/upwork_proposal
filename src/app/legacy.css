@@ -440,6 +440,7 @@ textarea#output{
   .nb.auto .sw,.nb.auto .sw i{transition:none;}
   .card,.card:hover{transition:none;transform:none;}
   .loadhint{transition:none;}
+  .loadbar-fill{transition:none;}
   .toast{transition:opacity .01s;transform:translateX(-50%);}
   .toast.show{transform:translateX(-50%);}
   .bias-chip,.bias-text{transition:none;}
@@ -463,6 +464,26 @@ textarea#output{
   background:linear-gradient(90deg,#E8EEE2 25%,#F2F6EC 50%,#E8EEE2 75%);
   background-size:200% 100%;animation:sheen 1.2s infinite;
 }
+/* fake-but-comforting progress readout above the skeleton bars - watching
+   a number climb keeps attention on the page instead of tab-switching away */
+.loadpct{
+  display:flex;align-items:baseline;justify-content:space-between;
+  margin-bottom:10px;
+  font-size:14px;font-weight:700;color:var(--ink);
+}
+.loadpct span:last-child{
+  font-variant-numeric:tabular-nums;color:var(--green-dark);font-size:15px;
+}
+.loadbar{
+  height:6px;border-radius:999px;background:var(--line);
+  overflow:hidden;margin-bottom:20px;flex-shrink:0;
+}
+.loadbar-fill{
+  height:100%;width:0%;border-radius:999px;
+  background:var(--btn-grad);
+  transition:width .22s ease;
+}
+html.dark .loadpct span:last-child{color:#5EFBB8;}
 /* Labor-illusion line: rotating short sentences during the ~1-2s wait cut
    perceived latency roughly 40% vs. a silent skeleton. Sits below the skel bars. */
 .loadhint{margin-top:auto;padding-top:12px;font-size:13px;line-height:18px;color:var(--muted);
