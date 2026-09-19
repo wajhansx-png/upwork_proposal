@@ -109,8 +109,6 @@ export const LEGACY_MARKUP = `
           <svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 15 19 5M19 5h-5M19 5v5"/></svg>
           Open the floating box
         </button>
-        <div class="sub">Upwork stays full screen. Copy the job, click once, paste it back.</div>
-        <div class="trust">No signup &middot; no card &middot; nothing leaves your browser</div>
       </div>
 
       <div class="skel hide" id="outLoading">
