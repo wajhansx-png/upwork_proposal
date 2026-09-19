@@ -41,9 +41,11 @@ export const LEGACY_MARKUP = `
   </section>
 
   <div class="bias">
-    <span class="bias-bolt">⚡</span>
+    <span class="bias-bolt">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+    </span>
     <span class="bias-chip" id="biasChip">Illusory superiority</span>
-    <span class="bias-sep">|</span>
+    <span class="bias-sep"></span>
     <span class="bias-text" id="biasText">Everyone thinks their proposal is different. Test it: does your first line only work for this client?</span>
     <button class="bias-x" onclick="closeBias()" aria-label="Dismiss tip">&#10005;</button>
     <span class="bias-bar" id="biasBar"></span>
@@ -92,12 +94,15 @@ export const LEGACY_MARKUP = `
 
       <div class="empty" id="outEmpty">
         <div class="ring">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#17915A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h6"/>
+          <svg class="doc" viewBox="0 0 64 72" fill="none">
+            <path d="M8 4a4 4 0 0 1 4-4h30l18 18v46a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4V4Z" fill="#ffffff" stroke="#17915A" stroke-width="2.4"/>
+            <path d="M42 0v14a4 4 0 0 0 4 4h14" fill="#E3F1E5" stroke="#17915A" stroke-width="2.4" stroke-linejoin="round"/>
+            <path d="M18 32h20M18 42h28M18 52h22" stroke="#17915A" stroke-width="2.6" stroke-linecap="round"/>
           </svg>
-          <svg class="spark spark-a" viewBox="0 0 24 24" fill="#17915A"><path d="M12 2l1.6 4.8L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.2z"/></svg>
-          <svg class="spark spark-b" viewBox="0 0 24 24" fill="#17915A"><path d="M12 2l1.6 4.8L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.2z"/></svg>
-          <svg class="spark spark-c" viewBox="0 0 24 24" fill="#17915A"><path d="M12 2l1.6 4.8L18 8l-4.4 1.6L12 14l-1.6-4.4L6 8l4.4-1.2z"/></svg>
+          <svg class="spark spark-a" viewBox="0 0 24 24" fill="#17915A"><path d="M12 1.5 14 9.5 22 12l-8 2.5L12 22.5 10 14.5 2 12l8-2.5z"/></svg>
+          <svg class="spark spark-b" viewBox="0 0 24 24" fill="#17915A"><path d="M12 1.5 14 9.5 22 12l-8 2.5L12 22.5 10 14.5 2 12l8-2.5z"/></svg>
+          <svg class="spark spark-c" viewBox="0 0 24 24" fill="#17915A"><path d="M12 1.5 14 9.5 22 12l-8 2.5L12 22.5 10 14.5 2 12l8-2.5z"/></svg>
+          <svg class="spark spark-d" viewBox="0 0 24 24" fill="#17915A"><path d="M12 1.5 14 9.5 22 12l-8 2.5L12 22.5 10 14.5 2 12l8-2.5z"/></svg>
         </div>
         <div class="emsg">Paste a job post and your proposal<br>lands here in about two seconds.</div>
         <button class="cta" onclick="openFloating()">
