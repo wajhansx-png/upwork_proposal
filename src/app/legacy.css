@@ -178,15 +178,12 @@ button,textarea,input{font-family:inherit;}
   display:flex;align-items:center;gap:12px;flex-shrink:0;
   padding:13px 18px 15px;margin-bottom:14px;
 }
-.bias-dot{
-  flex-shrink:0;width:7px;height:7px;border-radius:50%;
-  background:var(--green);
-  box-shadow:0 0 0 0 rgba(23,145,90,.4);
-  animation:bias-pulse 2.6s ease-in-out infinite;
+.bias-bolt{
+  flex-shrink:0;font-size:16px;line-height:1;
 }
-@keyframes bias-pulse{
-  0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(23,145,90,.4);}
-  50%{opacity:.7;box-shadow:0 0 0 5px rgba(23,145,90,0);}
+.bias-sep{
+  flex-shrink:0;color:var(--line);font-size:18px;font-weight:300;line-height:1;
+  margin:0 2px;
 }
 .bias-chip{
   flex-shrink:0;
@@ -304,10 +301,10 @@ textarea#output{
 /* Gradient CTA with a warm shadow and a 1px hover-lift. Tactile, obvious,
    and hover-affordant without being loud. */
 .btn{
-  height:42px;width:100%;
+  height:48px;width:100%;
   background:var(--btn-grad);color:#fff;
-  border:none;border-radius:12px;
-  font-size:14.5px;font-weight:700;letter-spacing:.005em;
+  border:none;border-radius:999px;
+  font-size:15px;font-weight:700;letter-spacing:.005em;
   display:flex;align-items:center;justify-content:center;gap:9px;
   cursor:pointer;
   box-shadow:var(--btn-shadow);
@@ -325,7 +322,7 @@ textarea#output{
 #floatBtnJob{display:none;}
 .btn-ghost{background:var(--mint);color:var(--green-dark);box-shadow:none;}
 .btn-ghost:hover:not(:disabled){background:var(--mint);box-shadow:none;opacity:.85;}
-.btn-ic{width:15px;height:15px;flex-shrink:0;}
+.btn-ic{width:17px;height:17px;flex-shrink:0;}
 
 /* the hint line doubles as the status line, so nothing shifts when a message appears */
 .hintwrap{position:relative;margin-top:10px;height:16px;}
@@ -382,9 +379,9 @@ textarea#output{
 }
 .empty .ring svg{width:24px;height:24px;}
 .empty .cta{
-  margin-top:20px;height:40px;padding:0 22px;
-  background:var(--btn-grad);color:#fff;border:none;border-radius:12px;
-  font-size:14.5px;font-weight:700;cursor:pointer;
+  margin-top:20px;height:46px;padding:0 30px;
+  background:var(--btn-grad);color:#fff;border:none;border-radius:999px;
+  font-size:15px;font-weight:700;cursor:pointer;
   box-shadow:var(--btn-shadow);
   transition:transform .14s ease,box-shadow .16s ease;
 }
@@ -422,7 +419,7 @@ textarea#output{
   html::before{display:none;}
   body::before,body::after{animation:none;}
   .topbar,.bias,#workView>.card{animation:none;opacity:1;transform:none;}
-  .bias-dot{animation:none;}
+  .bias-bolt{animation:none;}
   .bias-bar.filling{transition:none;}
 }
 
@@ -1218,13 +1215,13 @@ html.dark .bias-x:hover{background:rgba(255,255,255,.12);color:var(--ink);}
 
 .empty .ring{
   position:relative;
-  width:76px;height:76px;
+  width:84px;height:84px;
   background:radial-gradient(circle,rgba(23,145,90,.14) 0%,rgba(23,145,90,.05) 62%,transparent 100%);
   box-shadow:none;
 }
-.empty .ring svg:first-child{width:30px;height:30px;}
-.empty .ring .spark{position:absolute;width:13px;height:13px;color:var(--green);}
-.empty .ring .spark-a{top:-4px;left:-8px;}
-.empty .ring .spark-b{bottom:2px;right:-10px;width:9px;height:9px;}
-.empty .ring .spark-c{top:14px;right:-14px;width:10px;height:10px;}
+.empty .ring svg:first-child{width:34px;height:34px;}
+.empty .ring .spark{position:absolute;width:16px;height:16px;color:var(--green);}
+.empty .ring .spark-a{top:-8px;left:-12px;}
+.empty .ring .spark-b{bottom:-2px;right:-14px;width:11px;height:11px;}
+.empty .ring .spark-c{top:10px;right:-18px;width:12px;height:12px;}
 html.dark .empty .ring{background:radial-gradient(circle,rgba(47,217,142,.16) 0%,rgba(47,217,142,.05) 62%,transparent 100%);}

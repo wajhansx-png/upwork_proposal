@@ -41,8 +41,9 @@ export const LEGACY_MARKUP = `
   </section>
 
   <div class="bias">
-    <span class="bias-dot"></span>
+    <span class="bias-bolt">⚡</span>
     <span class="bias-chip" id="biasChip">Illusory superiority</span>
+    <span class="bias-sep">|</span>
     <span class="bias-text" id="biasText">Everyone thinks their proposal is different. Test it: does your first line only work for this client?</span>
     <button class="bias-x" onclick="closeBias()" aria-label="Dismiss tip">&#10005;</button>
     <span class="bias-bar" id="biasBar"></span>
