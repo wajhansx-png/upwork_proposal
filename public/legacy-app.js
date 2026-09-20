@@ -180,31 +180,37 @@ function paintLoadPct(pct){
   const fillEl=document.getElementById('loadBarFill');
   if(!fillEl) return false;
   fillEl.style.width=pct+'%';
-  const numEl=document.getElementById('loadPctNum');
-  if(numEl) numEl.textContent=PROGRESS_PHASES[Math.min(progressPhaseIdx,PROGRESS_PHASES.length-1)];
   return true;
+}
+function paintPhase(text){
+  const numEl=document.getElementById('loadPctNum');
+  if(!numEl) return;
+  numEl.textContent=text;
+  numEl.style.animation='none';
+  void numEl.offsetWidth;
+  numEl.style.animation='';
 }
 function startLoadPct(){
   loadPct=0; progressPhaseIdx=0;
   clearInterval(loadPctTimer); clearInterval(progressPhaseTimer);
   if(!paintLoadPct(0)) return;
+  paintPhase(PROGRESS_PHASES[0]);
   loadPctTimer=setInterval(()=>{
     loadPct+=Math.max(0.4,(92-loadPct)*0.09);
     paintLoadPct(Math.min(loadPct,92));
   },180);
   progressPhaseTimer=setInterval(()=>{
     progressPhaseIdx++;
-    if(progressPhaseIdx<PROGRESS_PHASES.length) paintLoadPct(loadPct);
-  },1200);
+    if(progressPhaseIdx<PROGRESS_PHASES.length) paintPhase(PROGRESS_PHASES[progressPhaseIdx]);
+  },1400);
 }
 function stopLoadPct(){ clearInterval(loadPctTimer); clearInterval(progressPhaseTimer); }
 function finishLoadPct(){
   stopLoadPct();
-  const numEl=document.getElementById('loadPctNum');
-  if(numEl) numEl.textContent='Done ✓';
+  paintPhase('Done ✓');
   const fillEl=document.getElementById('loadBarFill');
   if(fillEl) fillEl.style.width='100%';
-  return new Promise(resolve=>setTimeout(resolve,350));
+  return new Promise(resolve=>setTimeout(resolve,400));
 }
 function clearJob(){
   jobEl.value='';
@@ -974,6 +980,11 @@ async function generate(){
   setStatus('');
   startLoaderHints();
   startLoadPct();
+  /* Bring the progress hero into view immediately so the user sees the
+     phase text working, not a distant loader below the fold */
+  if(window.matchMedia('(max-width:1000px)').matches){
+    document.getElementById('outLoading').scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',block:'start'});
+  }
 
   /* hold the loading state a minimum beat so a fast response doesn't flicker */
   const loadStart=Date.now();
@@ -1064,6 +1075,9 @@ function psCopyStatus(message,copied){
   setStatus(message,copied?'ok':'');
 }
 function showCopyToast(){
+  /* Mobile already shows the copy confirmation inside the card - the toast
+     just doubles up and covers the proposal, so skip it below 700px */
+  if(window.matchMedia('(max-width:700px)').matches) return;
   toast('✓ Proposal copied to clipboard');
 }
 

@@ -468,14 +468,44 @@ textarea#output{
 /* fake-but-comforting progress readout above the skeleton bars - watching
    a number climb keeps attention on the page instead of tab-switching away */
 .loadpct{
-  display:flex;flex-direction:column;gap:4px;
+  display:flex;align-items:center;justify-content:space-between;
   margin-bottom:12px;
   font-size:14px;font-weight:700;color:var(--ink);
 }
-.loadpct span:last-child{
-  font-size:13px;font-weight:600;letter-spacing:-.01em;
-  color:var(--green-dark);opacity:.85;
-  transition:opacity .16s;
+.ps-progress-hero{
+  display:flex;flex-direction:column;align-items:center;
+  gap:14px;
+  padding:24px 20px 22px;margin-bottom:24px;
+  border-radius:18px;
+  background:linear-gradient(180deg,rgba(23,145,90,.06) 0%,rgba(23,145,90,.02) 100%);
+  border:1px solid rgba(23,145,90,.14);
+  text-align:center;
+}
+.ps-progress-tag{
+  font-size:11px;font-weight:800;letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--green-dark);opacity:.68;
+}
+.ps-progress-phase{
+  font-size:22px;font-weight:800;letter-spacing:-.02em;line-height:1.25;
+  color:var(--ink);
+  min-height:1.5em;
+  background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);
+  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;
+  animation:psPhaseFade .4s ease-out;
+}
+.ps-progress-hero .loadbar{width:100%;max-width:320px;margin:2px auto 0}
+@keyframes psPhaseFade{
+  from{opacity:0;transform:translateY(4px)}
+  to{opacity:1;transform:translateY(0)}
+}
+html.dark .ps-progress-hero{
+  background:linear-gradient(180deg,rgba(80,220,150,.08) 0%,rgba(80,220,150,.02) 100%);
+  border-color:rgba(80,220,150,.18);
+}
+@media (max-width:700px){
+  .ps-progress-hero{padding:22px 16px 20px;margin-bottom:20px;border-radius:16px}
+  .ps-progress-phase{font-size:20px}
 }
 .loadbar{
   position:relative;
