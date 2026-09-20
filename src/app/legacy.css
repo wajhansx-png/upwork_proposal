@@ -468,14 +468,14 @@ textarea#output{
 /* fake-but-comforting progress readout above the skeleton bars - watching
    a number climb keeps attention on the page instead of tab-switching away */
 .loadpct{
-  display:flex;align-items:center;justify-content:space-between;
+  display:flex;flex-direction:column;gap:4px;
   margin-bottom:12px;
   font-size:14px;font-weight:700;color:var(--ink);
 }
 .loadpct span:last-child{
-  font-variant-numeric:tabular-nums;font-size:22px;font-weight:800;letter-spacing:-.02em;
-  background:linear-gradient(135deg,var(--green) 0%,var(--green-dark) 100%);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
+  font-size:13px;font-weight:600;letter-spacing:-.01em;
+  color:var(--green-dark);opacity:.85;
+  transition:opacity .16s;
 }
 .loadbar{
   position:relative;

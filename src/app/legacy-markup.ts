@@ -110,7 +110,7 @@ export const LEGACY_MARKUP = `
       <div class="skel hide" id="outLoading">
         <div class="loadpct">
           <span>Writing your proposal</span>
-          <span id="loadPctNum">0%</span>
+          <span id="loadPctNum" style="font-size:12px;opacity:.8;font-weight:600">Reading the job post…</span>
         </div>
         <div class="loadbar"><div class="loadbar-fill" id="loadBarFill"></div></div>
         <div class="skl" style="width:22%"></div>

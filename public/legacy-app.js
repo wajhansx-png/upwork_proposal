@@ -161,31 +161,50 @@ function stopLoaderHints(){
   if(el) el.textContent='';
 }
 
-/* ---------- fake-but-honest progress readout: climbs toward 92%, never
-   promises a finish time it can't back up, snaps to 100% only on success ---------- */
+/* ---------- progress: rotating craft messages instead of a bare percentage ---------- */
 let loadPctTimer, loadPct=0;
+const PROGRESS_PHASES=[
+  'Reading the job post…',
+  'Identifying what they really need…',
+  'Matching your experience…',
+  'Crafting the opening hook…',
+  'Adding a personal touch…',
+  'Building social proof…',
+  'Writing your approach…',
+  'Making it sound like you…',
+  'Polishing the closing line…',
+  'Final quality check…',
+];
+let progressPhaseIdx=0, progressPhaseTimer;
 function paintLoadPct(pct){
-  const numEl=document.getElementById('loadPctNum');
   const fillEl=document.getElementById('loadBarFill');
-  if(!numEl||!fillEl) return false;
-  numEl.textContent=Math.round(pct)+'%';
+  if(!fillEl) return false;
   fillEl.style.width=pct+'%';
+  const numEl=document.getElementById('loadPctNum');
+  if(numEl) numEl.textContent=PROGRESS_PHASES[Math.min(progressPhaseIdx,PROGRESS_PHASES.length-1)];
   return true;
 }
 function startLoadPct(){
-  loadPct=0;
-  clearInterval(loadPctTimer);
+  loadPct=0; progressPhaseIdx=0;
+  clearInterval(loadPctTimer); clearInterval(progressPhaseTimer);
   if(!paintLoadPct(0)) return;
   loadPctTimer=setInterval(()=>{
     loadPct+=Math.max(0.4,(92-loadPct)*0.09);
     paintLoadPct(Math.min(loadPct,92));
   },180);
+  progressPhaseTimer=setInterval(()=>{
+    progressPhaseIdx++;
+    if(progressPhaseIdx<PROGRESS_PHASES.length) paintLoadPct(loadPct);
+  },1200);
 }
-function stopLoadPct(){ clearInterval(loadPctTimer); }
+function stopLoadPct(){ clearInterval(loadPctTimer); clearInterval(progressPhaseTimer); }
 function finishLoadPct(){
   stopLoadPct();
-  paintLoadPct(100);
-  return new Promise(resolve=>setTimeout(resolve,220));
+  const numEl=document.getElementById('loadPctNum');
+  if(numEl) numEl.textContent='Done ✓';
+  const fillEl=document.getElementById('loadBarFill');
+  if(fillEl) fillEl.style.width='100%';
+  return new Promise(resolve=>setTimeout(resolve,350));
 }
 function clearJob(){
   jobEl.value='';
