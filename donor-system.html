@@ -1,3 +1,7 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GiveLife Donor Hub</title>
 <meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
@@ -196,6 +200,10 @@ button, input, select, textarea { font-family: inherit; }
 .btn-primary { background: var(--green-600); color: #fff; border-color: var(--green-600); }
 .btn-primary:hover { background: var(--green-500); border-color: var(--green-500); }
 .btn-sm { padding: 6px 12px; font-size: 13px; }
+.btn-next { background: var(--green-600); color: #fff; border-color: var(--green-600); font-weight: 600; }
+.btn-next:hover { background: var(--green-500); border-color: var(--green-500); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.btn[hidden] { display: none; }
 
 /* legacy search box no longer in header - kept for compat */
 .search-box { display: none; }
@@ -323,7 +331,7 @@ button, input, select, textarea { font-family: inherit; }
   padding: 14px 20px;
   border-radius: 12px;
   font-size: 13px;
-  min-width: 160px;
+  min-width: 150px;
   flex: 1;
   border: 1px solid transparent;
 }
@@ -341,6 +349,11 @@ button, input, select, textarea { font-family: inherit; }
 .tile.donated .val { color: var(--green-700); }
 .tile.committed .val { color: var(--gold); }
 .tile .sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.tile.messaged { background: var(--surface); border-color: var(--border); }
+.tile.pending { background: var(--surface); border-color: var(--green-500); }
+.tile.pending .val { color: var(--green-700); }
+.progress { height: 6px; border-radius: 3px; background: var(--surface-alt); margin: 8px 0 6px; overflow: hidden; }
+.progress span { display: block; height: 100%; background: var(--green-500); border-radius: 3px; transition: width 0.3s; }
 
 /* Icon-only button */
 .btn.icon-only { padding: 10px; }
@@ -371,6 +384,10 @@ button, input, select, textarea { font-family: inherit; }
   font-weight: 500;
 }
 .chip:hover { background: var(--surface-alt); }
+.chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.chip { font-family: inherit; }
+.chip-n { font-variant-numeric: tabular-nums; opacity: 0.7; margin-left: 2px; }
+.chip.active .chip-n { opacity: 0.9; }
 .chip.active { background: var(--green-600); color: #fff; border-color: var(--green-600); }
 .chip.vip.active { background: var(--gold); border-color: var(--gold); }
 
@@ -391,6 +408,13 @@ button, input, select, textarea { font-family: inherit; }
 .donor-card.vip { background: var(--gold-bg); border-color: var(--gold); }
 .donor-card.donated { border-left: 3px solid var(--green-500); }
 .donor-card.committed { border-left: 3px solid var(--gold); }
+.donor-card.messaged { border-left: 3px solid var(--text-tertiary); }
+/* Handled rows step back so the eye lands on who is left */
+.donor-card.messaged, .donor-card.donated { opacity: 0.6; }
+.donor-card.messaged:hover, .donor-card.donated:hover,
+.donor-card.focused, .donor-card:focus-within { opacity: 1; }
+.donor-card.focused { border-color: var(--green-500); box-shadow: 0 0 0 3px var(--accent-hover); }
+.unnamed { color: var(--text-tertiary); font-style: italic; font-weight: 500; }
 
 .star-btn {
   background: none; border: none;
@@ -437,24 +461,8 @@ button, input, select, textarea { font-family: inherit; }
 .msg-btn:hover { background: var(--green-600); color: #fff; transform: scale(1.05); }
 .msg-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .msg-btn:disabled:hover { transform: none; background: var(--green-100); color: var(--green-700); }
-.msg-btn.sent { background: var(--green-600); color: #fff; }
-.msg-btn.sent:hover { background: var(--green-500); color: #fff; }
-
-.sent-badge {
-  display: inline-flex; align-items: center; gap: 4px;
-  margin-top: 3px;
-  padding: 1px 8px;
-  border-radius: 12px;
-  background: var(--green-100);
-  color: var(--green-700);
-  font-size: 11px; font-weight: 600;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-.sent-badge:hover { border-color: var(--green-500); }
-.sent-badge.off { background: transparent; color: var(--text-tertiary); border-color: var(--border); font-weight: 500; opacity: 0; transition: opacity 0.12s; }
-.donor-card:hover .sent-badge.off { opacity: 1; }
-@media (hover: none) { .sent-badge.off { opacity: 1; } }
+.msg-btn.done { background: transparent; color: var(--green-600); box-shadow: inset 0 0 0 1.5px var(--green-500); }
+.msg-btn.done:hover { background: var(--green-600); color: #fff; }
 
 .status-btn {
   padding: 7px 12px;
@@ -467,6 +475,7 @@ button, input, select, textarea { font-family: inherit; }
   text-align: center;
 }
 .status-btn.pending { background: var(--surface-alt); color: var(--text-secondary); }
+.status-btn.messaged { background: transparent; color: var(--text-secondary); box-shadow: inset 0 0 0 1px var(--border); }
 .status-btn.committed { background: var(--gold-bg); color: var(--gold); }
 .status-btn.donated { background: var(--green-100); color: var(--green-700); }
 .status-btn:hover { filter: brightness(0.95); }
@@ -581,7 +590,10 @@ textarea.paste-area:focus { border-color: var(--green-500); }
   z-index: 200;
   animation: slideUp 0.25s ease;
 }
-:root[data-theme="dark"] .toast, @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .toast{color:#0D2318}}
+.toast { display: flex; align-items: center; gap: 14px; }
+.toast button { background: none; border: 1px solid currentColor; color: inherit; border-radius: 6px; padding: 3px 10px; font: inherit; font-weight: 600; cursor: pointer; }
+:root[data-theme="dark"] .toast { color: #0D2318; }
+@media(prefers-color-scheme:dark){ :root:not([data-theme="light"]) .toast { color: #0D2318; } }
 @keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
 
 /* Keyboard shortcut overlay */
@@ -621,10 +633,20 @@ textarea.paste-area:focus { border-color: var(--green-500); }
 }
 
 @media(max-width:900px) {
-  .donor-card { grid-template-columns: 28px 1fr auto; gap: 10px; }
-  .donor-card > .status-btn { grid-column: 1/-1; }
-  .donor-card > .amount-input { grid-column: 1/3; }
-  .donor-card > .notes-input { grid-column: 1/-1; }
+  /* Compact card: name + actions on top, status + amount, then notes */
+  .donor-card {
+    grid-template-columns: 28px 1fr 110px 36px 30px;
+    grid-template-areas: "star info info msg rm" "status status amount amount amount" "notes notes notes notes notes";
+    row-gap: 8px;
+  }
+  .donor-card > .star-btn { grid-area: star; }
+  .donor-card > .donor-info { grid-area: info; }
+  .donor-card > .msg-btn { grid-area: msg; }
+  .donor-card > .remove-btn { grid-area: rm; opacity: 0.6; }
+  .donor-card > .status-btn { grid-area: status; }
+  .donor-card > .amount-input { grid-area: amount; }
+  .donor-card > .notes-input { grid-area: notes; background: var(--surface-alt); }
+  .tile { min-width: calc(50% - 6px); }
 }
 @media(max-width:768px) {
   .app { flex-direction: column; }
@@ -636,6 +658,9 @@ textarea.paste-area:focus { border-color: var(--green-500); }
   .donor-area { padding: 14px 16px 40px; }
   .search-box { width: 100%; }
   .header-actions { width: 100%; flex-wrap: wrap; }
+  .btn-next { flex: 1; justify-content: center; }
+  .filters .inline-search { max-width: none; min-width: 100%; margin-left: 0; }
+  .toast { left: 16px; right: 16px; bottom: 16px; }
   .help-toggle, .shortcuts-panel { display: none !important; }
 }
 </style>
@@ -678,7 +703,11 @@ textarea.paste-area:focus { border-color: var(--green-500); }
           <svg width="15" height="15" viewBox="0 0 14 14" fill="currentColor"><path d="M7 1a1 1 0 011 1v5.59l1.3-1.3a1 1 0 111.4 1.42l-3 3a1 1 0 01-1.4 0l-3-3a1 1 0 111.4-1.42L6 7.59V2a1 1 0 011-1zM2 11a1 1 0 012 0v1h6v-1a1 1 0 012 0v1a2 2 0 01-2 2H4a2 2 0 01-2-2v-1z"/></svg>
           Export
         </button>
-        <button class="btn btn-primary" onclick="showAddDonorModal()" id="addDonorBtn" disabled title="Add donors (A)">
+        <button class="btn btn-next" onclick="messageNext()" id="nextBtn" hidden title="Message the next person who hasn't been asked (Enter)">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor"><path d="M3 2.5v11l10-5.5z"/></svg>
+          <span id="nextBtnLabel">Message next</span>
+        </button>
+        <button class="btn" onclick="showAddDonorModal()" id="addDonorBtn" disabled title="Add donors (A)">
           <svg width="15" height="15" viewBox="0 0 14 14" fill="currentColor"><path d="M7 1a1 1 0 011 1v4h4a1 1 0 010 2H8v4a1 1 0 01-2 0V8H2a1 1 0 010-2h4V2a1 1 0 011-1z"/></svg>
           Add
         </button>
@@ -699,8 +728,15 @@ textarea.paste-area:focus { border-color: var(--green-500); }
   <div class="sc"><span>Message template</span><span class="kbd">M</span></div>
   <div class="sc"><span>Add photos/videos</span><span class="kbd">P</span></div>
   <div class="sc"><span>Focus search</span><span class="kbd">/</span></div>
-  <div class="sc"><span>Next / prev case</span><span><span class="kbd">J</span> <span class="kbd">K</span></span></div>
+  <div class="sc"><span>Message next person</span><span class="kbd">Enter</span></div>
+  <div class="sc"><span>Move down / up</span><span><span class="kbd">J</span> <span class="kbd">K</span> or <span class="kbd">↓</span> <span class="kbd">↑</span></span></div>
+  <div class="sc"><span>Mark messaged on/off</span><span class="kbd">S</span></div>
+  <div class="sc"><span>Next status (Shift = back)</span><span class="kbd">C</span></div>
+  <div class="sc"><span>Type amount</span><span class="kbd">E</span></div>
+  <div class="sc"><span>VIP on/off</span><span class="kbd">V</span></div>
+  <div class="sc"><span>Remove / undo</span><span><span class="kbd">X</span> <span class="kbd">Z</span></span></div>
   <div class="sc"><span>Filter tabs</span><span><span class="kbd">1</span>–<span class="kbd">6</span></span></div>
+  <div class="sc"><span>Prev / next case</span><span><span class="kbd">[</span> <span class="kbd">]</span></span></div>
   <div class="sc"><span>Close modal</span><span class="kbd">Esc</span></div>
   <div class="sc"><span>Toggle dark mode</span><span class="kbd">T</span></div>
 </div>
@@ -841,6 +877,7 @@ function renderStats() {
 
 function selectCase(id) {
   state.activeCaseId = id;
+  focusIdx = null;
   saveState(); renderCases(); renderDonors();
   document.getElementById('addDonorBtn').disabled = false;
 }
@@ -853,6 +890,30 @@ function deleteCase(id) {
   saveState(); renderCases(); renderDonors(); renderStats();
 }
 
+// ============ STATUS FLOW ============
+// One field drives everything: Not asked -> Messaged -> Committed -> Donated
+const STATUS = {
+  pending:   { label: 'Not asked' },
+  messaged:  { label: 'Messaged' },
+  committed: { label: 'Committed' },
+  donated:   { label: 'Donated ✓' },
+};
+const STATUS_ORDER = ['pending', 'messaged', 'committed', 'donated'];
+function statusOf(d) { return STATUS[d.status] ? d.status : 'pending'; }
+
+// Old data had a separate "sent" flag; fold it into the status
+function migrateState() {
+  for (const c of state.cases) for (const d of c.donors) {
+    if (d.sent && statusOf(d) === 'pending') d.status = 'messaged';
+    if (d.sentAt && !d.messagedAt) d.messagedAt = d.sentAt;
+    delete d.sent; delete d.sentAt;
+  }
+  if (!['all', 'pending', 'messaged', 'committed', 'donated', 'vip'].includes(state.filter)) state.filter = 'all';
+}
+
+// Runtime-only: the keyboard-focused donor row (index into case.donors)
+let focusIdx = null;
+
 function getFilteredDonors(c) {
   const filter = (state.searchTerm || '').toLowerCase();
   let donors = c.donors.map((d, i) => ({ ...d, _idx: i }));
@@ -863,12 +924,8 @@ function getFilteredDonors(c) {
       (d.notes || '').toLowerCase().includes(filter)
     );
   }
-  if (state.filter === 'donated') donors = donors.filter(d => d.status === 'donated');
-  else if (state.filter === 'committed') donors = donors.filter(d => d.status === 'committed');
-  else if (state.filter === 'pending') donors = donors.filter(d => d.status === 'pending' || !d.status);
-  else if (state.filter === 'vip') donors = donors.filter(d => d.vip);
-  else if (state.filter === 'sent') donors = donors.filter(d => d.sent);
-  else if (state.filter === 'notsent') donors = donors.filter(d => !d.sent);
+  if (state.filter === 'vip') donors = donors.filter(d => d.vip);
+  else if (STATUS[state.filter]) donors = donors.filter(d => statusOf(d) === state.filter);
   return donors;
 }
 
@@ -877,6 +934,7 @@ function renderDonors() {
   const c = getActiveCase();
   if (!c) {
     document.getElementById('caseTitle').textContent = 'Select a Case';
+    document.getElementById('nextBtn').hidden = true;
     area.innerHTML = `<div class="empty-state">
       <svg width="56" height="56" viewBox="0 0 48 48" fill="none">
         <circle cx="24" cy="24" r="23" stroke="var(--border)" stroke-width="2" stroke-dasharray="4 3"/>
@@ -893,124 +951,239 @@ function renderDonors() {
     return;
   }
   document.getElementById('caseTitle').textContent = c.name;
-  const donors = getFilteredDonors(c);
-
-  const donated = c.donors.filter(d => d.status === 'donated').reduce((a,d) => a + (d.amount||0), 0);
-  const committed = c.donors.filter(d => d.status === 'committed').reduce((a,d) => a + (d.amount||0), 0);
-  const nDonated = c.donors.filter(d => d.status === 'donated').length;
-  const nCommitted = c.donors.filter(d => d.status === 'committed').length;
-  const nPending = c.donors.filter(d => d.status === 'pending' || !d.status).length;
-  const nVip = c.donors.filter(d => d.vip).length;
-  const nSent = c.donors.filter(d => d.sent).length;
-
   area.innerHTML = `
-    <div class="summary">
-      <div class="tile donated">
-        <div class="lbl">Donated</div>
-        <div class="val">PKR ${donated.toLocaleString()}</div>
-        <div class="sub">${nDonated} donor${nDonated!==1?'s':''}</div>
-      </div>
-      <div class="tile committed">
-        <div class="lbl">Committed</div>
-        <div class="val">PKR ${committed.toLocaleString()}</div>
-        <div class="sub">${nCommitted} pending payment</div>
-      </div>
-      <div class="tile pending">
-        <div class="lbl">Not yet asked</div>
-        <div class="val">${nPending}</div>
-        <div class="sub">of ${c.donors.length} total</div>
-      </div>
-    </div>
+    <div class="summary" id="donorTiles"></div>
     <div class="filters">
-      <div class="chip ${state.filter==='all'?'active':''}" onclick="setFilter('all')">All (${c.donors.length})</div>
-      <div class="chip ${state.filter==='donated'?'active':''}" onclick="setFilter('donated')">Donated (${nDonated})</div>
-      <div class="chip ${state.filter==='committed'?'active':''}" onclick="setFilter('committed')">Committed (${nCommitted})</div>
-      <div class="chip ${state.filter==='pending'?'active':''}" onclick="setFilter('pending')">Not asked (${nPending})</div>
-      <div class="chip vip ${state.filter==='vip'?'active':''}" onclick="setFilter('vip')">⭐ VIP (${nVip})</div>
-      <div class="chip ${state.filter==='sent'?'active':''}" onclick="setFilter('sent')">✓ Sent (${nSent})</div>
-      <div class="chip ${state.filter==='notsent'?'active':''}" onclick="setFilter('notsent')">Not sent (${c.donors.length - nSent})</div>
-      <input type="text" class="inline-search" placeholder="Search names, numbers, notes...  ( / )" id="searchBox" value="${esc(state.searchTerm||'')}" oninput="onSearchInput(this.value)">
+      <div class="chip-row" id="donorChips"></div>
+      <input type="text" class="inline-search" placeholder="Search names, numbers, notes   /" id="searchBox" value="${esc(state.searchTerm||'')}" oninput="onSearchInput(this.value)">
     </div>
-    ${donors.length === 0 ? `<div class="empty-state"><p>No donors match this filter.</p></div>` : `
-    <div class="donor-list">
-      ${donors.map(d => renderCard(d)).join('')}
-    </div>`}
-  `;
+    <div id="donorList"></div>`;
+  refreshHead();
+  renderList();
+}
+
+// Tiles, progress, filter counts and the "Message next" button — cheap, no list redraw
+function refreshHead() {
+  const c = getActiveCase(); if (!c) return;
+  const count = s => c.donors.filter(d => statusOf(d) === s).length;
+  const sum = s => c.donors.filter(d => statusOf(d) === s).reduce((a, d) => a + (d.amount || 0), 0);
+  const total = c.donors.length;
+  const n = { pending: count('pending'), messaged: count('messaged'), committed: count('committed'), donated: count('donated') };
+  const nVip = c.donors.filter(d => d.vip).length;
+  const done = total - n.pending;
+  const pct = total ? Math.round(done / total * 100) : 0;
+
+  const tiles = document.getElementById('donorTiles');
+  if (tiles) tiles.innerHTML = `
+    <div class="tile pending">
+      <div class="lbl">To message</div>
+      <div class="val">${n.pending}</div>
+      <div class="progress"><span style="width:${pct}%"></span></div>
+      <div class="sub">${done} of ${total} reached · ${pct}%</div>
+    </div>
+    <div class="tile messaged">
+      <div class="lbl">Awaiting reply</div>
+      <div class="val">${n.messaged}</div>
+      <div class="sub">messaged, no answer yet</div>
+    </div>
+    <div class="tile committed">
+      <div class="lbl">Committed</div>
+      <div class="val">PKR ${sum('committed').toLocaleString()}</div>
+      <div class="sub">${n.committed} pledge${n.committed !== 1 ? 's' : ''} to collect</div>
+    </div>
+    <div class="tile donated">
+      <div class="lbl">Donated</div>
+      <div class="val">PKR ${sum('donated').toLocaleString()}</div>
+      <div class="sub">${n.donated} donor${n.donated !== 1 ? 's' : ''}</div>
+    </div>`;
+
+  const chip = (f, label, num, key, extra = '') =>
+    `<button class="chip ${extra} ${state.filter === f ? 'active' : ''}" onclick="setFilter('${f}')" title="Key ${key}">${label} <span class="chip-n">${num}</span></button>`;
+  const chips = document.getElementById('donorChips');
+  if (chips) chips.innerHTML =
+    chip('all', 'All', total, 1) +
+    chip('pending', 'To message', n.pending, 2) +
+    chip('messaged', 'Messaged', n.messaged, 3) +
+    chip('committed', 'Committed', n.committed, 4) +
+    chip('donated', 'Donated', n.donated, 5) +
+    chip('vip', '★ VIP', nVip, 6, 'vip');
+
+  const nb = document.getElementById('nextBtn');
+  nb.hidden = false;
+  nb.disabled = n.pending === 0;
+  document.getElementById('nextBtnLabel').textContent = n.pending ? `Message next · ${n.pending}` : 'All reached ✓';
+
   renderStats();
   renderCases();
 }
 
+function renderList() {
+  const c = getActiveCase(); if (!c) return;
+  const el = document.getElementById('donorList'); if (!el) return;
+  const donors = getFilteredDonors(c);
+  el.className = donors.length ? 'donor-list' : '';
+  el.innerHTML = donors.length
+    ? donors.map(d => renderCard(d)).join('')
+    : `<div class="empty-state"><p>No donors match this filter.</p></div>`;
+}
+
+// Redraw a single row in place (keeps scroll position and keeps the list stable)
+function updateCard(idx) {
+  const c = getActiveCase(); if (!c) return;
+  const el = document.querySelector(`.donor-card[data-idx="${idx}"]`);
+  if (el) el.outerHTML = renderCard({ ...c.donors[idx], _idx: idx });
+  refreshHead();
+}
+
+const WA_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.76.46 3.42 1.27 4.86L2 22l5.36-1.24A9.95 9.95 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm4.62 14.05c-.2.56-1.16 1.09-1.63 1.14-.42.04-.94.06-1.51-.09-.35-.09-.79-.24-1.36-.48-2.4-1.04-3.96-3.46-4.08-3.62-.12-.16-.98-1.3-.98-2.48s.62-1.76.84-2c.22-.24.48-.3.64-.3h.46c.15 0 .35-.06.55.42.2.48.68 1.66.74 1.78.06.12.1.26.02.42-.08.16-.12.26-.24.4-.12.14-.25.31-.36.42-.12.12-.24.25-.1.49.14.24.62 1.02 1.33 1.65.91.81 1.68 1.06 1.92 1.18.24.12.38.1.52-.06.14-.16.6-.7.76-.94.16-.24.32-.2.54-.12.22.08 1.4.66 1.64.78.24.12.4.18.46.28.06.1.06.58-.14 1.14z"/></svg>';
+
 function renderCard(d) {
-  const status = d.status || 'pending';
-  const statusLabel = { pending: 'Not asked', committed: 'Committed', donated: 'Donated ✓' }[status];
+  const status = statusOf(d);
   const hasPhone = !!d.phone;
-  return `<div class="donor-card ${d.vip?'vip':''} ${status}">
-    <button class="star-btn ${d.vip?'active':''}" onclick="toggleVip(${d._idx})" title="Mark important">&#9733;</button>
+  const i = d._idx;
+  return `<div class="donor-card ${d.vip ? 'vip' : ''} ${status} ${i === focusIdx ? 'focused' : ''}" data-idx="${i}" onmousedown="setFocus(${i}, false)">
+    <button class="star-btn ${d.vip ? 'active' : ''}" onclick="toggleVip(${i})" title="Mark important (V)">&#9733;</button>
     <div class="donor-info">
-      <div class="donor-name" onclick="copyDonor(${d._idx})" title="Click to copy phone number">
-        ${d.name ? esc(d.name) : '<span style="color:var(--text-tertiary);font-style:italic">Unnamed</span>'}
-        <span class="copy-hint">${hasPhone ? '⧉ copy' : ''}</span>
+      <div class="donor-name" onclick="copyDonor(${i})" title="Click to copy ${hasPhone ? 'phone number' : 'name'}">
+        ${d.name ? esc(d.name) : '<span class="unnamed">Unnamed</span>'}
+        <span class="copy-hint">⧉ copy</span>
       </div>
-      ${d.phone ? `<div class="donor-phone" onclick="copyPhone('${d.phone}')" title="Click to copy">${esc(d.phone)}</div>` : ''}
-      ${d.sent
-        ? `<div class="sent-badge" onclick="toggleSent(${d._idx})" title="Messaged — click to unmark">✓ Sent</div>`
-        : `<div class="sent-badge off" onclick="toggleSent(${d._idx})" title="Mark as sent without opening WhatsApp">Mark sent</div>`}
+      ${hasPhone ? `<div class="donor-phone" onclick="copyPhone('${d.phone}')" title="Click to copy">${esc(d.phone)}</div>` : ''}
     </div>
-    <button class="status-btn ${status}" onclick="cycleStatus(${d._idx})" title="Click to cycle status">${statusLabel}</button>
-    <input class="amount-input" type="number" value="${d.amount||''}" placeholder="PKR 0" onchange="setAmount(${d._idx}, this.value)">
-    <input class="notes-input" type="text" value="${esc(d.notes||'')}" placeholder="Notes..." onchange="setNotes(${d._idx}, this.value)">
-    <button class="msg-btn ${d.sent ? 'sent' : ''}" onclick="sendMessage(${d._idx})" title="${d.sent ? 'Already messaged — click to message again' : (hasPhone ? 'Open WhatsApp with message' : 'Copy personalized message')}">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.76.46 3.42 1.27 4.86L2 22l5.36-1.24A9.95 9.95 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm4.62 14.05c-.2.56-1.16 1.09-1.63 1.14-.42.04-.94.06-1.51-.09-.35-.09-.79-.24-1.36-.48-2.4-1.04-3.96-3.46-4.08-3.62-.12-.16-.98-1.3-.98-2.48s.62-1.76.84-2c.22-.24.48-.3.64-.3h.46c.15 0 .35-.06.55.42.2.48.68 1.66.74 1.78.06.12.1.26.02.42-.08.16-.12.26-.24.4-.12.14-.25.31-.36.42-.12.12-.24.25-.1.49.14.24.62 1.02 1.33 1.65.91.81 1.68 1.06 1.92 1.18.24.12.38.1.52-.06.14-.16.6-.7.76-.94.16-.24.32-.2.54-.12.22.08 1.4.66 1.64.78.24.12.4.18.46.28.06.1.06.58-.14 1.14z"/></svg>
-    </button>
-    <button class="remove-btn" onclick="removeDonor(${d._idx})" title="Remove">&times;</button>
+    <button class="status-btn ${status}" onclick="cycleStatus(${i}, event.shiftKey ? -1 : 1)" title="Click: next status · Shift+click: back (C)">${STATUS[status].label}</button>
+    <input class="amount-input" type="number" inputmode="numeric" value="${d.amount || ''}" placeholder="PKR" onchange="setAmount(${i}, this.value)" title="Amount (E)">
+    <input class="notes-input" type="text" value="${esc(d.notes || '')}" placeholder="Notes" onchange="setNotes(${i}, this.value)">
+    <button class="msg-btn ${status !== 'pending' ? 'done' : ''}" onclick="sendMessage(${i})" title="${hasPhone ? 'Open WhatsApp with message' : 'Copy personalized message'} (Enter)">${WA_ICON}</button>
+    <button class="remove-btn" onclick="removeDonor(${i})" title="Remove (X)">&times;</button>
   </div>`;
 }
 
-function setFilter(f) { state.filter = f; saveState(); renderDonors(); }
-function cycleStatus(idx) {
-  const c = getActiveCase(); if(!c) return;
-  const order = ['pending', 'committed', 'donated'];
-  const cur = c.donors[idx].status || 'pending';
-  c.donors[idx].status = order[(order.indexOf(cur) + 1) % order.length];
-  saveState(); renderDonors();
+function setFocus(idx, scroll = true) {
+  document.querySelectorAll('.donor-card.focused').forEach(el => el.classList.remove('focused'));
+  focusIdx = idx;
+  if (idx == null) return;
+  const el = document.querySelector(`.donor-card[data-idx="${idx}"]`);
+  if (!el) return;
+  el.classList.add('focused');
+  if (scroll) el.scrollIntoView({ block: 'nearest' });
+}
+
+// Donor indexes in the order they are shown on screen
+function visibleIdxs() {
+  return [...document.querySelectorAll('#donorList .donor-card')].map(el => +el.dataset.idx);
+}
+
+function moveFocus(step) {
+  const list = visibleIdxs(); if (!list.length) return;
+  const pos = list.indexOf(focusIdx);
+  const next = pos === -1 ? (step > 0 ? 0 : list.length - 1) : Math.min(list.length - 1, Math.max(0, pos + step));
+  setFocus(list[next]);
+}
+
+// First "Not asked" donor at or after the focused row (wraps around)
+function findNextPending(fromIdx, includeSelf) {
+  const c = getActiveCase(); if (!c) return null;
+  const list = visibleIdxs();
+  let start = list.indexOf(fromIdx);
+  if (start === -1) { start = 0; includeSelf = true; }
+  for (let k = includeSelf ? 0 : 1; k <= list.length; k++) {
+    const idx = list[(start + k) % list.length];
+    if (statusOf(c.donors[idx]) === 'pending') return idx;
+  }
+  return null;
+}
+
+// One key / one button: message the next person, then jump to the one after
+function messageNext() {
+  const idx = findNextPending(focusIdx, true);
+  if (idx == null) { toast('Everyone in this view has been reached ✓'); return; }
+  setFocus(idx);
+  sendMessage(idx);
+  const after = findNextPending(idx, false);
+  if (after != null) setFocus(after);
+}
+
+function setFilter(f) { state.filter = f; focusIdx = null; saveState(); renderDonors(); }
+
+function cycleStatus(idx, step = 1) {
+  const c = getActiveCase(); if (!c) return;
+  const d = c.donors[idx];
+  const pos = STATUS_ORDER.indexOf(statusOf(d));
+  d.status = STATUS_ORDER[(pos + step + STATUS_ORDER.length) % STATUS_ORDER.length];
+  if (d.status === 'messaged' && !d.messagedAt) d.messagedAt = Date.now();
+  saveState(); updateCard(idx);
+}
+function toggleMessaged(idx) {
+  const c = getActiveCase(); if (!c) return;
+  const d = c.donors[idx];
+  if (statusOf(d) === 'pending') { d.status = 'messaged'; d.messagedAt = Date.now(); toast('Marked as messaged'); }
+  else if (statusOf(d) === 'messaged') { d.status = 'pending'; d.messagedAt = null; toast('Back to not asked'); }
+  else return;
+  saveState(); updateCard(idx);
 }
 function toggleVip(idx) {
-  const c = getActiveCase(); if(!c) return;
+  const c = getActiveCase(); if (!c) return;
   c.donors[idx].vip = !c.donors[idx].vip;
-  saveState(); renderDonors();
+  saveState(); updateCard(idx);
 }
 function setAmount(idx, val) {
-  const c = getActiveCase(); if(!c) return;
+  const c = getActiveCase(); if (!c) return;
   c.donors[idx].amount = parseInt(val) || 0;
-  saveState(); renderDonors();
+  saveState(); refreshHead();   // no row redraw, so Tab keeps working
 }
 function setNotes(idx, val) {
-  const c = getActiveCase(); if(!c) return;
+  const c = getActiveCase(); if (!c) return;
   c.donors[idx].notes = val;
   saveState();
 }
+
+let lastRemoved = null;
 function removeDonor(idx) {
-  const c = getActiveCase(); if(!c) return;
-  c.donors.splice(idx, 1);
-  saveState(); renderDonors();
+  const c = getActiveCase(); if (!c) return;
+  const [d] = c.donors.splice(idx, 1);
+  lastRemoved = { caseId: c.id, idx, donor: d };
+  focusIdx = null;
+  saveState(); refreshHead(); renderList();
+  toast(`Removed ${d.name || d.phone || 'donor'}`, { label: 'Undo', fn: undoRemove });
 }
-function copyPhone(p) {
-  navigator.clipboard.writeText(p).then(() => toast('Phone copied: ' + p));
+function undoRemove() {
+  if (!lastRemoved) return;
+  const c = state.cases.find(x => x.id === lastRemoved.caseId);
+  if (c) c.donors.splice(lastRemoved.idx, 0, lastRemoved.donor);
+  lastRemoved = null;
+  saveState(); refreshHead(); renderList();
+  toast('Restored');
 }
 
-function copyDonor(idx) {
-  const c = getActiveCase(); if(!c) return;
-  const d = c.donors[idx];
-  if (d.phone) {
-    navigator.clipboard.writeText(d.phone).then(() => toast('Copied: ' + (d.name || d.phone)));
+// Clipboard: write immediately and confirm immediately — no waiting on the promise
+function copyText(text, msg) {
+  if (navigator.clipboard && window.isSecureContext !== false) {
+    navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
   } else {
-    navigator.clipboard.writeText(d.name).then(() => toast('Name copied (no phone available)'));
+    legacyCopy(text);
   }
+  if (msg) toast(msg);
+}
+function legacyCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); } catch (e) {}
+  ta.remove();
+}
+
+function copyPhone(p) { copyText(p, 'Copied ' + p); }
+
+function copyDonor(idx) {
+  const c = getActiveCase(); if (!c) return;
+  const d = c.donors[idx];
+  if (d.phone) copyText(d.phone, 'Copied ' + (d.name || d.phone));
+  else copyText(d.name, 'Name copied (no phone on file)');
 }
 
 function getFirstName(name) {
   if (!name) return 'Brother';
-  return name.split(/\s+/)[0].replace(/[^\w]/g, '');
+  return name.split(/\s+/)[0].replace(/[^\w]/g, '') || 'Brother';
 }
 
 function buildMessage(donor) {
@@ -1019,44 +1192,24 @@ function buildMessage(donor) {
 }
 
 function sendMessage(idx) {
-  const c = getActiveCase(); if(!c) return;
+  const c = getActiveCase(); if (!c) return;
   const d = c.donors[idx];
   const message = buildMessage(d);
   if (d.phone) {
     const phoneClean = d.phone.replace(/[^\d]/g, '');
-    const url = `https://wa.me/${phoneClean}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
-    toast('Opening WhatsApp for ' + (d.name || d.phone) + ' — marked as sent');
+    window.open(`https://wa.me/${phoneClean}?text=${encodeURIComponent(message)}`, '_blank');
+    toast('WhatsApp opened for ' + (d.name || d.phone));
   } else {
-    navigator.clipboard.writeText(message).then(() => toast('Message copied — marked as sent'));
+    copyText(message, 'No phone on file — message copied');
   }
-  d.sent = true;
-  d.sentAt = Date.now();
-  saveState(); renderDonors();
-}
-
-function toggleSent(idx) {
-  const c = getActiveCase(); if(!c) return;
-  const d = c.donors[idx];
-  d.sent = !d.sent;
-  d.sentAt = d.sent ? Date.now() : null;
-  saveState(); renderDonors();
-  toast(d.sent ? 'Marked as sent' : 'Unmarked');
+  if (statusOf(d) === 'pending') { d.status = 'messaged'; d.messagedAt = Date.now(); }
+  saveState(); updateCard(idx);
 }
 
 function onSearchInput(v) {
   state.searchTerm = v;
   saveState();
-  // Only re-render list section (not the input, to keep focus)
-  const c = getActiveCase(); if (!c) return;
-  const donors = getFilteredDonors(c);
-
-  const listEl = document.querySelector('.donor-list');
-  if (listEl) {
-    listEl.innerHTML = donors.map(d => renderCard(d)).join('');
-  } else {
-    renderDonors();
-  }
+  renderList();   // list only, so the search box keeps focus
 }
 
 function showMessageTemplateModal() {
@@ -1221,9 +1374,9 @@ function addPastedDonors() {
 async function exportCase() {
   const c = getActiveCase();
   if (!c) { toast('Select a case first'); return; }
-  let csv = 'Name,Phone,Status,Amount (PKR),VIP,Message Sent,Notes\n';
+  let csv = 'Name,Phone,Status,Amount (PKR),VIP,Notes\n';
   for (const d of c.donors) {
-    csv += `"${(d.name||'').replace(/"/g,'""')}","${d.phone||''}",${d.status||'pending'},${d.amount||0},${d.vip?'Yes':'No'},${d.sent?'Yes':'No'},"${(d.notes||'').replace(/"/g,'""')}"\n`;
+    csv += `"${(d.name||'').replace(/"/g,'""')}","${d.phone||''}",${STATUS[statusOf(d)].label.replace(' ✓','')},${d.amount||0},${d.vip?'Yes':'No'},"${(d.notes||'').replace(/"/g,'""')}"\n`;
   }
   const filename = c.name.replace(/[^a-z0-9]/gi,'_') + '_donors.csv';
 
@@ -1245,11 +1398,23 @@ async function exportCase() {
   toast('Exported');
 }
 
-function toast(msg) {
+// One toast at a time: a new one replaces the old, so they never pile up
+let toastTimer = null;
+function toast(msg, action) {
+  const box = document.getElementById('toastContainer');
+  box.innerHTML = '';
   const t = document.createElement('div');
-  t.className = 'toast'; t.textContent = msg;
-  document.getElementById('toastContainer').appendChild(t);
-  setTimeout(() => t.remove(), 2500);
+  t.className = 'toast';
+  t.textContent = msg;
+  if (action) {
+    const b = document.createElement('button');
+    b.textContent = action.label;
+    b.onclick = () => { box.innerHTML = ''; action.fn(); };
+    t.appendChild(b);
+  }
+  box.appendChild(t);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.remove(), action ? 5000 : 1800);
 }
 
 function toggleShortcuts() {
@@ -1327,7 +1492,15 @@ async function mediaDBDelete(id) {
 async function loadMediaLibrary() {
   try {
     const items = await mediaDBGetAll();
+    mediaItems.forEach(m => m.url && URL.revokeObjectURL(m.url));
     mediaItems = items.map(it => ({ ...it, url: URL.createObjectURL(it.blob) }));
+    // Clipboard only takes PNG. Convert once now, not on every click.
+    for (const m of mediaItems) {
+      if (m.type === 'image' && m.mime !== 'image/png') {
+        m.png = convertBlobToPng(m.blob);
+        m.png.catch(() => {});
+      }
+    }
     mediaItems.sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
     mediaDBAvailable = true;
   } catch(e) {
@@ -1432,10 +1605,7 @@ function saveMessageItem(editId) {
 function copySavedMessage(id) {
   const m = state.savedMessages.find(x => x.id === id);
   if (!m) return;
-  navigator.clipboard.writeText(m.text).then(
-    () => toast('Copied: ' + (m.label || m.text.slice(0, 30))),
-    () => toast('Copy failed')
-  );
+  copyText(m.text, 'Copied: ' + (m.label || m.text.slice(0, 30)));
 }
 
 function deleteSavedMessage(id) {
@@ -1456,10 +1626,7 @@ function copySelectedMessages() {
   const texts = state.savedMessages.filter(m => selectedMsgIds.has(m.id)).map(m => m.text);
   if (texts.length === 0) return;
   const combined = texts.join('\n\n');
-  navigator.clipboard.writeText(combined).then(
-    () => toast(`Copied ${texts.length} messages`),
-    () => toast('Copy failed')
-  );
+  copyText(combined, `Copied ${texts.length} messages`);
 }
 
 function showAddMediaModal() {
@@ -1567,19 +1734,6 @@ function convertBlobToPng(blob) {
   });
 }
 
-async function copyImageBlobToClipboard(blob) {
-  try {
-    await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
-    return true;
-  } catch(e) {
-    try {
-      const pngBlob = await convertBlobToPng(blob);
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
-      return true;
-    } catch(e2) { return false; }
-  }
-}
-
 async function fallbackDownload(blob, filename) {
   try {
     const downloads = window.claude ? await window.claude.use("downloads") : null;
@@ -1596,19 +1750,20 @@ async function copyMediaItem(id) {
   const m = mediaItems.find(x => x.id === id);
   if (!m) return;
   if (m.type === 'image') {
-    const ok = await copyImageBlobToClipboard(m.blob);
-    if (ok) { toast('Image copied — paste it into WhatsApp'); return; }
-    await fallbackDownload(m.blob, mediaFilename(m));
-    toast("Clipboard copy isn't supported here — downloaded instead");
-  } else {
-    let ok = false;
     try {
-      await navigator.clipboard.write([new ClipboardItem({ [m.mime || 'video/mp4']: m.blob })]);
-      ok = true;
-    } catch(e) { ok = false; }
-    if (ok) { toast('Video copied — paste it into WhatsApp'); return; }
+      // Hand the clipboard a promise straight away: this keeps the click "fresh"
+      // for the browser and uses the PNG that was prepared on load.
+      const png = m.mime === 'image/png' ? m.blob : (m.png || convertBlobToPng(m.blob));
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+      toast('Image copied — paste in WhatsApp');
+    } catch (e) {
+      await fallbackDownload(m.blob, mediaFilename(m));
+      toast("Couldn't copy here — downloaded instead");
+    }
+  } else {
+    // Browsers do not allow video on the clipboard, so save the file instead
     await fallbackDownload(m.blob, mediaFilename(m));
-    toast("Browsers can't copy video to clipboard — downloaded instead, attach it in WhatsApp");
+    toast('Video downloaded — attach it in WhatsApp');
   }
 }
 
@@ -1631,22 +1786,41 @@ document.addEventListener('keydown', e => {
     case '?': toggleShortcuts(); break;
     case 't': toggleTheme(); break;
     case '1': setFilter('all'); break;
-    case '2': setFilter('donated'); break;
-    case '3': setFilter('committed'); break;
-    case '4': setFilter('pending'); break;
-    case '5': setFilter('sent'); break;
-    case '6': setFilter('notsent'); break;
-    case 'j': case 'k': {
+    case '2': setFilter('pending'); break;
+    case '3': setFilter('messaged'); break;
+    case '4': setFilter('committed'); break;
+    case '5': setFilter('donated'); break;
+    case '6': setFilter('vip'); break;
+    case '[': case ']': {
       const i = state.cases.findIndex(c => c.id === state.activeCaseId);
-      const n = e.key === 'j' ? i + 1 : i - 1;
+      const n = e.key === ']' ? i + 1 : i - 1;
       if (state.cases[n]) selectCase(state.cases[n].id);
       break;
     }
+    // --- Row keys: move with J/K or arrows, act on the highlighted donor ---
+    case 'j': case 'arrowdown': e.preventDefault(); moveFocus(1); break;
+    case 'k': case 'arrowup': e.preventDefault(); moveFocus(-1); break;
+    case 'enter':
+      if (!getActiveCase()) break;
+      e.preventDefault();   // stop Enter from also re-clicking a focused button
+      if (focusIdx != null && statusOf(getActiveCase().donors[focusIdx] || {}) !== 'pending') {
+        sendMessage(focusIdx);            // re-message the highlighted person
+      } else {
+        messageNext();                    // message next "Not asked" and move on
+      }
+      break;
+    case 's': if (focusIdx != null) toggleMessaged(focusIdx); break;
+    case 'c': if (focusIdx != null) cycleStatus(focusIdx, e.shiftKey ? -1 : 1); break;
+    case 'v': if (focusIdx != null) toggleVip(focusIdx); break;
+    case 'e': if (focusIdx != null) { e.preventDefault(); document.querySelector(`.donor-card[data-idx="${focusIdx}"] .amount-input`)?.focus(); } break;
+    case 'x': case 'delete': if (focusIdx != null) removeDonor(focusIdx); break;
+    case 'z': if (lastRemoved) undoRemove(); break;
   }
 });
 
 // Init
 loadState();
+migrateState();
 renderCases();
 renderDonors();
 renderStats();
