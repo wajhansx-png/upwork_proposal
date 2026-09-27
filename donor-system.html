@@ -351,12 +351,12 @@ button, input, select, textarea { font-family: inherit; }
 .pm-remove:hover { color: var(--red); }
 
 /* Donor area */
-.donor-area { flex: 1; overflow-y: auto; padding: 20px 26px 40px; }
+.donor-area { flex: 1; overflow-y: auto; padding: 16px 26px 40px; }
 
 /* Summary strip (one slim row) */
 .summary {
   display: flex; align-items: center; gap: 18px;
-  padding: 13px 18px; margin-bottom: 16px;
+  padding: 11px 18px; margin-bottom: 12px;
   background: var(--surface); border: 1px solid var(--border-light); border-radius: 12px;
   flex-wrap: wrap;
 }
@@ -373,7 +373,7 @@ button, input, select, textarea { font-family: inherit; }
 .btn.icon-only { padding: 10px; }
 
 /* Filter chips */
-.filters { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+.filters { display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
 .segmented { display: inline-flex; flex-wrap: wrap; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 10px; padding: 3px; gap: 2px; }
 .segmented .chip { border: none; background: none; border-radius: 7px; padding: 6px 12px; color: var(--text-secondary); font-weight: 500; }
 .segmented .chip:hover { background: var(--surface); }
@@ -411,19 +411,19 @@ button, input, select, textarea { font-family: inherit; }
 .chip.vip.active { background: var(--gold); border-color: var(--gold); }
 
 /* Donor cards (list layout — bigger targets, less struggle) */
-.donor-list { display: flex; flex-direction: column; gap: 6px; }
+.donor-list { display: flex; flex-direction: column; gap: 4px; }
 .donor-card {
   display: grid;
-  grid-template-columns: 30px 1fr 120px 120px 1fr 36px 30px;
+  grid-template-columns: 26px 1fr 116px 108px 1fr 34px 26px;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 7px 12px;
   background: var(--surface);
   border: 1px solid var(--border-light);
-  border-radius: 10px;
-  transition: border-color 0.12s, background 0.12s;
+  border-radius: 9px;
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
 }
-.donor-card:hover { border-color: var(--border); }
+.donor-card:hover { border-color: var(--green-500); box-shadow: var(--shadow); }
 .donor-card.vip { background: var(--gold-bg); border-color: var(--gold); }
 .donor-card.donated { border-left: 3px solid var(--green-500); }
 .donor-card.committed { border-left: 3px solid var(--gold); }
@@ -437,7 +437,7 @@ button, input, select, textarea { font-family: inherit; }
 
 .star-btn {
   background: none; border: none;
-  font-size: 20px; cursor: pointer;
+  font-size: 18px; cursor: pointer;
   opacity: 0.25; padding: 0;
   transition: opacity 0.12s, transform 0.12s;
   color: var(--text-tertiary);
@@ -447,15 +447,15 @@ button, input, select, textarea { font-family: inherit; }
 
 .donor-info { min-width: 0; }
 .donor-name {
-  font-size: 15px; font-weight: 600;
+  font-size: 14.5px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   cursor: pointer;
   transition: color 0.12s;
 }
-.donor-name:hover { color: var(--green-600); }
+.donor-name:hover { color: var(--green-600); text-decoration: underline; text-underline-offset: 2px; }
 .donor-name .copy-hint {
   opacity: 0; margin-left: 6px; font-size: 11px;
-  color: var(--text-tertiary); font-weight: 400;
+  color: var(--green-600); font-weight: 500;
   transition: opacity 0.12s;
 }
 .donor-name:hover .copy-hint { opacity: 1; }
@@ -465,13 +465,13 @@ button, input, select, textarea { font-family: inherit; }
   font-family: ui-monospace, monospace;
   cursor: pointer;
 }
-.donor-phone:hover { color: var(--green-600); }
+.donor-phone:hover { color: var(--green-600); text-decoration: underline; text-underline-offset: 2px; }
 
 .msg-btn {
   background: var(--green-100);
   border: none;
   color: var(--green-700);
-  width: 34px; height: 34px;
+  width: 32px; height: 32px;
   border-radius: 8px;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
@@ -484,15 +484,16 @@ button, input, select, textarea { font-family: inherit; }
 .msg-btn.done:hover { background: var(--green-600); color: #fff; }
 
 .status-btn {
-  padding: 7px 12px;
-  border-radius: 8px;
+  padding: 6px 12px;
+  border-radius: 7px;
   border: none;
-  font-size: 13px; font-weight: 600;
+  font-size: 12.5px; font-weight: 600;
   cursor: pointer;
   width: 100%;
   transition: all 0.12s;
   text-align: center;
 }
+.status-btn:hover { box-shadow: inset 0 0 0 1.5px var(--green-500); }
 .status-btn.pending { background: var(--surface-alt); color: var(--text-secondary); }
 .status-btn.messaged { background: transparent; color: var(--text-secondary); box-shadow: inset 0 0 0 1px var(--border); }
 .status-btn.committed { background: var(--gold-bg); color: var(--gold); }
@@ -500,18 +501,19 @@ button, input, select, textarea { font-family: inherit; }
 .status-btn:hover { filter: brightness(0.95); }
 
 .amount-input, .notes-input {
-  padding: 8px 12px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  font-size: 14px;
-  background: transparent;
+  padding: 6px 10px;
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  font-size: 13.5px;
+  background: var(--surface-alt);
   color: var(--text);
   width: 100%;
   outline: none;
+  cursor: text;
   transition: all 0.12s;
 }
 .amount-input { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
-.amount-input:hover, .notes-input:hover { background: var(--surface-alt); }
+.amount-input:hover, .notes-input:hover { border-color: var(--green-500); }
 .amount-input:focus, .notes-input:focus {
   background: var(--surface); border-color: var(--green-500);
   box-shadow: 0 0 0 3px var(--accent-hover);
