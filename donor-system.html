@@ -437,6 +437,24 @@ button, input, select, textarea { font-family: inherit; }
 .msg-btn:hover { background: var(--green-600); color: #fff; transform: scale(1.05); }
 .msg-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .msg-btn:disabled:hover { transform: none; background: var(--green-100); color: var(--green-700); }
+.msg-btn.sent { background: var(--green-600); color: #fff; }
+.msg-btn.sent:hover { background: var(--green-500); color: #fff; }
+
+.sent-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-top: 3px;
+  padding: 1px 8px;
+  border-radius: 12px;
+  background: var(--green-100);
+  color: var(--green-700);
+  font-size: 11px; font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+.sent-badge:hover { border-color: var(--green-500); }
+.sent-badge.off { background: transparent; color: var(--text-tertiary); border-color: var(--border); font-weight: 500; opacity: 0; transition: opacity 0.12s; }
+.donor-card:hover .sent-badge.off { opacity: 1; }
+@media (hover: none) { .sent-badge.off { opacity: 1; } }
 
 .status-btn {
   padding: 7px 12px;
@@ -682,7 +700,7 @@ textarea.paste-area:focus { border-color: var(--green-500); }
   <div class="sc"><span>Add photos/videos</span><span class="kbd">P</span></div>
   <div class="sc"><span>Focus search</span><span class="kbd">/</span></div>
   <div class="sc"><span>Next / prev case</span><span><span class="kbd">J</span> <span class="kbd">K</span></span></div>
-  <div class="sc"><span>Filter tabs</span><span><span class="kbd">1</span>–<span class="kbd">4</span></span></div>
+  <div class="sc"><span>Filter tabs</span><span><span class="kbd">1</span>–<span class="kbd">6</span></span></div>
   <div class="sc"><span>Close modal</span><span class="kbd">Esc</span></div>
   <div class="sc"><span>Toggle dark mode</span><span class="kbd">T</span></div>
 </div>
@@ -835,6 +853,25 @@ function deleteCase(id) {
   saveState(); renderCases(); renderDonors(); renderStats();
 }
 
+function getFilteredDonors(c) {
+  const filter = (state.searchTerm || '').toLowerCase();
+  let donors = c.donors.map((d, i) => ({ ...d, _idx: i }));
+  if (filter) {
+    donors = donors.filter(d =>
+      (d.name || '').toLowerCase().includes(filter) ||
+      (d.phone || '').includes(filter) ||
+      (d.notes || '').toLowerCase().includes(filter)
+    );
+  }
+  if (state.filter === 'donated') donors = donors.filter(d => d.status === 'donated');
+  else if (state.filter === 'committed') donors = donors.filter(d => d.status === 'committed');
+  else if (state.filter === 'pending') donors = donors.filter(d => d.status === 'pending' || !d.status);
+  else if (state.filter === 'vip') donors = donors.filter(d => d.vip);
+  else if (state.filter === 'sent') donors = donors.filter(d => d.sent);
+  else if (state.filter === 'notsent') donors = donors.filter(d => !d.sent);
+  return donors;
+}
+
 function renderDonors() {
   const area = document.getElementById('donorArea');
   const c = getActiveCase();
@@ -856,19 +893,7 @@ function renderDonors() {
     return;
   }
   document.getElementById('caseTitle').textContent = c.name;
-  const filter = (state.searchTerm || '').toLowerCase();
-  let donors = c.donors.map((d, i) => ({ ...d, _idx: i }));
-  if (filter) {
-    donors = donors.filter(d =>
-      (d.name || '').toLowerCase().includes(filter) ||
-      (d.phone || '').includes(filter) ||
-      (d.notes || '').toLowerCase().includes(filter)
-    );
-  }
-  if (state.filter === 'donated') donors = donors.filter(d => d.status === 'donated');
-  else if (state.filter === 'committed') donors = donors.filter(d => d.status === 'committed');
-  else if (state.filter === 'pending') donors = donors.filter(d => d.status === 'pending' || !d.status);
-  else if (state.filter === 'vip') donors = donors.filter(d => d.vip);
+  const donors = getFilteredDonors(c);
 
   const donated = c.donors.filter(d => d.status === 'donated').reduce((a,d) => a + (d.amount||0), 0);
   const committed = c.donors.filter(d => d.status === 'committed').reduce((a,d) => a + (d.amount||0), 0);
@@ -876,6 +901,7 @@ function renderDonors() {
   const nCommitted = c.donors.filter(d => d.status === 'committed').length;
   const nPending = c.donors.filter(d => d.status === 'pending' || !d.status).length;
   const nVip = c.donors.filter(d => d.vip).length;
+  const nSent = c.donors.filter(d => d.sent).length;
 
   area.innerHTML = `
     <div class="summary">
@@ -901,6 +927,8 @@ function renderDonors() {
       <div class="chip ${state.filter==='committed'?'active':''}" onclick="setFilter('committed')">Committed (${nCommitted})</div>
       <div class="chip ${state.filter==='pending'?'active':''}" onclick="setFilter('pending')">Not asked (${nPending})</div>
       <div class="chip vip ${state.filter==='vip'?'active':''}" onclick="setFilter('vip')">⭐ VIP (${nVip})</div>
+      <div class="chip ${state.filter==='sent'?'active':''}" onclick="setFilter('sent')">✓ Sent (${nSent})</div>
+      <div class="chip ${state.filter==='notsent'?'active':''}" onclick="setFilter('notsent')">Not sent (${c.donors.length - nSent})</div>
       <input type="text" class="inline-search" placeholder="Search names, numbers, notes...  ( / )" id="searchBox" value="${esc(state.searchTerm||'')}" oninput="onSearchInput(this.value)">
     </div>
     ${donors.length === 0 ? `<div class="empty-state"><p>No donors match this filter.</p></div>` : `
@@ -924,11 +952,14 @@ function renderCard(d) {
         <span class="copy-hint">${hasPhone ? '⧉ copy' : ''}</span>
       </div>
       ${d.phone ? `<div class="donor-phone" onclick="copyPhone('${d.phone}')" title="Click to copy">${esc(d.phone)}</div>` : ''}
+      ${d.sent
+        ? `<div class="sent-badge" onclick="toggleSent(${d._idx})" title="Messaged — click to unmark">✓ Sent</div>`
+        : `<div class="sent-badge off" onclick="toggleSent(${d._idx})" title="Mark as sent without opening WhatsApp">Mark sent</div>`}
     </div>
     <button class="status-btn ${status}" onclick="cycleStatus(${d._idx})" title="Click to cycle status">${statusLabel}</button>
     <input class="amount-input" type="number" value="${d.amount||''}" placeholder="PKR 0" onchange="setAmount(${d._idx}, this.value)">
     <input class="notes-input" type="text" value="${esc(d.notes||'')}" placeholder="Notes..." onchange="setNotes(${d._idx}, this.value)">
-    <button class="msg-btn" onclick="sendMessage(${d._idx})" ${!hasPhone ? '' : ''} title="${hasPhone ? 'Open WhatsApp with message' : 'Copy personalized message'}">
+    <button class="msg-btn ${d.sent ? 'sent' : ''}" onclick="sendMessage(${d._idx})" title="${d.sent ? 'Already messaged — click to message again' : (hasPhone ? 'Open WhatsApp with message' : 'Copy personalized message')}">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.76.46 3.42 1.27 4.86L2 22l5.36-1.24A9.95 9.95 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm4.62 14.05c-.2.56-1.16 1.09-1.63 1.14-.42.04-.94.06-1.51-.09-.35-.09-.79-.24-1.36-.48-2.4-1.04-3.96-3.46-4.08-3.62-.12-.16-.98-1.3-.98-2.48s.62-1.76.84-2c.22-.24.48-.3.64-.3h.46c.15 0 .35-.06.55.42.2.48.68 1.66.74 1.78.06.12.1.26.02.42-.08.16-.12.26-.24.4-.12.14-.25.31-.36.42-.12.12-.24.25-.1.49.14.24.62 1.02 1.33 1.65.91.81 1.68 1.06 1.92 1.18.24.12.38.1.52-.06.14-.16.6-.7.76-.94.16-.24.32-.2.54-.12.22.08 1.4.66 1.64.78.24.12.4.18.46.28.06.1.06.58-.14 1.14z"/></svg>
     </button>
     <button class="remove-btn" onclick="removeDonor(${d._idx})" title="Remove">&times;</button>
@@ -995,10 +1026,22 @@ function sendMessage(idx) {
     const phoneClean = d.phone.replace(/[^\d]/g, '');
     const url = `https://wa.me/${phoneClean}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
-    toast('Opening WhatsApp for ' + (d.name || d.phone));
+    toast('Opening WhatsApp for ' + (d.name || d.phone) + ' — marked as sent');
   } else {
-    navigator.clipboard.writeText(message).then(() => toast('Message copied (no phone on file)'));
+    navigator.clipboard.writeText(message).then(() => toast('Message copied — marked as sent'));
   }
+  d.sent = true;
+  d.sentAt = Date.now();
+  saveState(); renderDonors();
+}
+
+function toggleSent(idx) {
+  const c = getActiveCase(); if(!c) return;
+  const d = c.donors[idx];
+  d.sent = !d.sent;
+  d.sentAt = d.sent ? Date.now() : null;
+  saveState(); renderDonors();
+  toast(d.sent ? 'Marked as sent' : 'Unmarked');
 }
 
 function onSearchInput(v) {
@@ -1006,19 +1049,7 @@ function onSearchInput(v) {
   saveState();
   // Only re-render list section (not the input, to keep focus)
   const c = getActiveCase(); if (!c) return;
-  const filter = v.toLowerCase();
-  let donors = c.donors.map((d, i) => ({ ...d, _idx: i }));
-  if (filter) {
-    donors = donors.filter(d =>
-      (d.name || '').toLowerCase().includes(filter) ||
-      (d.phone || '').includes(filter) ||
-      (d.notes || '').toLowerCase().includes(filter)
-    );
-  }
-  if (state.filter === 'donated') donors = donors.filter(d => d.status === 'donated');
-  else if (state.filter === 'committed') donors = donors.filter(d => d.status === 'committed');
-  else if (state.filter === 'pending') donors = donors.filter(d => d.status === 'pending' || !d.status);
-  else if (state.filter === 'vip') donors = donors.filter(d => d.vip);
+  const donors = getFilteredDonors(c);
 
   const listEl = document.querySelector('.donor-list');
   if (listEl) {
@@ -1190,9 +1221,9 @@ function addPastedDonors() {
 async function exportCase() {
   const c = getActiveCase();
   if (!c) { toast('Select a case first'); return; }
-  let csv = 'Name,Phone,Status,Amount (PKR),VIP,Notes\n';
+  let csv = 'Name,Phone,Status,Amount (PKR),VIP,Message Sent,Notes\n';
   for (const d of c.donors) {
-    csv += `"${(d.name||'').replace(/"/g,'""')}","${d.phone||''}",${d.status||'pending'},${d.amount||0},${d.vip?'Yes':'No'},"${(d.notes||'').replace(/"/g,'""')}"\n`;
+    csv += `"${(d.name||'').replace(/"/g,'""')}","${d.phone||''}",${d.status||'pending'},${d.amount||0},${d.vip?'Yes':'No'},${d.sent?'Yes':'No'},"${(d.notes||'').replace(/"/g,'""')}"\n`;
   }
   const filename = c.name.replace(/[^a-z0-9]/gi,'_') + '_donors.csv';
 
@@ -1603,6 +1634,8 @@ document.addEventListener('keydown', e => {
     case '2': setFilter('donated'); break;
     case '3': setFilter('committed'); break;
     case '4': setFilter('pending'); break;
+    case '5': setFilter('sent'); break;
+    case '6': setFilter('notsent'); break;
     case 'j': case 'k': {
       const i = state.cases.findIndex(c => c.id === state.activeCaseId);
       const n = e.key === 'j' ? i + 1 : i - 1;
