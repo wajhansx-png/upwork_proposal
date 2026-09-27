@@ -1,0 +1,1486 @@
+<title>GiveLife Donor Hub</title>
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+
+<style>
+:root {
+  --green-700: #0F5F3A;
+  --green-600: #1E8555;
+  --green-500: #2CA36B;
+  --green-100: #DFF0E7;
+  --green-50: #EEF7F2;
+  --gold: #C08419;
+  --gold-bg: #FBEFD5;
+  --red: #C93444;
+  --red-bg: #FBE1E4;
+  --bg: #F7F5EF;
+  --surface: #FFFFFF;
+  --surface-alt: #EFEDE6;
+  --text: #1E1F22;
+  --text-secondary: #4E525A;
+  --text-tertiary: #7C808B;
+  --border: #DDD9CE;
+  --border-light: #ECE9DF;
+  --shadow: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 6px 20px rgba(0,0,0,0.08);
+  --accent-hover: rgba(30,133,85,0.08);
+}
+@media(prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --green-700: #B4EACB;
+    --green-600: #6ED09A;
+    --green-500: #4EC084;
+    --green-100: #123324;
+    --green-50: #0D2318;
+    --gold: #F0BC55;
+    --gold-bg: #2E240F;
+    --red: #F17683;
+    --red-bg: #341518;
+    --bg: #14161B;
+    --surface: #1D2027;
+    --surface-alt: #262A32;
+    --text: #ECEDF0;
+    --text-secondary: #ADB1BA;
+    --text-tertiary: #757A85;
+    --border: #333844;
+    --border-light: #262A32;
+    --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-md: 0 6px 20px rgba(0,0,0,0.4);
+    --accent-hover: rgba(110,208,154,0.1);
+  }
+}
+:root[data-theme="dark"]{
+  --green-700: #B4EACB; --green-600: #6ED09A; --green-500: #4EC084;
+  --green-100: #123324; --green-50: #0D2318; --gold: #F0BC55;
+  --gold-bg: #2E240F; --red: #F17683; --red-bg: #341518;
+  --bg: #14161B; --surface: #1D2027; --surface-alt: #262A32;
+  --text: #ECEDF0; --text-secondary: #ADB1BA; --text-tertiary: #757A85;
+  --border: #333844; --border-light: #262A32;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3); --shadow-md: 0 6px 20px rgba(0,0,0,0.4);
+  --accent-hover: rgba(110,208,154,0.1);
+}
+
+* { box-sizing: border-box; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+h1,h2,h3,h4 { font-family: 'DM Sans', system-ui, sans-serif; letter-spacing: -0.01em; }
+button, input, select, textarea { font-family: inherit; }
+::selection { background: var(--green-100); color: var(--green-700); }
+
+.app { display: flex; min-height: 100vh; }
+
+/* Sidebar */
+.sidebar {
+  width: 300px;
+  min-width: 300px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.sidebar-header { padding: 22px 20px 18px; border-bottom: 1px solid var(--border); }
+.sidebar-header h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--green-600);
+  display: flex; align-items: center; gap: 10px;
+}
+.sidebar-header p { font-size: 13px; color: var(--text-tertiary); margin-top: 4px; }
+
+.sidebar-section {
+  padding: 14px 18px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.kbd {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  color: var(--text-tertiary);
+  background: var(--surface-alt);
+}
+.case-list { flex: 1; overflow-y: auto; padding: 0 10px 8px; }
+.case-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14.5px;
+  color: var(--text);
+  transition: background 0.12s;
+  position: relative;
+  margin-bottom: 2px;
+}
+.case-item:hover { background: var(--accent-hover); }
+.case-item.active { background: var(--green-100); color: var(--green-700); font-weight: 600; }
+.case-item .case-badge {
+  font-size: 12px;
+  background: var(--surface-alt);
+  color: var(--text-tertiary);
+  padding: 2px 9px;
+  border-radius: 12px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.case-item.active .case-badge { background: var(--green-600); color: #fff; }
+.case-item .delete-case {
+  display: none;
+  background: none; border: none;
+  color: var(--red); cursor: pointer;
+  font-size: 18px; padding: 0 4px;
+  line-height: 1;
+}
+.case-item:hover .delete-case { display: block; }
+.case-item:hover .case-badge { display: none; }
+
+.add-case-btn {
+  display: flex; align-items: center; gap: 10px;
+  margin: 6px 10px 14px;
+  padding: 12px 14px;
+  border: 1.5px dashed var(--border);
+  border-radius: 10px;
+  background: none;
+  color: var(--green-600);
+  font-size: 14px; font-weight: 500;
+  cursor: pointer;
+  width: calc(100% - 20px);
+}
+.add-case-btn:hover { background: var(--green-50); border-color: var(--green-500); }
+
+/* Stats */
+.stats-bar { padding: 16px 20px; border-top: 1px solid var(--border); background: var(--surface-alt); }
+.stats-bar .stat { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+.stats-bar .stat span:first-child { color: var(--text-tertiary); }
+.stats-bar .stat span:last-child { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Main */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.main-header {
+  padding: 18px 26px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+}
+.main-header h2 { font-size: 22px; font-weight: 700; flex: 1; min-width: 200px; }
+.header-actions { display: flex; gap: 8px; align-items: center; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px; font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.12s;
+}
+.btn:hover { background: var(--surface-alt); border-color: var(--text-tertiary); }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--green-600); color: #fff; border-color: var(--green-600); }
+.btn-primary:hover { background: var(--green-500); border-color: var(--green-500); }
+.btn-sm { padding: 6px 12px; font-size: 13px; }
+
+/* legacy search box no longer in header - kept for compat */
+.search-box { display: none; }
+
+/* Media bar */
+.media-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 26px;
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.media-add-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px;
+  border: 1.5px dashed var(--border);
+  border-radius: 20px;
+  background: none;
+  color: var(--green-600);
+  font-size: 13px; font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s;
+}
+.media-add-chip:hover { background: var(--green-50); border-color: var(--green-500); }
+.media-chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 4px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s;
+}
+.media-chip:hover { border-color: var(--green-500); box-shadow: var(--shadow); transform: translateY(-1px); }
+.media-chip:active { transform: translateY(0); }
+.media-chip .thumb {
+  width: 28px; height: 28px; border-radius: 50%;
+  object-fit: cover; background: var(--surface-alt);
+  flex-shrink: 0; display: block;
+}
+.media-chip .thumb-icon {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--green-100); color: var(--green-700);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.media-chip .cap {
+  font-size: 13px; font-weight: 500;
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis;
+}
+.media-del {
+  background: none; border: none; color: var(--text-tertiary);
+  cursor: pointer; font-size: 15px; padding: 0 2px; opacity: 0;
+  transition: opacity .12s; line-height: 1;
+}
+.media-chip:hover .media-del { opacity: 1; }
+.media-del:hover { color: var(--red); }
+.media-empty-hint { font-size: 12.5px; color: var(--text-tertiary); padding: 4px 8px; }
+
+/* Add media modal */
+.media-pick-zone {
+  border: 2px dashed var(--border); border-radius: 10px;
+  padding: 26px; text-align: center; cursor: pointer;
+  transition: all 0.12s;
+}
+.media-pick-zone:hover { border-color: var(--green-500); background: var(--green-50); }
+.pending-media-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; max-height: 320px; overflow-y: auto; }
+.pending-media-item {
+  display: flex; gap: 10px; align-items: center;
+  padding: 8px; border: 1px solid var(--border-light); border-radius: 8px;
+}
+.pending-media-item .pm-thumb {
+  width: 48px; height: 48px; border-radius: 8px;
+  object-fit: cover; background: var(--surface-alt); flex-shrink: 0;
+}
+.pending-media-item input { flex: 1; padding: 8px 10px; font-size: 13px; }
+.pm-remove { background: none; border: none; color: var(--text-tertiary); cursor: pointer; font-size: 18px; padding: 2px 6px; }
+.pm-remove:hover { color: var(--red); }
+
+/* Donor area */
+.donor-area { flex: 1; overflow-y: auto; padding: 20px 26px 40px; }
+
+/* Summary tiles */
+.summary { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.tile {
+  padding: 14px 20px;
+  border-radius: 12px;
+  font-size: 13px;
+  min-width: 160px;
+  flex: 1;
+  border: 1px solid transparent;
+}
+.tile.donated { background: var(--green-100); border-color: var(--green-500); }
+.tile.committed { background: var(--gold-bg); border-color: var(--gold); }
+.tile.pending { background: var(--surface-alt); border-color: var(--border); }
+.tile .lbl {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--text-tertiary); margin-bottom: 4px; font-weight: 600;
+}
+.tile .val {
+  font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums;
+  font-family: 'DM Sans', sans-serif;
+}
+.tile.donated .val { color: var(--green-700); }
+.tile.committed .val { color: var(--gold); }
+.tile .sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+
+/* Icon-only button */
+.btn.icon-only { padding: 10px; }
+
+/* Filter chips */
+.filters { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+.filters .inline-search {
+  flex: 1; min-width: 200px; margin-left: auto;
+  padding: 8px 14px 8px 34px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 13.5px;
+  background: var(--surface) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 16 16' fill='none' stroke='%237C808B' stroke-width='2'><circle cx='7' cy='7' r='5'/><path d='M11 11l3 3'/></svg>") 12px center no-repeat;
+  color: var(--text);
+  outline: none;
+  max-width: 320px;
+}
+.filters .inline-search:focus { border-color: var(--green-500); box-shadow: 0 0 0 3px var(--accent-hover); }
+.chip {
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.12s;
+  font-weight: 500;
+}
+.chip:hover { background: var(--surface-alt); }
+.chip.active { background: var(--green-600); color: #fff; border-color: var(--green-600); }
+.chip.vip.active { background: var(--gold); border-color: var(--gold); }
+
+/* Donor cards (list layout — bigger targets, less struggle) */
+.donor-list { display: flex; flex-direction: column; gap: 6px; }
+.donor-card {
+  display: grid;
+  grid-template-columns: 30px 1fr 120px 120px 1fr 36px 30px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  transition: border-color 0.12s, background 0.12s;
+}
+.donor-card:hover { border-color: var(--border); }
+.donor-card.vip { background: var(--gold-bg); border-color: var(--gold); }
+.donor-card.donated { border-left: 3px solid var(--green-500); }
+.donor-card.committed { border-left: 3px solid var(--gold); }
+
+.star-btn {
+  background: none; border: none;
+  font-size: 20px; cursor: pointer;
+  opacity: 0.25; padding: 0;
+  transition: opacity 0.12s, transform 0.12s;
+  color: var(--text-tertiary);
+}
+.star-btn:hover { opacity: 0.7; transform: scale(1.15); }
+.star-btn.active { opacity: 1; color: var(--gold); }
+
+.donor-info { min-width: 0; }
+.donor-name {
+  font-size: 15px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.donor-name:hover { color: var(--green-600); }
+.donor-name .copy-hint {
+  opacity: 0; margin-left: 6px; font-size: 11px;
+  color: var(--text-tertiary); font-weight: 400;
+  transition: opacity 0.12s;
+}
+.donor-name:hover .copy-hint { opacity: 1; }
+.donor-phone {
+  font-size: 12.5px; color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+}
+.donor-phone:hover { color: var(--green-600); }
+
+.msg-btn {
+  background: var(--green-100);
+  border: none;
+  color: var(--green-700);
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.12s;
+}
+.msg-btn:hover { background: var(--green-600); color: #fff; transform: scale(1.05); }
+.msg-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.msg-btn:disabled:hover { transform: none; background: var(--green-100); color: var(--green-700); }
+
+.status-btn {
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: none;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: all 0.12s;
+  text-align: center;
+}
+.status-btn.pending { background: var(--surface-alt); color: var(--text-secondary); }
+.status-btn.committed { background: var(--gold-bg); color: var(--gold); }
+.status-btn.donated { background: var(--green-100); color: var(--green-700); }
+.status-btn:hover { filter: brightness(0.95); }
+
+.amount-input, .notes-input {
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 14px;
+  background: transparent;
+  color: var(--text);
+  width: 100%;
+  outline: none;
+  transition: all 0.12s;
+}
+.amount-input { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+.amount-input:hover, .notes-input:hover { background: var(--surface-alt); }
+.amount-input:focus, .notes-input:focus {
+  background: var(--surface); border-color: var(--green-500);
+  box-shadow: 0 0 0 3px var(--accent-hover);
+}
+.amount-input::placeholder, .notes-input::placeholder { color: var(--text-tertiary); font-weight: 400; }
+
+.remove-btn {
+  background: none; border: none;
+  color: var(--text-tertiary); cursor: pointer;
+  font-size: 18px; padding: 4px 8px;
+  border-radius: 6px;
+  opacity: 0.3;
+}
+.donor-card:hover .remove-btn { opacity: 1; }
+.remove-btn:hover { color: var(--red); background: var(--red-bg); }
+
+/* Empty state */
+.empty-state { text-align: center; padding: 80px 24px; color: var(--text-tertiary); }
+.empty-state svg { margin-bottom: 16px; }
+.empty-state h3 { font-size: 17px; color: var(--text-secondary); margin-bottom: 8px; }
+.empty-state p { font-size: 14px; max-width: 380px; margin: 0 auto 22px; line-height: 1.6; }
+.empty-hint { display: flex; gap: 14px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+.empty-hint span { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45); backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100; padding: 16px;
+  animation: fadeIn 0.15s ease;
+}
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+.modal {
+  background: var(--surface); border-radius: 14px;
+  box-shadow: var(--shadow-md);
+  width: 100%; max-width: 540px; max-height: 85vh;
+  display: flex; flex-direction: column;
+  animation: slideDown 0.2s ease;
+}
+@keyframes slideDown { from{transform:translateY(-12px);opacity:0} to{transform:translateY(0);opacity:1} }
+.modal-header {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.modal-header h3 { font-size: 17px; font-weight: 600; }
+.modal-close {
+  background: none; border: none;
+  font-size: 22px; color: var(--text-tertiary);
+  cursor: pointer; padding: 4px 10px;
+  border-radius: 6px; line-height: 1;
+}
+.modal-close:hover { background: var(--surface-alt); }
+.modal-body { padding: 20px 22px; overflow-y: auto; }
+.modal-footer {
+  padding: 14px 22px;
+  border-top: 1px solid var(--border);
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+
+textarea.paste-area {
+  width: 100%; min-height: 160px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  background: var(--surface-alt);
+  color: var(--text);
+  resize: vertical; outline: none;
+  line-height: 1.6;
+}
+textarea.paste-area:focus { border-color: var(--green-500); }
+.hint { font-size: 13px; color: var(--text-tertiary); margin-top: 10px; line-height: 1.5; }
+
+.case-input {
+  width: 100%; padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px;
+  background: var(--surface);
+  color: var(--text); outline: none;
+}
+.case-input:focus { border-color: var(--green-500); box-shadow: 0 0 0 3px var(--accent-hover); }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 26px; right: 26px;
+  background: var(--green-700);
+  color: var(--surface);
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 14px; font-weight: 500;
+  box-shadow: var(--shadow-md);
+  z-index: 200;
+  animation: slideUp 0.25s ease;
+}
+:root[data-theme="dark"] .toast, @media(prefers-color-scheme:dark){:root:not([data-theme="light"]) .toast{color:#0D2318}}
+@keyframes slideUp { from{transform:translateY(20px);opacity:0} to{transform:translateY(0);opacity:1} }
+
+/* Keyboard shortcut overlay */
+.shortcuts-panel {
+  position: fixed; bottom: 20px; left: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 18px;
+  box-shadow: var(--shadow-md);
+  font-size: 12.5px;
+  display: none;
+  z-index: 50;
+  max-width: 320px;
+}
+.shortcuts-panel.visible { display: block; }
+.shortcuts-panel h4 { font-size: 12px; margin-bottom: 8px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.06em; }
+.shortcuts-panel .sc { display: flex; justify-content: space-between; padding: 3px 0; }
+.shortcuts-panel .sc span:first-child { color: var(--text-secondary); }
+
+.help-toggle {
+  position: fixed; bottom: 20px; left: 20px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--text-secondary);
+  width: 36px; height: 36px; border-radius: 50%;
+  cursor: pointer; font-size: 15px; font-weight: 600;
+  box-shadow: var(--shadow);
+  z-index: 40;
+}
+.help-toggle:hover { background: var(--surface-alt); }
+
+.mobile-toggle {
+  display: none;
+  background: none; border: none;
+  font-size: 24px; cursor: pointer;
+  color: var(--text); padding: 4px;
+}
+
+@media(max-width:900px) {
+  .donor-card { grid-template-columns: 28px 1fr auto; gap: 10px; }
+  .donor-card > .status-btn { grid-column: 1/-1; }
+  .donor-card > .amount-input { grid-column: 1/3; }
+  .donor-card > .notes-input { grid-column: 1/-1; }
+}
+@media(max-width:768px) {
+  .app { flex-direction: column; }
+  .sidebar { width: 100%; min-width: 0; max-height: 45vh; border-right: none; border-bottom: 1px solid var(--border); }
+  .sidebar.collapsed { display: none; }
+  .mobile-toggle { display: block; }
+  .main-header { padding: 12px 16px; }
+  .media-bar { padding: 8px 16px; }
+  .donor-area { padding: 14px 16px 40px; }
+  .search-box { width: 100%; }
+  .header-actions { width: 100%; flex-wrap: wrap; }
+  .help-toggle, .shortcuts-panel { display: none !important; }
+}
+</style>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h1>
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" fill="currentColor"/></svg>
+        GiveLife Foundation
+      </h1>
+      <p>Donor Management</p>
+    </div>
+
+    <div class="sidebar-section"><span>Cases</span><span class="kbd">N</span></div>
+    <div class="case-list" id="caseList"></div>
+    <button class="add-case-btn" onclick="showNewCaseModal()">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a1 1 0 011 1v4h4a1 1 0 010 2H9v4a1 1 0 01-2 0V9H3a1 1 0 010-2h4V3a1 1 0 011-1z"/></svg>
+      New Case
+    </button>
+
+    <div class="stats-bar" id="statsBar"></div>
+  </aside>
+
+  <div class="main">
+    <div class="main-header">
+      <button class="mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('collapsed')">&#9776;</button>
+      <h2 id="caseTitle">Select a Case</h2>
+      <div class="header-actions">
+        <button class="btn icon-only" onclick="toggleTheme()" title="Toggle dark mode (T)" id="themeBtn">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="currentColor" id="themeIcon"><path d="M10 2a8 8 0 108 8c0-.4-.03-.8-.09-1.19a5.5 5.5 0 01-7.72-7.72A8.06 8.06 0 0010 2z"/></svg>
+        </button>
+        <button class="btn icon-only" onclick="showMessageTemplateModal()" title="Message template (M)">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H8l-3.29 3.29A1 1 0 013 16.59V4z"/></svg>
+        </button>
+        <button class="btn icon-only" onclick="showAddMediaModal()" title="Add photos/videos (P)">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="currentColor"><path d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm0 2h12v5.59l-2.3-2.3a1 1 0 00-1.4 0L9 12.6l-1.3-1.3a1 1 0 00-1.4 0L4 13.6V6zm2.5 3a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"/></svg>
+        </button>
+        <button class="btn" onclick="exportCase()" title="Export as CSV">
+          <svg width="15" height="15" viewBox="0 0 14 14" fill="currentColor"><path d="M7 1a1 1 0 011 1v5.59l1.3-1.3a1 1 0 111.4 1.42l-3 3a1 1 0 01-1.4 0l-3-3a1 1 0 111.4-1.42L6 7.59V2a1 1 0 011-1zM2 11a1 1 0 012 0v1h6v-1a1 1 0 012 0v1a2 2 0 01-2 2H4a2 2 0 01-2-2v-1z"/></svg>
+          Export
+        </button>
+        <button class="btn btn-primary" onclick="showAddDonorModal()" id="addDonorBtn" disabled title="Add donors (A)">
+          <svg width="15" height="15" viewBox="0 0 14 14" fill="currentColor"><path d="M7 1a1 1 0 011 1v4h4a1 1 0 010 2H8v4a1 1 0 01-2 0V8H2a1 1 0 010-2h4V2a1 1 0 011-1z"/></svg>
+          Add
+        </button>
+      </div>
+    </div>
+
+    <div class="media-bar" id="mediaBar"></div>
+
+    <div class="donor-area" id="donorArea"></div>
+  </div>
+</div>
+
+<button class="help-toggle" onclick="toggleShortcuts()" title="Keyboard shortcuts">?</button>
+<div class="shortcuts-panel" id="shortcutsPanel">
+  <h4>Keyboard Shortcuts</h4>
+  <div class="sc"><span>New case</span><span class="kbd">N</span></div>
+  <div class="sc"><span>Add donors</span><span class="kbd">A</span></div>
+  <div class="sc"><span>Message template</span><span class="kbd">M</span></div>
+  <div class="sc"><span>Add photos/videos</span><span class="kbd">P</span></div>
+  <div class="sc"><span>Focus search</span><span class="kbd">/</span></div>
+  <div class="sc"><span>Next / prev case</span><span><span class="kbd">J</span> <span class="kbd">K</span></span></div>
+  <div class="sc"><span>Filter tabs</span><span><span class="kbd">1</span>–<span class="kbd">4</span></span></div>
+  <div class="sc"><span>Close modal</span><span class="kbd">Esc</span></div>
+  <div class="sc"><span>Toggle dark mode</span><span class="kbd">T</span></div>
+</div>
+
+<div id="modalContainer"></div>
+<div id="toastContainer"></div>
+
+<script>
+// ============ FULL DONOR LIST (with phone numbers where available) ============
+const PRELOADED_DONORS = [
+  { name: "New D1" }, { name: "Abdul Awan" }, { name: "Abdul Basit" },
+  { name: "Abdul Moeed" }, { name: "Abdul Wahab" }, { name: "Ahsan" },
+  { name: "Ali Nawab" }, { name: "Allahamdulilah" }, { name: "Amaan" },
+  { name: "Basit Tanveer" }, { name: "Bilal Aust" }, { name: "Bilal" },
+  { name: "Bilal Nasir" }, { name: "Brad Goorman" }, { name: "CallMeShoaib" },
+  { name: "Chippu" }, { name: "Stud" }, { name: "Muhammad Kashif" },
+  { name: "Donor 1" }, { name: "Donor 3" }, { name: "Education Donor" },
+  { name: "Fahad" }, { name: "Foundation 2" }, { name: "Gul Nabi Senior" },
+  { name: "Hajra Abid" }, { name: "Hysam Khan" }, { name: "Ibaad Khurshid" },
+  { name: "Ihtesham 2" }, { name: "Imran Safdar" }, { name: "Iqra" },
+  { name: "Jr Accounts" }, { name: "Junior 23" }, { name: "Kashmala Mami" },
+  { name: "Kh. Awais 4.5k" }, { name: "M Abdulsamad" }, { name: "M Adil" },
+  { name: "Madhu Kumari" }, { name: "Moeed" }, { name: "Mohsin" },
+  { name: "Muaz" }, { name: "Mubeena" }, { name: "Muhammad Hasham J." },
+  { name: "Muhammad Umar" }, { name: "Naseeb" }, { name: "President Society" },
+  { name: "Ramail Niazi" }, { name: "Rao Zeeshan Ali" },
+  { name: "React Native EXPERT" }, { name: "Shaheer Ashraf" },
+  { name: "Sohaib" }, { name: "Syed Ahsan D15" }, { name: "Syed Moazam" },
+  { name: "Umair Fast Imran" }, { name: "Zaid Fareed" },
+  // D-series (group members without full names)
+  { name: "D6" }, { name: "D12" }, { name: "D14" }, { name: "D17" },
+  { name: "D22" }, { name: "D28" }, { name: "D29" }, { name: "D33" },
+  { name: "D34" }, { name: "D35" }, { name: "D39" }, { name: "D42" },
+  { name: "D43" }, { name: "D44" }, { name: "D45" }, { name: "D47" },
+  { name: "D48" }, { name: "D49" }, { name: "D51" }, { name: "D52" },
+  { name: "D53" }, { name: "D57" }, { name: "D59" }, { name: "D62" },
+  { name: "D64" },
+  // UET Lahore members
+  { name: "UET Lahore 1" }, { name: "UET Lahore 7" }, { name: "UET Lahore 11" },
+  { name: "UET Lahore 37" }, { name: "UET Lahore 38" }, { name: "UET Lahore 47" },
+  { name: "UET Lahore 62" }, { name: "UET Lahore 71" }, { name: "UET Lahore 77" },
+  { name: "UET Lahore 79" }, { name: "UET Lahore 90" }, { name: "UET Lahore 93" },
+  { name: "UET Lahore 113" }, { name: "UET Lahore SOCIETY" },
+  // Upwork group
+  { name: "Upwork Member 1" }, { name: "Upwork Member 6" }, { name: "Upwork Member 11" },
+  { name: "Upwork Member 12" }, { name: "Upwork Member 40" }, { name: "Upwork Member 44" },
+  { name: "Upwork Member 45" }, { name: "Upwork Member 46" }, { name: "Upwork Member 48" },
+  { name: "Upwork Member 51" }, { name: "Upwork Member 52" }, { name: "Upwork Member 53" },
+  // Contacts with phone numbers
+  { name: "Contact", phone: "+923292186535" },
+  { name: "Contact", phone: "+923249554130" },
+  { name: "Contact", phone: "+923182751486" },
+  { name: "Ali Aftab Khan", phone: "+971503802721" },
+  { name: "Asim Hussain Shah", phone: "+923005356751" },
+  { name: "Danish Ijaz", phone: "+923464210126" },
+  { name: "Hafiz Muhammad Hassan", phone: "+923300003484" },
+  { name: "Muhammad Ali Hashmi", phone: "+923357789789" },
+  { name: "", phone: "+923168238171" },
+  { name: "", phone: "+19145575138" },
+  { name: "", phone: "+923210999173" },
+  { name: "", phone: "+923341476312" },
+  { name: "", phone: "+923461713234" },
+  { name: "Uniguide", phone: "+923278043121" },
+  { name: "", phone: "+923085301191" },
+  { name: "", phone: "+923187242155" },
+  { name: ":D", phone: "+923305542801" },
+  { name: "", phone: "+923060786667" },
+  { name: "", phone: "+923276509956" },
+  { name: "", phone: "+923106643059" },
+  { name: "Saqlain Khan (Fiverr)", phone: "+923079913095" },
+  { name: "", phone: "+923092614475" },
+  { name: "", phone: "+923205265549" },
+  { name: "", phone: "+923078881414" },
+  { name: "", phone: "+923115043015" },
+  { name: "", phone: "+923412705464" },
+  { name: "", phone: "+923335201096" },
+  { name: "", phone: "+923495537698" },
+  { name: "", phone: "+923286841038" },
+  { name: "", phone: "+923280430004" },
+  { name: "", phone: "+923095699710" },
+  { name: "Usman", phone: "+923414757829" },
+  { name: "", phone: "+923147478825" },
+];
+
+const DEFAULT_TEMPLATE = "{name} Brother, Assalam u Alaikum.\n\nThe GiveLife Foundation is currently running a case that needs your support. Any contribution, big or small, would be deeply appreciated.\n\nJazakAllah Khair.";
+
+let state = {
+  cases: [],
+  activeCaseId: null,
+  filter: 'all',
+  theme: null,
+  searchTerm: '',
+  messageTemplate: DEFAULT_TEMPLATE
+};
+
+function loadState() {
+  try {
+    const s = localStorage.getItem('givelife_donor_state_v2');
+    if (s) state = { ...state, ...JSON.parse(s) };
+  } catch(e) {}
+  if (state.theme) document.documentElement.setAttribute('data-theme', state.theme);
+}
+function saveState() {
+  try { localStorage.setItem('givelife_donor_state_v2', JSON.stringify(state)); } catch(e) {}
+}
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+function getActiveCase() { return state.cases.find(c => c.id === state.activeCaseId); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+function renderCases() {
+  const el = document.getElementById('caseList');
+  el.innerHTML = state.cases.map(c => {
+    const donated = c.donors.filter(d => d.status === 'donated').length;
+    return `<div class="case-item ${c.id === state.activeCaseId ? 'active' : ''}" onclick="selectCase('${c.id}')">
+      <span>${esc(c.name)}</span>
+      <span class="case-badge">${donated}/${c.donors.length}</span>
+      <button class="delete-case" onclick="event.stopPropagation();deleteCase('${c.id}')" title="Delete">&times;</button>
+    </div>`;
+  }).join('');
+}
+
+function renderStats() {
+  const el = document.getElementById('statsBar');
+  const totalDonated = state.cases.reduce((s,c) => s + c.donors.filter(d => d.status==='donated').reduce((a,d) => a + (d.amount||0), 0), 0);
+  const totalCommitted = state.cases.reduce((s,c) => s + c.donors.filter(d => d.status==='committed').reduce((a,d) => a + (d.amount||0), 0), 0);
+  const totalDonors = state.cases.reduce((s,c) => s + c.donors.filter(d => d.status==='donated').length, 0);
+  el.innerHTML = `
+    <div class="stat"><span>Cases</span><span>${state.cases.length}</span></div>
+    <div class="stat"><span>Donations received</span><span>${totalDonors}</span></div>
+    <div class="stat"><span>Total raised</span><span>PKR ${totalDonated.toLocaleString()}</span></div>
+    <div class="stat"><span>Pending pledges</span><span style="color:var(--gold)">PKR ${totalCommitted.toLocaleString()}</span></div>
+  `;
+}
+
+function selectCase(id) {
+  state.activeCaseId = id;
+  saveState(); renderCases(); renderDonors();
+  document.getElementById('addDonorBtn').disabled = false;
+}
+
+function deleteCase(id) {
+  const c = state.cases.find(x => x.id === id);
+  if (!confirm(`Delete "${c.name}" and all its donor records?`)) return;
+  state.cases = state.cases.filter(x => x.id !== id);
+  if (state.activeCaseId === id) state.activeCaseId = state.cases[0]?.id || null;
+  saveState(); renderCases(); renderDonors(); renderStats();
+}
+
+function renderDonors() {
+  const area = document.getElementById('donorArea');
+  const c = getActiveCase();
+  if (!c) {
+    document.getElementById('caseTitle').textContent = 'Select a Case';
+    area.innerHTML = `<div class="empty-state">
+      <svg width="56" height="56" viewBox="0 0 48 48" fill="none">
+        <circle cx="24" cy="24" r="23" stroke="var(--border)" stroke-width="2" stroke-dasharray="4 3"/>
+        <path d="M24 16v16M16 24h16" stroke="var(--text-tertiary)" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <h3>No case selected</h3>
+      <p>Create a case to start tracking donors for a specific cause — flood relief, medical aid, education, etc.</p>
+      <button class="btn btn-primary" onclick="showNewCaseModal()">Create your first case</button>
+      <div class="empty-hint">
+        <span><span class="kbd">N</span> new case</span>
+        <span><span class="kbd">?</span> shortcuts</span>
+      </div>
+    </div>`;
+    return;
+  }
+  document.getElementById('caseTitle').textContent = c.name;
+  const filter = (state.searchTerm || '').toLowerCase();
+  let donors = c.donors.map((d, i) => ({ ...d, _idx: i }));
+  if (filter) {
+    donors = donors.filter(d =>
+      (d.name || '').toLowerCase().includes(filter) ||
+      (d.phone || '').includes(filter) ||
+      (d.notes || '').toLowerCase().includes(filter)
+    );
+  }
+  if (state.filter === 'donated') donors = donors.filter(d => d.status === 'donated');
+  else if (state.filter === 'committed') donors = donors.filter(d => d.status === 'committed');
+  else if (state.filter === 'pending') donors = donors.filter(d => d.status === 'pending' || !d.status);
+  else if (state.filter === 'vip') donors = donors.filter(d => d.vip);
+
+  const donated = c.donors.filter(d => d.status === 'donated').reduce((a,d) => a + (d.amount||0), 0);
+  const committed = c.donors.filter(d => d.status === 'committed').reduce((a,d) => a + (d.amount||0), 0);
+  const nDonated = c.donors.filter(d => d.status === 'donated').length;
+  const nCommitted = c.donors.filter(d => d.status === 'committed').length;
+  const nPending = c.donors.filter(d => d.status === 'pending' || !d.status).length;
+  const nVip = c.donors.filter(d => d.vip).length;
+
+  area.innerHTML = `
+    <div class="summary">
+      <div class="tile donated">
+        <div class="lbl">Donated</div>
+        <div class="val">PKR ${donated.toLocaleString()}</div>
+        <div class="sub">${nDonated} donor${nDonated!==1?'s':''}</div>
+      </div>
+      <div class="tile committed">
+        <div class="lbl">Committed</div>
+        <div class="val">PKR ${committed.toLocaleString()}</div>
+        <div class="sub">${nCommitted} pending payment</div>
+      </div>
+      <div class="tile pending">
+        <div class="lbl">Not yet asked</div>
+        <div class="val">${nPending}</div>
+        <div class="sub">of ${c.donors.length} total</div>
+      </div>
+    </div>
+    <div class="filters">
+      <div class="chip ${state.filter==='all'?'active':''}" onclick="setFilter('all')">All (${c.donors.length})</div>
+      <div class="chip ${state.filter==='donated'?'active':''}" onclick="setFilter('donated')">Donated (${nDonated})</div>
+      <div class="chip ${state.filter==='committed'?'active':''}" onclick="setFilter('committed')">Committed (${nCommitted})</div>
+      <div class="chip ${state.filter==='pending'?'active':''}" onclick="setFilter('pending')">Not asked (${nPending})</div>
+      <div class="chip vip ${state.filter==='vip'?'active':''}" onclick="setFilter('vip')">⭐ VIP (${nVip})</div>
+      <input type="text" class="inline-search" placeholder="Search names, numbers, notes...  ( / )" id="searchBox" value="${esc(state.searchTerm||'')}" oninput="onSearchInput(this.value)">
+    </div>
+    ${donors.length === 0 ? `<div class="empty-state"><p>No donors match this filter.</p></div>` : `
+    <div class="donor-list">
+      ${donors.map(d => renderCard(d)).join('')}
+    </div>`}
+  `;
+  renderStats();
+  renderCases();
+}
+
+function renderCard(d) {
+  const status = d.status || 'pending';
+  const statusLabel = { pending: 'Not asked', committed: 'Committed', donated: 'Donated ✓' }[status];
+  const hasPhone = !!d.phone;
+  return `<div class="donor-card ${d.vip?'vip':''} ${status}">
+    <button class="star-btn ${d.vip?'active':''}" onclick="toggleVip(${d._idx})" title="Mark important">&#9733;</button>
+    <div class="donor-info">
+      <div class="donor-name" onclick="copyDonor(${d._idx})" title="Click to copy phone number">
+        ${d.name ? esc(d.name) : '<span style="color:var(--text-tertiary);font-style:italic">Unnamed</span>'}
+        <span class="copy-hint">${hasPhone ? '⧉ copy' : ''}</span>
+      </div>
+      ${d.phone ? `<div class="donor-phone" onclick="copyPhone('${d.phone}')" title="Click to copy">${esc(d.phone)}</div>` : ''}
+    </div>
+    <button class="status-btn ${status}" onclick="cycleStatus(${d._idx})" title="Click to cycle status">${statusLabel}</button>
+    <input class="amount-input" type="number" value="${d.amount||''}" placeholder="PKR 0" onchange="setAmount(${d._idx}, this.value)">
+    <input class="notes-input" type="text" value="${esc(d.notes||'')}" placeholder="Notes..." onchange="setNotes(${d._idx}, this.value)">
+    <button class="msg-btn" onclick="sendMessage(${d._idx})" ${!hasPhone ? '' : ''} title="${hasPhone ? 'Open WhatsApp with message' : 'Copy personalized message'}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12c0 1.76.46 3.42 1.27 4.86L2 22l5.36-1.24A9.95 9.95 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm4.62 14.05c-.2.56-1.16 1.09-1.63 1.14-.42.04-.94.06-1.51-.09-.35-.09-.79-.24-1.36-.48-2.4-1.04-3.96-3.46-4.08-3.62-.12-.16-.98-1.3-.98-2.48s.62-1.76.84-2c.22-.24.48-.3.64-.3h.46c.15 0 .35-.06.55.42.2.48.68 1.66.74 1.78.06.12.1.26.02.42-.08.16-.12.26-.24.4-.12.14-.25.31-.36.42-.12.12-.24.25-.1.49.14.24.62 1.02 1.33 1.65.91.81 1.68 1.06 1.92 1.18.24.12.38.1.52-.06.14-.16.6-.7.76-.94.16-.24.32-.2.54-.12.22.08 1.4.66 1.64.78.24.12.4.18.46.28.06.1.06.58-.14 1.14z"/></svg>
+    </button>
+    <button class="remove-btn" onclick="removeDonor(${d._idx})" title="Remove">&times;</button>
+  </div>`;
+}
+
+function setFilter(f) { state.filter = f; saveState(); renderDonors(); }
+function cycleStatus(idx) {
+  const c = getActiveCase(); if(!c) return;
+  const order = ['pending', 'committed', 'donated'];
+  const cur = c.donors[idx].status || 'pending';
+  c.donors[idx].status = order[(order.indexOf(cur) + 1) % order.length];
+  saveState(); renderDonors();
+}
+function toggleVip(idx) {
+  const c = getActiveCase(); if(!c) return;
+  c.donors[idx].vip = !c.donors[idx].vip;
+  saveState(); renderDonors();
+}
+function setAmount(idx, val) {
+  const c = getActiveCase(); if(!c) return;
+  c.donors[idx].amount = parseInt(val) || 0;
+  saveState(); renderDonors();
+}
+function setNotes(idx, val) {
+  const c = getActiveCase(); if(!c) return;
+  c.donors[idx].notes = val;
+  saveState();
+}
+function removeDonor(idx) {
+  const c = getActiveCase(); if(!c) return;
+  c.donors.splice(idx, 1);
+  saveState(); renderDonors();
+}
+function copyPhone(p) {
+  navigator.clipboard.writeText(p).then(() => toast('Phone copied: ' + p));
+}
+
+function copyDonor(idx) {
+  const c = getActiveCase(); if(!c) return;
+  const d = c.donors[idx];
+  if (d.phone) {
+    navigator.clipboard.writeText(d.phone).then(() => toast('Copied: ' + (d.name || d.phone)));
+  } else {
+    navigator.clipboard.writeText(d.name).then(() => toast('Name copied (no phone available)'));
+  }
+}
+
+function getFirstName(name) {
+  if (!name) return 'Brother';
+  return name.split(/\s+/)[0].replace(/[^\w]/g, '');
+}
+
+function buildMessage(donor) {
+  const first = getFirstName(donor.name);
+  return (state.messageTemplate || DEFAULT_TEMPLATE).replace(/\{name\}/g, first);
+}
+
+function sendMessage(idx) {
+  const c = getActiveCase(); if(!c) return;
+  const d = c.donors[idx];
+  const message = buildMessage(d);
+  if (d.phone) {
+    const phoneClean = d.phone.replace(/[^\d]/g, '');
+    const url = `https://wa.me/${phoneClean}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+    toast('Opening WhatsApp for ' + (d.name || d.phone));
+  } else {
+    navigator.clipboard.writeText(message).then(() => toast('Message copied (no phone on file)'));
+  }
+}
+
+function onSearchInput(v) {
+  state.searchTerm = v;
+  saveState();
+  // Only re-render list section (not the input, to keep focus)
+  const c = getActiveCase(); if (!c) return;
+  const filter = v.toLowerCase();
+  let donors = c.donors.map((d, i) => ({ ...d, _idx: i }));
+  if (filter) {
+    donors = donors.filter(d =>
+      (d.name || '').toLowerCase().includes(filter) ||
+      (d.phone || '').includes(filter) ||
+      (d.notes || '').toLowerCase().includes(filter)
+    );
+  }
+  if (state.filter === 'donated') donors = donors.filter(d => d.status === 'donated');
+  else if (state.filter === 'committed') donors = donors.filter(d => d.status === 'committed');
+  else if (state.filter === 'pending') donors = donors.filter(d => d.status === 'pending' || !d.status);
+  else if (state.filter === 'vip') donors = donors.filter(d => d.vip);
+
+  const listEl = document.querySelector('.donor-list');
+  if (listEl) {
+    listEl.innerHTML = donors.map(d => renderCard(d)).join('');
+  } else {
+    renderDonors();
+  }
+}
+
+function showMessageTemplateModal() {
+  document.getElementById('modalContainer').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="max-width:600px">
+        <div class="modal-header"><h3>Message Template</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
+        <div class="modal-body">
+          <p class="hint" style="margin-bottom:10px;margin-top:0">Use <code style="background:var(--surface-alt);padding:1px 6px;border-radius:4px;font-size:12px;">{name}</code> — it will be replaced with each donor's first name. Clicking the message icon on any donor opens WhatsApp with this text prefilled (or copies it if there's no phone number).</p>
+          <textarea class="paste-area" id="templateArea" style="min-height:180px">${esc(state.messageTemplate)}</textarea>
+          <div style="margin-top:14px;padding:12px 14px;background:var(--green-50);border-radius:8px;border-left:3px solid var(--green-500);">
+            <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-tertiary);margin-bottom:6px;font-weight:600;">Preview (as "Basit")</div>
+            <div style="font-size:13.5px;white-space:pre-wrap;line-height:1.5;" id="templatePreview">${esc(state.messageTemplate.replace(/\{name\}/g, 'Basit'))}</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+            <button class="btn btn-sm" onclick="insertTemplateSnippet('{name} Brother, Assalam u Alaikum. ')">+ Brother greeting</button>
+            <button class="btn btn-sm" onclick="insertTemplateSnippet('{name} Bhai, ')">+ Bhai greeting</button>
+            <button class="btn btn-sm" onclick="insertTemplateSnippet('Dear {name}, ')">+ Dear greeting</button>
+            <button class="btn btn-sm" onclick="resetTemplate()">Reset to default</button>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(() => {
+    const ta = document.getElementById('templateArea');
+    ta.addEventListener('input', () => {
+      document.getElementById('templatePreview').textContent = ta.value.replace(/\{name\}/g, 'Basit');
+    });
+    ta.focus();
+  }, 50);
+}
+
+function insertTemplateSnippet(s) {
+  const ta = document.getElementById('templateArea');
+  ta.value = s + ta.value;
+  document.getElementById('templatePreview').textContent = ta.value.replace(/\{name\}/g, 'Basit');
+  ta.focus();
+}
+
+function resetTemplate() {
+  document.getElementById('templateArea').value = DEFAULT_TEMPLATE;
+  document.getElementById('templatePreview').textContent = DEFAULT_TEMPLATE.replace(/\{name\}/g, 'Basit');
+}
+
+function saveTemplate() {
+  state.messageTemplate = document.getElementById('templateArea').value.trim() || DEFAULT_TEMPLATE;
+  saveState(); closeModal();
+  toast('Template saved');
+}
+
+function closeModal() { document.getElementById('modalContainer').innerHTML = ''; }
+
+function showNewCaseModal() {
+  document.getElementById('modalContainer').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <div class="modal-header"><h3>New Case</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
+        <div class="modal-body">
+          <label style="font-size:14px;font-weight:500;display:block;margin-bottom:8px;">Case Name</label>
+          <input class="case-input" id="newCaseName" placeholder="e.g. Flood Relief, Medical Aid - Ahmed" autofocus>
+          <p class="hint">All ${PRELOADED_DONORS.length} donors from your list will be added automatically. Press <span class="kbd">Enter</span> to create.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="createCase()">Create Case</button>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(() => {
+    const inp = document.getElementById('newCaseName');
+    inp?.focus();
+    inp?.addEventListener('keydown', e => { if(e.key==='Enter') createCase(); });
+  }, 50);
+}
+
+function createCase() {
+  const name = document.getElementById('newCaseName').value.trim();
+  if (!name) return;
+  const donors = PRELOADED_DONORS.map(d => ({
+    name: d.name || '',
+    phone: d.phone || '',
+    status: 'pending',
+    amount: 0,
+    vip: false,
+    notes: ''
+  }));
+  const c = { id: uid(), name, donors, created: new Date().toISOString() };
+  state.cases.push(c);
+  state.activeCaseId = c.id;
+  saveState(); closeModal();
+  renderCases(); renderDonors(); renderStats();
+  document.getElementById('addDonorBtn').disabled = false;
+  toast(`Created "${name}" with ${donors.length} donors`);
+}
+
+function showAddDonorModal() {
+  const c = getActiveCase(); if (!c) return;
+  document.getElementById('modalContainer').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal">
+        <div class="modal-header"><h3>Add Donors to "${esc(c.name)}"</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
+        <div class="modal-body">
+          <textarea class="paste-area" id="pasteArea" autofocus placeholder="Paste names or numbers, one per line:&#10;&#10;Ahmed Khan&#10;+923001234567&#10;Ali | +923009876543&#10;Bilal Donor"></textarea>
+          <p class="hint">Names AND phone numbers are extracted. Duplicates are skipped. Press <span class="kbd">Ctrl+Enter</span> to add.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="addPastedDonors()">Add All</button>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(() => {
+    const ta = document.getElementById('pasteArea');
+    ta?.focus();
+    ta?.addEventListener('keydown', e => { if(e.ctrlKey && e.key==='Enter') addPastedDonors(); });
+  }, 50);
+}
+
+function extractEntries(text) {
+  const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
+  const entries = [];
+  for (let line of lines) {
+    const phoneMatch = line.match(/\+?\d[\d\s\-()]{6,}\d/);
+    const phone = phoneMatch ? phoneMatch[0].replace(/[\s\-()]/g, '') : '';
+    let name = line
+      .replace(/\+?\d[\d\s\-()]{6,}\d/g, '')
+      .replace(/\|/g, '')
+      .replace(/^\d+[\.\)\-\s]+/, '')
+      .replace(/\b(Donor|Donir|Donoe|Donkr|Member|Group admin|no number shown)\b/gi, '')
+      .replace(/[~♦️❤💞😎]/g, '')
+      .replace(/\(.*?\)/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (name || phone) entries.push({ name, phone });
+  }
+  return entries;
+}
+
+function addPastedDonors() {
+  const c = getActiveCase(); if(!c) return;
+  const text = document.getElementById('pasteArea').value;
+  const entries = extractEntries(text);
+  let added = 0;
+  for (const e of entries) {
+    const dup = c.donors.some(d =>
+      (e.phone && d.phone === e.phone) ||
+      (e.name && d.name === e.name && !e.phone && !d.phone)
+    );
+    if (!dup) {
+      c.donors.push({ name: e.name, phone: e.phone, status: 'pending', amount: 0, vip: false, notes: '' });
+      added++;
+    }
+  }
+  saveState(); closeModal(); renderDonors();
+  toast(`${added} donor${added !== 1 ? 's' : ''} added`);
+}
+
+async function exportCase() {
+  const c = getActiveCase();
+  if (!c) { toast('Select a case first'); return; }
+  let csv = 'Name,Phone,Status,Amount (PKR),VIP,Notes\n';
+  for (const d of c.donors) {
+    csv += `"${(d.name||'').replace(/"/g,'""')}","${d.phone||''}",${d.status||'pending'},${d.amount||0},${d.vip?'Yes':'No'},"${(d.notes||'').replace(/"/g,'""')}"\n`;
+  }
+  const filename = c.name.replace(/[^a-z0-9]/gi,'_') + '_donors.csv';
+
+  try {
+    const downloads = window.claude ? await window.claude.use("downloads") : null;
+    if (downloads) {
+      await downloads.save({ filename, data: csv });
+      toast('Exported'); return;
+    }
+  } catch(e) { if (e.code === 'declined') return; }
+
+  // Fallback: standalone browser download
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+  toast('Exported');
+}
+
+function toast(msg) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.getElementById('toastContainer').appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+function toggleShortcuts() {
+  document.getElementById('shortcutsPanel').classList.toggle('visible');
+}
+
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme') ||
+              (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  state.theme = next; saveState();
+  updateThemeIcon();
+}
+
+function updateThemeIcon() {
+  const cur = document.documentElement.getAttribute('data-theme') ||
+              (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const icon = document.getElementById('themeIcon');
+  if (!icon) return;
+  if (cur === 'dark') {
+    // sun icon
+    icon.innerHTML = '<circle cx="10" cy="10" r="4"/><path d="M10 1v2M10 17v2M19 10h-2M3 10H1M16.36 3.64l-1.42 1.42M5.06 14.94l-1.42 1.42M16.36 16.36l-1.42-1.42M5.06 5.06L3.64 3.64" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>';
+  } else {
+    // moon icon
+    icon.innerHTML = '<path d="M10 2a8 8 0 108 8c0-.4-.03-.8-.09-1.19a5.5 5.5 0 01-7.72-7.72A8.06 8.06 0 0010 2z"/>';
+  }
+}
+
+// ============ MEDIA LIBRARY (photos & videos, stored in IndexedDB) ============
+let mediaItems = [];
+let pendingMediaFiles = [];
+let mediaDBAvailable = true;
+
+function openMediaDB() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error('no indexedDB')); return; }
+    const req = indexedDB.open('givelife_media_db', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('media')) db.createObjectStore('media', { keyPath: 'id' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function mediaDBAdd(item) {
+  const db = await openMediaDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('media', 'readwrite');
+    tx.objectStore('media').put(item);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function mediaDBGetAll() {
+  const db = await openMediaDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('media', 'readonly');
+    const req = tx.objectStore('media').getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function mediaDBDelete(id) {
+  const db = await openMediaDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('media', 'readwrite');
+    tx.objectStore('media').delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadMediaLibrary() {
+  try {
+    const items = await mediaDBGetAll();
+    mediaItems = items.map(it => ({ ...it, url: URL.createObjectURL(it.blob) }));
+    mediaItems.sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+    mediaDBAvailable = true;
+  } catch(e) {
+    mediaItems = [];
+    mediaDBAvailable = false;
+  }
+  renderMediaBar();
+}
+
+function videoIconSvg() {
+  return '<svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M4 5a2 2 0 00-2 2v6a2 2 0 002 2h7a2 2 0 002-2V7a2 2 0 00-2-2H4zm11.5 2.4l3-1.7A1 1 0 0120 6.6v6.8a1 1 0 01-1.5.87l-3-1.7V7.4z"/></svg>';
+}
+
+function renderMediaBar() {
+  const bar = document.getElementById('mediaBar');
+  if (!bar) return;
+  let html = `<button class="media-add-chip" onclick="showAddMediaModal()" title="Add photos or videos (P)">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a1 1 0 011 1v4h4a1 1 0 010 2H9v4a1 1 0 01-2 0V9H3a1 1 0 010-2h4V3a1 1 0 011-1z"/></svg>
+    Add Media
+  </button>`;
+  if (!mediaDBAvailable) {
+    html += `<span class="media-empty-hint">Media storage isn't available in this view.</span>`;
+  } else if (mediaItems.length === 0) {
+    html += `<span class="media-empty-hint">No photos or videos yet — click Add Media, or press P</span>`;
+  } else {
+    html += mediaItems.map(m => `
+      <div class="media-chip" onclick="copyMediaItem('${m.id}')" title="Click to copy ${m.type === 'video' ? 'video' : 'image'}: ${esc(m.name)}">
+        ${m.type === 'image' ? `<img class="thumb" src="${m.url}">` : `<span class="thumb-icon">${videoIconSvg()}</span>`}
+        <span class="cap">${esc(m.name)}</span>
+        <button class="media-del" onclick="event.stopPropagation();deleteMediaItem('${m.id}')" title="Remove">&times;</button>
+      </div>
+    `).join('');
+  }
+  bar.innerHTML = html;
+}
+
+function showAddMediaModal() {
+  if (!mediaDBAvailable) { toast("Media storage isn't available in this view"); return; }
+  pendingMediaFiles = [];
+  document.getElementById('modalContainer').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="max-width:560px">
+        <div class="modal-header"><h3>Add Photos & Videos</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
+        <div class="modal-body">
+          <div class="media-pick-zone" onclick="document.getElementById('mediaFileInput').click()">
+            <input type="file" id="mediaFileInput" accept="image/*,video/*" multiple style="display:none" onchange="handleMediaFiles(this.files)">
+            <p style="font-size:14px;color:var(--text-secondary);">Click to choose photos or videos <span style="color:var(--green-600);font-weight:500;">(multiple allowed)</span></p>
+          </div>
+          <div class="pending-media-list" id="pendingMediaList"></div>
+          <p class="hint">Give each file a short caption — it becomes its label in the media bar. Click that chip anytime to copy the picture or video straight into WhatsApp.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveMediaFiles()" id="saveMediaBtn" disabled>Save All</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function handleMediaFiles(fileList) {
+  const files = Array.from(fileList);
+  for (const file of files) {
+    const type = file.type.startsWith('video') ? 'video' : 'image';
+    const previewUrl = URL.createObjectURL(file);
+    pendingMediaFiles.push({ file, caption: file.name.replace(/\.[^.]+$/, ''), previewUrl, type });
+  }
+  renderPendingMedia();
+}
+
+function renderPendingMedia() {
+  const list = document.getElementById('pendingMediaList');
+  list.innerHTML = pendingMediaFiles.map((p, i) => `
+    <div class="pending-media-item">
+      ${p.type === 'image' ? `<img class="pm-thumb" src="${p.previewUrl}">` : `<video class="pm-thumb" src="${p.previewUrl}" muted></video>`}
+      <input class="case-input" value="${esc(p.caption)}" placeholder="Caption / name" oninput="pendingMediaFiles[${i}].caption=this.value">
+      <button class="pm-remove" onclick="removePendingMedia(${i})" title="Remove">&times;</button>
+    </div>
+  `).join('');
+  document.getElementById('saveMediaBtn').disabled = pendingMediaFiles.length === 0;
+}
+
+function removePendingMedia(i) {
+  URL.revokeObjectURL(pendingMediaFiles[i].previewUrl);
+  pendingMediaFiles.splice(i, 1);
+  renderPendingMedia();
+}
+
+async function saveMediaFiles() {
+  if (pendingMediaFiles.length === 0) return;
+  for (const p of pendingMediaFiles) {
+    const item = {
+      id: uid(),
+      name: p.caption.trim() || p.file.name,
+      type: p.type,
+      mime: p.file.type,
+      blob: p.file,
+      createdAt: Date.now()
+    };
+    try { await mediaDBAdd(item); } catch(e) { toast('Could not save ' + item.name); }
+  }
+  const count = pendingMediaFiles.length;
+  pendingMediaFiles = [];
+  closeModal();
+  await loadMediaLibrary();
+  toast(`${count} file${count!==1?'s':''} added to Media Library`);
+}
+
+async function deleteMediaItem(id) {
+  if (!confirm('Remove this from the media library?')) return;
+  try { await mediaDBDelete(id); } catch(e) {}
+  const item = mediaItems.find(m => m.id === id);
+  if (item) URL.revokeObjectURL(item.url);
+  await loadMediaLibrary();
+  toast('Removed');
+}
+
+function mediaFilename(m) {
+  const ext = (m.mime && m.mime.split('/')[1]) || (m.type === 'video' ? 'mp4' : 'png');
+  const base = (m.name || 'media').replace(/[^a-z0-9]/gi, '_');
+  return `${base}.${ext}`;
+}
+
+function convertBlobToPng(blob) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(blob);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      canvas.toBlob(b => {
+        URL.revokeObjectURL(url);
+        if (b) resolve(b); else reject(new Error('conversion failed'));
+      }, 'image/png');
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function copyImageBlobToClipboard(blob) {
+  try {
+    await navigator.clipboard.write([new ClipboardItem({ [blob.type || 'image/png']: blob })]);
+    return true;
+  } catch(e) {
+    try {
+      const pngBlob = await convertBlobToPng(blob);
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+      return true;
+    } catch(e2) { return false; }
+  }
+}
+
+async function fallbackDownload(blob, filename) {
+  try {
+    const downloads = window.claude ? await window.claude.use("downloads") : null;
+    if (downloads) { await downloads.save({ filename, data: blob }); return; }
+  } catch(e) {}
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function copyMediaItem(id) {
+  const m = mediaItems.find(x => x.id === id);
+  if (!m) return;
+  if (m.type === 'image') {
+    const ok = await copyImageBlobToClipboard(m.blob);
+    if (ok) { toast('Image copied — paste it into WhatsApp'); return; }
+    await fallbackDownload(m.blob, mediaFilename(m));
+    toast("Clipboard copy isn't supported here — downloaded instead");
+  } else {
+    let ok = false;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ [m.mime || 'video/mp4']: m.blob })]);
+      ok = true;
+    } catch(e) { ok = false; }
+    if (ok) { toast('Video copied — paste it into WhatsApp'); return; }
+    await fallbackDownload(m.blob, mediaFilename(m));
+    toast("Browsers can't copy video to clipboard — downloaded instead, attach it in WhatsApp");
+  }
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, textarea, select')) {
+    if (e.key === 'Escape') e.target.blur();
+    return;
+  }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (document.querySelector('.modal-overlay') && e.key !== 'Escape') return;
+
+  switch(e.key.toLowerCase()) {
+    case 'n': e.preventDefault(); showNewCaseModal(); break;
+    case 'a': if (getActiveCase()) { e.preventDefault(); showAddDonorModal(); } break;
+    case 'm': e.preventDefault(); showMessageTemplateModal(); break;
+    case 'p': e.preventDefault(); showAddMediaModal(); break;
+    case '/': e.preventDefault(); document.getElementById('searchBox')?.focus(); break;
+    case 'escape': closeModal(); document.getElementById('shortcutsPanel').classList.remove('visible'); break;
+    case '?': toggleShortcuts(); break;
+    case 't': toggleTheme(); break;
+    case '1': setFilter('all'); break;
+    case '2': setFilter('donated'); break;
+    case '3': setFilter('committed'); break;
+    case '4': setFilter('pending'); break;
+    case 'j': case 'k': {
+      const i = state.cases.findIndex(c => c.id === state.activeCaseId);
+      const n = e.key === 'j' ? i + 1 : i - 1;
+      if (state.cases[n]) selectCase(state.cases[n].id);
+      break;
+    }
+  }
+});
+
+// Init
+loadState();
+renderCases();
+renderDonors();
+renderStats();
+updateThemeIcon();
+loadMediaLibrary();
+if (state.activeCaseId) document.getElementById('addDonorBtn').disabled = false;
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateThemeIcon);
+</script>
