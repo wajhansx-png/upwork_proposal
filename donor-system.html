@@ -258,6 +258,42 @@ button, input, select, textarea { font-family: inherit; }
 .media-del:hover { color: var(--red); }
 .media-empty-hint { font-size: 12.5px; color: var(--text-tertiary); padding: 4px 8px; }
 
+/* Saved message chips (live in the same media bar) */
+.msg-chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 12px 4px 8px;
+  border-radius: 20px;
+  background: var(--gold-bg);
+  border: 1px solid var(--gold);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.12s;
+}
+.msg-chip:hover { box-shadow: var(--shadow); transform: translateY(-1px); }
+.msg-chip:active { transform: translateY(0); }
+.msg-chip.selected { outline: 2px solid var(--gold); outline-offset: 1px; }
+.msg-chip .msg-check { width: 15px; height: 15px; cursor: pointer; accent-color: var(--gold); flex-shrink: 0; margin: 0; }
+.msg-chip .msg-icon {
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--gold); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.msg-chip .cap {
+  font-size: 13px; font-weight: 500; color: var(--gold);
+  max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.msg-copy-selected {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px;
+  border: none; border-radius: 20px;
+  background: var(--green-600); color: #fff;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; flex-shrink: 0;
+}
+.msg-copy-selected:hover { background: var(--green-500); }
+.bar-divider { width: 1px; align-self: stretch; background: var(--border); margin: 2px 2px; flex-shrink: 0; }
+
 /* Add media modal */
 .media-pick-zone {
   border: 2px dashed var(--border); border-radius: 10px;
@@ -739,8 +775,12 @@ let state = {
   filter: 'all',
   theme: null,
   searchTerm: '',
-  messageTemplate: DEFAULT_TEMPLATE
+  messageTemplate: DEFAULT_TEMPLATE,
+  savedMessages: []
 };
+
+// Runtime-only (not persisted): which saved messages are ticked for multi-copy
+let selectedMsgIds = new Set();
 
 function loadState() {
   try {
@@ -1273,6 +1313,8 @@ function videoIconSvg() {
 function renderMediaBar() {
   const bar = document.getElementById('mediaBar');
   if (!bar) return;
+
+  // --- Media (photos & videos) ---
   let html = `<button class="media-add-chip" onclick="showAddMediaModal()" title="Add photos or videos (P)">
     <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a1 1 0 011 1v4h4a1 1 0 010 2H9v4a1 1 0 01-2 0V9H3a1 1 0 010-2h4V3a1 1 0 011-1z"/></svg>
     Add Media
@@ -1280,7 +1322,7 @@ function renderMediaBar() {
   if (!mediaDBAvailable) {
     html += `<span class="media-empty-hint">Media storage isn't available in this view.</span>`;
   } else if (mediaItems.length === 0) {
-    html += `<span class="media-empty-hint">No photos or videos yet — click Add Media, or press P</span>`;
+    html += `<span class="media-empty-hint">No photos or videos yet</span>`;
   } else {
     html += mediaItems.map(m => `
       <div class="media-chip" onclick="copyMediaItem('${m.id}')" title="Click to copy ${m.type === 'video' ? 'video' : 'image'}: ${esc(m.name)}">
@@ -1290,7 +1332,103 @@ function renderMediaBar() {
       </div>
     `).join('');
   }
+
+  // --- Saved messages (click a chip to copy; tick boxes to copy several) ---
+  html += `<span class="bar-divider"></span>`;
+  html += `<button class="media-add-chip" onclick="showSaveMessageModal()" title="Save a reusable message">
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H8l-3.29 3.29A1 1 0 013 16.59V4z"/></svg>
+    Save Message
+  </button>`;
+  if (state.savedMessages.length === 0) {
+    html += `<span class="media-empty-hint">No saved messages yet</span>`;
+  } else {
+    html += state.savedMessages.map(m => `
+      <div class="msg-chip ${selectedMsgIds.has(m.id) ? 'selected' : ''}" onclick="copySavedMessage('${m.id}')" title="Click to copy: ${esc(m.text)}">
+        <input type="checkbox" class="msg-check" ${selectedMsgIds.has(m.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleMsgSelect('${m.id}', this.checked)" title="Tick to copy several at once">
+        <span class="msg-icon"><svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H8l-3.29 3.29A1 1 0 013 16.59V4z"/></svg></span>
+        <span class="cap">${esc(m.label || m.text)}</span>
+        <button class="media-del" onclick="event.stopPropagation();deleteSavedMessage('${m.id}')" title="Remove">&times;</button>
+      </div>
+    `).join('');
+    if (selectedMsgIds.size > 0) {
+      html += `<button class="msg-copy-selected" onclick="copySelectedMessages()">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor"><path d="M5 2a2 2 0 012-2h5a2 2 0 012 2v7a2 2 0 01-2 2H7a2 2 0 01-2-2V2zM3 4a2 2 0 00-2 2v7a2 2 0 002 2h5a2 2 0 002-2H7a4 4 0 01-4-4V4z"/></svg>
+        Copy ${selectedMsgIds.size} selected
+      </button>`;
+    }
+  }
+
   bar.innerHTML = html;
+}
+
+// ============ SAVED MESSAGES (reusable text snippets, click to copy) ============
+function showSaveMessageModal(editId) {
+  const editing = editId ? state.savedMessages.find(m => m.id === editId) : null;
+  document.getElementById('modalContainer').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="max-width:560px">
+        <div class="modal-header"><h3>${editing ? 'Edit' : 'Save'} Message</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>
+        <div class="modal-body">
+          <label style="font-size:14px;font-weight:500;display:block;margin-bottom:8px;">Label (short name for the chip)</label>
+          <input class="case-input" id="msgLabel" placeholder="e.g. Thank you note, Bank details" value="${editing ? esc(editing.label || '') : ''}">
+          <label style="font-size:14px;font-weight:500;display:block;margin:14px 0 8px;">Message text</label>
+          <textarea class="paste-area" id="msgText" placeholder="Type the message you want to reuse...">${editing ? esc(editing.text) : ''}</textarea>
+          <p class="hint">Click a saved chip to copy its text. Tick the boxes on several chips to copy them all at once (joined together).</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveMessageItem(${editId ? `'${editId}'` : 'null'})">${editing ? 'Save Changes' : 'Save Message'}</button>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(() => document.getElementById('msgLabel')?.focus(), 50);
+}
+
+function saveMessageItem(editId) {
+  const label = document.getElementById('msgLabel').value.trim();
+  const text = document.getElementById('msgText').value.trim();
+  if (!text) { toast('Message text is empty'); return; }
+  if (editId) {
+    const m = state.savedMessages.find(x => x.id === editId);
+    if (m) { m.label = label; m.text = text; }
+  } else {
+    state.savedMessages.push({ id: uid(), label, text });
+  }
+  saveState(); closeModal(); renderMediaBar();
+  toast(editId ? 'Message updated' : 'Message saved');
+}
+
+function copySavedMessage(id) {
+  const m = state.savedMessages.find(x => x.id === id);
+  if (!m) return;
+  navigator.clipboard.writeText(m.text).then(
+    () => toast('Copied: ' + (m.label || m.text.slice(0, 30))),
+    () => toast('Copy failed')
+  );
+}
+
+function deleteSavedMessage(id) {
+  if (!confirm('Remove this saved message?')) return;
+  state.savedMessages = state.savedMessages.filter(x => x.id !== id);
+  selectedMsgIds.delete(id);
+  saveState(); renderMediaBar();
+  toast('Removed');
+}
+
+function toggleMsgSelect(id, checked) {
+  if (checked) selectedMsgIds.add(id); else selectedMsgIds.delete(id);
+  renderMediaBar();
+}
+
+function copySelectedMessages() {
+  // Copy in the order they appear in the bar, joined by a blank line
+  const texts = state.savedMessages.filter(m => selectedMsgIds.has(m.id)).map(m => m.text);
+  if (texts.length === 0) return;
+  const combined = texts.join('\n\n');
+  navigator.clipboard.writeText(combined).then(
+    () => toast(`Copied ${texts.length} messages`),
+    () => toast('Copy failed')
+  );
 }
 
 function showAddMediaModal() {
