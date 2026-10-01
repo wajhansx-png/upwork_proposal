@@ -239,6 +239,21 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 @media(prefers-color-scheme:dark){ :root:not([data-theme="light"]) .toast { color: #0D2318; } }
 .toast button { background: none; border: 1px solid currentColor; color: inherit; border-radius: 7px; padding: 3px 10px; font: inherit; font-weight: 600; cursor: pointer; }
 
+/* Live/shared + read-only state */
+.sync-badge {
+  display: inline-flex; align-items: center; gap: 7px; margin-top: 10px;
+  font-size: 12.5px; font-weight: 600; padding: 5px 11px; border-radius: 20px;
+  background: var(--green-50); color: var(--green-700);
+}
+.sync-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green-500); }
+@media (prefers-reduced-motion: no-preference) {
+  .sync-badge .dot { animation: pulse 2.2s infinite; }
+}
+@keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(44,163,107,.5); } 70% { box-shadow: 0 0 0 6px rgba(44,163,107,0); } 100% { box-shadow: 0 0 0 0 rgba(44,163,107,0); } }
+.sync-badge.ro { background: var(--gold-bg); color: var(--gold); }
+body.readonly .add { display: none; }
+body.readonly .act, body.readonly .check { pointer-events: none; opacity: 0.4; }
+
 @media (max-width: 480px) {
   .top { padding: 14px 14px 8px; }
   .list { padding: 6px 10px 110px; }
@@ -257,6 +272,8 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
         <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" id="themeIcon"><path d="M10 2a8 8 0 108 8c0-.4-.03-.8-.09-1.19a5.5 5.5 0 01-7.72-7.72A8.06 8.06 0 0010 2z"/></svg>
       </button>
     </div>
+
+    <div id="syncBadge" class="sync-badge" hidden></div>
 
     <div class="progress-wrap">
       <div class="progress-top">
@@ -292,38 +309,52 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; }
 <div id="toastRoot"></div>
 
 <script>
-const KEY = 'givelife_tasks_v1';
-const DEFAULT = { tasks: [], members: [{ id: 'me', name: 'Me' }], filter: 'todo', theme: null, newFlag: false };
-let state = { ...DEFAULT };
+/* GiveLife Tasks
+   Storage: when opened via the claude.ai link the shared `db` capability
+   syncs tasks between teammates live. Opened as a plain local file it has
+   no db, so it falls back to this browser's localStorage. Same UI either way. */
+const KEY = 'givelife_tasks_v1';     // local-mode full data
+const PREFS = 'givelife_tasks_prefs'; // theme + filter (per viewer, both modes)
+let state = { tasks: [], members: [{ id: 'me', name: 'Me' }], filter: 'todo', theme: null, newFlag: false };
 let lastDeleted = null;
 
-// Fixed palette for member avatars (stable per member id)
-const AV_COLORS = ['#1E8555','#C08419','#3B6FB0','#B0533B','#7A4FB0','#2A9D8F','#C9456B','#6A7A1E'];
-function memberColor(id) {
-  let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
-  return AV_COLORS[h % AV_COLORS.length];
-}
-function initials(name) {
-  const p = (name || '?').trim().split(/\s+/);
-  return ((p[0]?.[0] || '') + (p[1]?.[0] || '')).toUpperCase() || '?';
-}
+let DB = null;        // db namespace when shared, else null
+let canWrite = true;  // false for view-only viewers
 
-function load() {
-  try { const s = localStorage.getItem(KEY); if (s) state = { ...DEFAULT, ...JSON.parse(s) }; } catch(e) {}
-  if (!state.members || !state.members.length) state.members = [{ id: 'me', name: 'Me' }];
+// Member avatar colors (stable per member id)
+const AV_COLORS = ['#1E8555','#C08419','#3B6FB0','#B0533B','#7A4FB0','#2A9D8F','#C9456B','#6A7A1E'];
+function memberColor(id) { let h = 0; for (const c of (id||'me')) h = (h * 31 + c.charCodeAt(0)) & 0xffff; return AV_COLORS[h % AV_COLORS.length]; }
+function initials(name) { const p = (name || '?').trim().split(/\s+/); return ((p[0]?.[0] || '') + (p[1]?.[0] || '')).toUpperCase() || '?'; }
+
+// ---- Per-viewer prefs (always localStorage) ----
+function loadPrefs() {
+  try { const s = localStorage.getItem(PREFS); if (s) { const p = JSON.parse(s); if (p.filter) state.filter = p.filter; if ('theme' in p) state.theme = p.theme; } } catch(e) {}
   if (state.theme) document.documentElement.setAttribute('data-theme', state.theme);
 }
-function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e) {} }
+function savePrefs() { try { localStorage.setItem(PREFS, JSON.stringify({ filter: state.filter, theme: state.theme })); } catch(e) {} }
+// ---- Local-mode data ----
+function loadLocal() { try { const s = localStorage.getItem(KEY); if (s) { const d = JSON.parse(s); state.tasks = d.tasks || []; state.members = (d.members && d.members.length) ? d.members : [{ id: 'me', name: 'Me' }]; } } catch(e) {} }
+function saveLocal() { try { localStorage.setItem(KEY, JSON.stringify({ tasks: state.tasks, members: state.members })); } catch(e) {} }
+
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+function findTask(id) { return state.tasks.find(t => t.id === id); }
+
+// ---- Persistence: db when shared, localStorage otherwise ----
+function taskBody(t) { return { title: t.title, done: !!t.done, important: !!t.important, due: t.due || '', assignee: t.assignee || 'me', createdAt: t.createdAt || Date.now() }; }
+function onWriteErr(e) {
+  if (e && (e.code === 'invalid_argument' || e.code === 'revoked')) { setReadOnly(); toast('View only — ask the owner for edit access'); }
+}
+function persistTask(id) { const t = findTask(id); if (!t) return; if (DB) DB.collection('tasks').doc(id).set(taskBody(t)).catch(onWriteErr); else saveLocal(); }
+function persistDelete(id) { if (DB) DB.doc('tasks/' + id).delete().catch(onWriteErr); else saveLocal(); }
+function persistTeam() { if (DB) DB.doc('meta/team').set({ members: state.members }).catch(onWriteErr); else saveLocal(); }
+function setReadOnly() { canWrite = false; document.body.classList.add('readonly'); render(); updateBadge(); }
 
 // ---- Dates ----
-function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10); }
+function todayStr() { return new Date().toISOString().slice(0, 10); }
 function dueInfo(due) {
   if (!due) return null;
-  const today = todayStr();
-  const d = new Date(due + 'T00:00:00');
-  const t = new Date(today + 'T00:00:00');
+  const d = new Date(due + 'T00:00:00'), t = new Date(todayStr() + 'T00:00:00');
   const diff = Math.round((d - t) / 86400000);
   let label, cls = 'due';
   if (diff < 0) { label = Math.abs(diff) === 1 ? 'Yesterday' : `${Math.abs(diff)}d overdue`; cls += ' over'; }
@@ -339,13 +370,12 @@ function visible() {
   let t = state.tasks;
   if (state.filter === 'todo') t = t.filter(x => !x.done);
   else if (state.filter === 'done') t = t.filter(x => x.done);
-  // Sort: not-done first, then important first, then by due date (soonest), then newest
   return [...t].sort((a, b) => {
     if (a.done !== b.done) return a.done ? 1 : -1;
     if (!!b.important !== !!a.important) return b.important ? 1 : -1;
     if (a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1;
     if (!!a.due !== !!b.due) return a.due ? -1 : 1;
-    return b.created - a.created;
+    return (b.createdAt || 0) - (a.createdAt || 0);
   });
 }
 
@@ -388,7 +418,7 @@ function renderTask(t) {
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </button>
     <div class="body">
-      <div class="title" contenteditable="true" spellcheck="false"
+      <div class="title" contenteditable="${canWrite}" spellcheck="false"
            onblur="editTitle('${t.id}', this.textContent)"
            onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${esc(t.title)}</div>
       ${(di || multi) ? `<div class="meta">
@@ -415,53 +445,51 @@ function renderTask(t) {
 // ---- Actions ----
 function addTask(e) {
   if (e) e.preventDefault();
+  if (!canWrite) return;
   const inp = document.getElementById('addInput');
   const title = inp.value.trim();
   if (!title) return;
-  state.tasks.push({
-    id: uid(), title, done: false, important: !!state.newFlag,
-    due: '', assignee: state.members[0].id, created: Date.now()
-  });
+  const t = { id: uid(), title, done: false, important: !!state.newFlag, due: '', assignee: state.members[0].id, createdAt: Date.now() };
+  state.tasks.push(t);
   inp.value = '';
   state.newFlag = false;
   document.getElementById('flagToggle').classList.remove('on');
-  if (state.filter === 'done') state.filter = 'todo';
-  save(); render();
+  if (state.filter === 'done') state.filter = 'todo', savePrefs();
+  render(); persistTask(t.id);
   inp.focus();
 }
 function toggleNewFlag() {
   state.newFlag = !state.newFlag;
   document.getElementById('flagToggle').classList.toggle('on', state.newFlag);
 }
-function findTask(id) { return state.tasks.find(t => t.id === id); }
-function toggleDone(id) {
-  const t = findTask(id); if (!t) return;
-  t.done = !t.done; t.doneAt = t.done ? Date.now() : null;
-  save(); render();
-}
-function toggleImportant(id) { const t = findTask(id); if (!t) return; t.important = !t.important; save(); render(); }
+function toggleDone(id) { if (!canWrite) return; const t = findTask(id); if (!t) return; t.done = !t.done; render(); persistTask(id); }
+function toggleImportant(id) { if (!canWrite) return; const t = findTask(id); if (!t) return; t.important = !t.important; render(); persistTask(id); }
 function editTitle(id, text) {
+  if (!canWrite) return;
   const t = findTask(id); if (!t) return;
   const v = (text || '').trim();
-  if (!v) { render(); return; }      // don't allow empty; restore
-  if (v !== t.title) { t.title = v; save(); render(); }
+  if (!v) { render(); return; }
+  if (v !== t.title) { t.title = v; render(); persistTask(id); }
 }
 function removeTask(id) {
+  if (!canWrite) return;
   const i = state.tasks.findIndex(t => t.id === id); if (i < 0) return;
   lastDeleted = { idx: i, task: state.tasks[i] };
   state.tasks.splice(i, 1);
-  save(); render();
+  render(); persistDelete(id);
   toast('Task deleted', { label: 'Undo', fn: undoDelete });
 }
 function undoDelete() {
   if (!lastDeleted) return;
-  state.tasks.splice(Math.min(lastDeleted.idx, state.tasks.length), 0, lastDeleted.task);
-  lastDeleted = null; save(); render();
+  const t = lastDeleted.task;
+  state.tasks.splice(Math.min(lastDeleted.idx, state.tasks.length), 0, t);
+  lastDeleted = null; render(); persistTask(t.id);
 }
-function setFilter(f) { state.filter = f; save(); render(); }
+function setFilter(f) { state.filter = f; savePrefs(); render(); }
 
 // ---- Due date sheet ----
 function openDue(id) {
+  if (!canWrite) return;
   const t = findTask(id); if (!t) return;
   const addDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
   sheet(`
@@ -476,57 +504,60 @@ function openDue(id) {
     ${t.due ? `<button class="due-clear" onclick="setDue('${id}','')">Remove due date</button>` : ''}
   `);
 }
-function setDue(id, val) { const t = findTask(id); if (t) { t.due = val; save(); render(); } closeSheet(); }
+function setDue(id, val) { const t = findTask(id); if (t) { t.due = val; render(); persistTask(id); } closeSheet(); }
 
 // ---- Assign sheet ----
 function openAssign(id) {
+  if (!canWrite) return;
   const t = findTask(id); if (!t) return;
   sheet(`
     <h3>Assign to</h3>
-    ${state.members.map(m => `
-      <div class="member-row ${t.assignee === m.id ? 'sel' : ''}" onclick="assign('${id}','${m.id}')">
-        <span class="who" style="background:${memberColor(m.id)}">${initials(m.name)}</span>
-        <span class="nm">${esc(m.name)}</span>
+    ${state.members.map(mem => `
+      <div class="member-row ${t.assignee === mem.id ? 'sel' : ''}" onclick="assign('${id}','${mem.id}')">
+        <span class="who" style="background:${memberColor(mem.id)}">${initials(mem.name)}</span>
+        <span class="nm">${esc(mem.name)}</span>
         <span class="tick"><svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
       </div>`).join('')}
     <button class="due-clear" style="color:var(--green-600)" onclick="closeSheet();openMembers()">+ Manage team</button>
   `);
 }
-function assign(id, mid) { const t = findTask(id); if (t) { t.assignee = mid; save(); render(); } closeSheet(); }
+function assign(id, mid) { const t = findTask(id); if (t) { t.assignee = mid; render(); persistTask(id); } closeSheet(); }
 
 // ---- Members sheet ----
 function openMembers() {
   sheet(`
     <h3>Team members</h3>
-    ${state.members.map(m => `
+    ${state.members.map(mem => `
       <div class="member-row">
-        <span class="who" style="background:${memberColor(m.id)}">${initials(m.name)}</span>
-        <span class="nm">${esc(m.name)}</span>
-        ${m.id === 'me' || state.members.length === 1 ? '' : `<button class="mdel" onclick="removeMember('${m.id}')" title="Remove">&times;</button>`}
+        <span class="who" style="background:${memberColor(mem.id)}">${initials(mem.name)}</span>
+        <span class="nm">${esc(mem.name)}</span>
+        ${(mem.id === 'me' || state.members.length === 1 || !canWrite) ? '' : `<button class="mdel" onclick="removeMember('${mem.id}')" title="Remove">&times;</button>`}
       </div>`).join('')}
-    <div class="add-member">
+    ${canWrite ? `<div class="add-member">
       <input id="memberName" placeholder="New member name" onkeydown="if(event.key==='Enter')addMember()">
       <button onclick="addMember()">Add</button>
     </div>
-    <p style="font-size:12.5px;color:var(--text-tertiary);margin-top:12px;">Add teammates, then tap a task's avatar to assign it.</p>
+    <p style="font-size:12.5px;color:var(--text-tertiary);margin-top:12px;">Add teammates, then tap a task's avatar to assign it. To let them edit from their own phone, share this page's link with them as an editor.</p>` : ''}
   `);
   setTimeout(() => document.getElementById('memberName')?.focus(), 60);
 }
 function addMember() {
+  if (!canWrite) return;
   const inp = document.getElementById('memberName'); const name = inp.value.trim();
   if (!name) return;
   state.members.push({ id: uid(), name });
-  save(); openMembers(); render();
+  render(); persistTeam(); openMembers();
   toast(`Added ${name}`);
 }
 function removeMember(mid) {
+  if (!canWrite) return;
   state.members = state.members.filter(m => m.id !== mid);
   const fallback = state.members[0].id;
-  state.tasks.forEach(t => { if (t.assignee === mid) t.assignee = fallback; });
-  save(); openMembers(); render();
+  state.tasks.forEach(t => { if (t.assignee === mid) { t.assignee = fallback; persistTask(t.id); } });
+  render(); persistTeam(); openMembers();
 }
 
-// ---- Sheet + toast infra ----
+// ---- Sheet + toast ----
 function sheet(html) {
   document.getElementById('sheetRoot').innerHTML =
     `<div class="overlay" onclick="if(event.target===this)closeSheet()"><div class="sheet"><div class="grab"></div>${html}</div></div>`;
@@ -535,14 +566,11 @@ function closeSheet() { document.getElementById('sheetRoot').innerHTML = ''; }
 
 let toastTimer = null;
 function toast(msg, action) {
-  const root = document.getElementById('toastRoot');
-  root.innerHTML = '';
-  const t = document.createElement('div');
-  t.className = 'toast'; t.textContent = msg;
+  const root = document.getElementById('toastRoot'); root.innerHTML = '';
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
   if (action) { const b = document.createElement('button'); b.textContent = action.label; b.onclick = () => { root.innerHTML = ''; action.fn(); }; t.appendChild(b); }
   root.appendChild(t);
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.remove(), action ? 5000 : 1800);
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.remove(), action ? 5000 : 1800);
 }
 
 // ---- Theme ----
@@ -551,7 +579,7 @@ function toggleTheme() {
     (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
   const next = cur === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
-  state.theme = next; save(); updateThemeIcon();
+  state.theme = next; savePrefs(); updateThemeIcon();
 }
 function updateThemeIcon() {
   const cur = document.documentElement.getAttribute('data-theme') ||
@@ -562,10 +590,47 @@ function updateThemeIcon() {
     : '<path d="M10 2a8 8 0 108 8c0-.4-.03-.8-.09-1.19a5.5 5.5 0 01-7.72-7.72A8.06 8.06 0 0010 2z"/>';
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+function updateBadge() {
+  const badge = document.getElementById('syncBadge');
+  if (!DB) { badge.hidden = true; return; }
+  badge.hidden = false;
+  if (canWrite) { badge.className = 'sync-badge'; badge.innerHTML = '<span class="dot"></span> Live · changes sync to your team'; }
+  else { badge.className = 'sync-badge ro'; badge.textContent = '👀 View only — ask the owner for edit access'; }
+}
 
-// Init
-load(); render(); updateThemeIcon();
+// ---- Shared DB wiring ----
+function subscribe() {
+  DB.collection('tasks').onSnapshot(snap => {
+    state.tasks = snap.docs.filter(d => d.exists).map(d => ({ id: d.id, ...d.data() }));
+    render();
+  }, e => { if (e && (e.code === 'revoked' || e.code === 'invalid_argument')) toast('Live sync stopped'); });
+  DB.doc('meta/team').onSnapshot(snap => {
+    const d = snap.exists ? snap.data() : null;
+    state.members = (d && Array.isArray(d.members) && d.members.length) ? d.members : [{ id: 'me', name: 'Me' }];
+    render();
+  });
+}
+
+async function init() {
+  loadPrefs(); updateThemeIcon();
+  let db = null;
+  try { if (window.claude && window.claude.use) db = await window.claude.use('db'); } catch(e) { db = null; }
+  if (db) {
+    DB = db;
+    try {
+      const u = window.claude.use ? await window.claude.use('user') : null;
+      if (u && u.can) { const w = await u.can('data.write'); if (w === false) { canWrite = false; document.body.classList.add('readonly'); } }
+    } catch(e) {}
+    updateBadge();
+    render();      // designed empty frame while the store answers
+    subscribe();   // fills in and keeps live
+  } else {
+    loadLocal(); render();
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateThemeIcon);
+init();
 </script>
 </html>
