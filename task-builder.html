@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>GiveLife Tasks</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+
+<style>
+:root {
+  --green-700: #0F5F3A; --green-600: #1E8555; --green-500: #2CA36B;
+  --green-100: #DFF0E7; --green-50: #EEF7F2;
+  --gold: #C08419; --gold-bg: #FBEFD5;
+  --red: #C93444; --red-bg: #FBE1E4;
+  --bg: #F7F5EF; --surface: #FFFFFF; --surface-alt: #EFEDE6;
+  --text: #1E1F22; --text-secondary: #4E525A; --text-tertiary: #7C808B;
+  --border: #DDD9CE; --border-light: #ECE9DF;
+  --shadow: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 8px 28px rgba(0,0,0,0.10);
+  --accent-hover: rgba(30,133,85,0.08);
+}
+@media(prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --green-700: #B4EACB; --green-600: #6ED09A; --green-500: #4EC084;
+  --green-100: #123324; --green-50: #0D2318;
+  --gold: #F0BC55; --gold-bg: #2E240F; --red: #F17683; --red-bg: #341518;
+  --bg: #14161B; --surface: #1D2027; --surface-alt: #262A32;
+  --text: #ECEDF0; --text-secondary: #ADB1BA; --text-tertiary: #757A85;
+  --border: #333844; --border-light: #262A32;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3); --shadow-md: 0 8px 28px rgba(0,0,0,0.45);
+  --accent-hover: rgba(110,208,154,0.1);
+}}
+:root[data-theme="dark"]{
+  --green-700: #B4EACB; --green-600: #6ED09A; --green-500: #4EC084;
+  --green-100: #123324; --green-50: #0D2318; --gold: #F0BC55; --gold-bg: #2E240F;
+  --red: #F17683; --red-bg: #341518; --bg: #14161B; --surface: #1D2027; --surface-alt: #262A32;
+  --text: #ECEDF0; --text-secondary: #ADB1BA; --text-tertiary: #757A85;
+  --border: #333844; --border-light: #262A32;
+  --shadow: 0 1px 3px rgba(0,0,0,0.3); --shadow-md: 0 8px 28px rgba(0,0,0,0.45);
+  --accent-hover: rgba(110,208,154,0.1);
+}
+
+* { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: 'Inter', system-ui, sans-serif; font-size: 16px; line-height: 1.5;
+}
+h1,h2,h3 { font-family: 'DM Sans', system-ui, sans-serif; letter-spacing: -0.01em; }
+button, input, select, textarea { font-family: inherit; font-size: inherit; }
+::selection { background: var(--green-100); color: var(--green-700); }
+
+.wrap { max-width: 620px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+
+/* Header */
+.top {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg);
+  padding: 18px 18px 10px;
+}
+.brand { display: flex; align-items: center; gap: 11px; }
+.brand .logo { color: var(--green-600); display: flex; }
+.brand h1 { font-size: 21px; font-weight: 700; color: var(--green-600); flex: 1; }
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 11px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background 0.12s, border-color 0.12s;
+}
+.icon-btn:hover { background: var(--surface-alt); }
+.icon-btn:active { transform: translateY(1px); }
+
+/* Progress */
+.progress-wrap { margin-top: 14px; }
+.progress-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 7px; }
+.progress-top .big { font-size: 15px; font-weight: 600; }
+.progress-top .big b { font-family: 'DM Sans', sans-serif; color: var(--green-600); }
+.progress-top .pct { font-size: 13px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.bar { height: 10px; border-radius: 6px; background: var(--surface-alt); overflow: hidden; }
+.bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--green-500), var(--green-600)); border-radius: 6px; transition: width 0.35s ease; }
+
+/* Add bar */
+.add {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 14px; padding: 6px 6px 6px 16px;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: 15px; box-shadow: var(--shadow);
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.add:focus-within { border-color: var(--green-500); box-shadow: 0 0 0 4px var(--accent-hover); }
+.add input {
+  flex: 1; border: none; background: none; outline: none; color: var(--text);
+  padding: 10px 0; font-size: 16px; font-weight: 500;
+}
+.add input::placeholder { color: var(--text-tertiary); font-weight: 400; }
+.add .flag-toggle {
+  width: 40px; height: 40px; border-radius: 11px; border: none; background: var(--surface-alt);
+  color: var(--text-tertiary); cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  transition: all 0.12s;
+}
+.add .flag-toggle.on { background: var(--gold-bg); color: var(--gold); }
+.add .add-btn {
+  width: 44px; height: 44px; border-radius: 12px; border: none;
+  background: var(--green-600); color: #fff; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  transition: all 0.12s;
+}
+.add .add-btn:hover { background: var(--green-500); }
+.add .add-btn:active { transform: scale(0.94); }
+
+/* Filters */
+.filters { display: flex; gap: 6px; padding: 14px 18px 4px; }
+.seg {
+  flex: 1; display: flex; background: var(--surface-alt); border: 1px solid var(--border);
+  border-radius: 12px; padding: 3px; gap: 2px;
+}
+.seg button {
+  flex: 1; border: none; background: none; border-radius: 9px; padding: 8px 6px;
+  color: var(--text-secondary); font-weight: 600; font-size: 13.5px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 5px; transition: all 0.12s;
+}
+.seg button .n { font-size: 11.5px; opacity: 0.65; font-variant-numeric: tabular-nums; }
+.seg button:hover { background: var(--surface); }
+.seg button.active { background: var(--surface); color: var(--green-700); box-shadow: var(--shadow); }
+
+/* List */
+.list { flex: 1; padding: 8px 14px 110px; }
+.task {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 13px 14px; margin: 6px 0;
+  background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: 14px; box-shadow: var(--shadow);
+  transition: transform 0.12s, box-shadow 0.12s, opacity 0.2s;
+  animation: pop 0.2s ease;
+}
+@keyframes pop { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.task.important { border-left: 4px solid var(--gold); }
+.task.done { opacity: 0.55; }
+.task.done:hover { opacity: 0.8; }
+
+.check {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
+  border: 2px solid var(--border); background: none; cursor: pointer; padding: 0;
+  display: flex; align-items: center; justify-content: center; color: #fff;
+  transition: all 0.15s;
+}
+.check:hover { border-color: var(--green-500); }
+.check.on { background: var(--green-600); border-color: var(--green-600); }
+.check svg { opacity: 0; transform: scale(0.5); transition: all 0.15s; }
+.check.on svg { opacity: 1; transform: none; }
+
+.body { flex: 1; min-width: 0; }
+.title {
+  font-size: 15.5px; font-weight: 500; line-height: 1.4; color: var(--text);
+  word-break: break-word; cursor: text; outline: none; border-radius: 4px;
+}
+.title:focus { box-shadow: 0 0 0 2px var(--accent-hover); }
+.task.done .title { text-decoration: line-through; color: var(--text-tertiary); }
+.meta { display: flex; align-items: center; gap: 7px; margin-top: 7px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 20px;
+  background: var(--surface-alt); color: var(--text-secondary); cursor: pointer; border: 1px solid transparent;
+}
+.chip.due { background: var(--green-50); color: var(--green-700); }
+.chip.due.today { background: var(--gold-bg); color: var(--gold); }
+.chip.due.over { background: var(--red-bg); color: var(--red); }
+.chip:hover { border-color: var(--border); }
+.chip.add-due { background: none; color: var(--text-tertiary); border: 1px dashed var(--border); }
+.chip.add-due:hover { color: var(--green-600); border-color: var(--green-500); }
+.who {
+  width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff; cursor: pointer; border: none;
+  font-family: 'DM Sans', sans-serif;
+}
+.del {
+  background: none; border: none; color: var(--text-tertiary); cursor: pointer;
+  font-size: 20px; line-height: 1; padding: 2px 6px; border-radius: 8px; flex-shrink: 0;
+  opacity: 0.35; transition: all 0.12s; align-self: center;
+}
+.del:hover { color: var(--red); background: var(--red-bg); opacity: 1; }
+
+/* Empty */
+.empty { text-align: center; padding: 56px 24px; color: var(--text-tertiary); }
+.empty .em { font-size: 44px; margin-bottom: 12px; }
+.empty h3 { font-size: 17px; color: var(--text-secondary); margin-bottom: 6px; }
+.empty p { font-size: 14px; max-width: 300px; margin: 0 auto; }
+
+/* Sheet (members / due picker) */
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 50; display: flex; align-items: flex-end; justify-content: center; animation: fade 0.15s; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.sheet {
+  background: var(--surface); width: 100%; max-width: 620px;
+  border-radius: 20px 20px 0 0; padding: 8px 18px calc(22px + env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-md); animation: up 0.22s ease; max-height: 80vh; overflow-y: auto;
+}
+@keyframes up { from { transform: translateY(100%); } to { transform: none; } }
+.sheet .grab { width: 40px; height: 4px; border-radius: 2px; background: var(--border); margin: 8px auto 14px; }
+.sheet h3 { font-size: 17px; margin-bottom: 14px; }
+.member-row { display: flex; align-items: center; gap: 11px; padding: 11px 6px; border-bottom: 1px solid var(--border-light); cursor: pointer; }
+.member-row:hover { background: var(--surface-alt); border-radius: 10px; }
+.member-row .who { width: 32px; height: 32px; font-size: 13px; }
+.member-row .nm { flex: 1; font-weight: 500; }
+.member-row .tick { color: var(--green-600); opacity: 0; }
+.member-row.sel .tick { opacity: 1; }
+.member-row .mdel { background:none;border:none;color:var(--text-tertiary);font-size:18px;cursor:pointer;padding:2px 6px; }
+.member-row .mdel:hover { color: var(--red); }
+.add-member { display: flex; gap: 8px; margin-top: 14px; }
+.add-member input { flex: 1; padding: 11px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); color: var(--text); outline: none; }
+.add-member input:focus { border-color: var(--green-500); }
+.add-member button { padding: 0 18px; border: none; border-radius: 11px; background: var(--green-600); color: #fff; font-weight: 600; cursor: pointer; }
+.sheet .due-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sheet .due-grid button, .sheet .due-clear {
+  padding: 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  color: var(--text); font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.sheet .due-grid button:hover { border-color: var(--green-500); background: var(--green-50); }
+.sheet .due-date { margin-top: 8px; width: 100%; padding: 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); }
+.sheet .due-clear { width: 100%; margin-top: 8px; color: var(--red); }
+
+/* Toast */
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(22px + env(safe-area-inset-bottom));
+  background: var(--green-700); color: var(--surface); padding: 11px 18px; border-radius: 12px;
+  font-size: 14px; font-weight: 500; box-shadow: var(--shadow-md); z-index: 80;
+  display: flex; align-items: center; gap: 14px; animation: up 0.2s;
+}
+:root[data-theme="dark"] .toast { color: #0D2318; }
+@media(prefers-color-scheme:dark){ :root:not([data-theme="light"]) .toast { color: #0D2318; } }
+.toast button { background: none; border: 1px solid currentColor; color: inherit; border-radius: 7px; padding: 3px 10px; font: inherit; font-weight: 600; cursor: pointer; }
+
+@media (max-width: 480px) {
+  .top { padding: 14px 14px 8px; }
+  .list { padding: 6px 10px 110px; }
+}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <span class="logo"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg></span>
+      <h1>GiveLife Tasks</h1>
+      <button class="icon-btn" onclick="openMembers()" title="Team members" aria-label="Team members">
+        <svg width="19" height="19" viewBox="0 0 20 20" fill="currentColor"><path d="M7 9a3 3 0 100-6 3 3 0 000 6zm6 0a3 3 0 100-6 3 3 0 000 6zM7 11c-2.7 0-5 1.6-5 3.6V17h10v-2.4C12 12.6 9.7 11 7 11zm6 0c-.5 0-1 .06-1.4.17 1 .9 1.6 2.1 1.6 3.43V17h5v-2.4c0-2-2.3-3.6-5-3.6z"/></svg>
+      </button>
+      <button class="icon-btn" onclick="toggleTheme()" title="Dark / light mode" aria-label="Theme" id="themeBtn">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" id="themeIcon"><path d="M10 2a8 8 0 108 8c0-.4-.03-.8-.09-1.19a5.5 5.5 0 01-7.72-7.72A8.06 8.06 0 0010 2z"/></svg>
+      </button>
+    </div>
+
+    <div class="progress-wrap">
+      <div class="progress-top">
+        <span class="big" id="progLabel">Nothing yet</span>
+        <span class="pct" id="progPct"></span>
+      </div>
+      <div class="bar"><span id="progBar" style="width:0%"></span></div>
+    </div>
+
+    <form class="add" onsubmit="addTask(event)">
+      <input id="addInput" placeholder="Add a task and press Enter…" autocomplete="off" enterkeyhint="done">
+      <button type="button" class="flag-toggle" id="flagToggle" onclick="toggleNewFlag()" title="Mark important" aria-label="Important">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><path d="M4 2a1 1 0 011 1v1h9.5a1 1 0 01.8 1.6L13 9l2.3 3.4a1 1 0 01-.8 1.6H5v4a1 1 0 01-2 0V3a1 1 0 011-1z"/></svg>
+      </button>
+      <button type="submit" class="add-btn" title="Add" aria-label="Add task">
+        <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 2a1 1 0 011 1v4h4a1 1 0 010 2H9v4a1 1 0 01-2 0V9H3a1 1 0 010-2h4V3a1 1 0 011-1z"/></svg>
+      </button>
+    </form>
+  </header>
+
+  <div class="filters">
+    <div class="seg">
+      <button id="f-todo" onclick="setFilter('todo')">To do <span class="n" id="n-todo"></span></button>
+      <button id="f-done" onclick="setFilter('done')">Done <span class="n" id="n-done"></span></button>
+      <button id="f-all" onclick="setFilter('all')">All <span class="n" id="n-all"></span></button>
+    </div>
+  </div>
+
+  <div class="list" id="list"></div>
+</div>
+
+<div id="sheetRoot"></div>
+<div id="toastRoot"></div>
+
+<script>
+const KEY = 'givelife_tasks_v1';
+const DEFAULT = { tasks: [], members: [{ id: 'me', name: 'Me' }], filter: 'todo', theme: null, newFlag: false };
+let state = { ...DEFAULT };
+let lastDeleted = null;
+
+// Fixed palette for member avatars (stable per member id)
+const AV_COLORS = ['#1E8555','#C08419','#3B6FB0','#B0533B','#7A4FB0','#2A9D8F','#C9456B','#6A7A1E'];
+function memberColor(id) {
+  let h = 0; for (const c of id) h = (h * 31 + c.charCodeAt(0)) & 0xffff;
+  return AV_COLORS[h % AV_COLORS.length];
+}
+function initials(name) {
+  const p = (name || '?').trim().split(/\s+/);
+  return ((p[0]?.[0] || '') + (p[1]?.[0] || '')).toUpperCase() || '?';
+}
+
+function load() {
+  try { const s = localStorage.getItem(KEY); if (s) state = { ...DEFAULT, ...JSON.parse(s) }; } catch(e) {}
+  if (!state.members || !state.members.length) state.members = [{ id: 'me', name: 'Me' }];
+  if (state.theme) document.documentElement.setAttribute('data-theme', state.theme);
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e) {} }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+// ---- Dates ----
+function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10); }
+function dueInfo(due) {
+  if (!due) return null;
+  const today = todayStr();
+  const d = new Date(due + 'T00:00:00');
+  const t = new Date(today + 'T00:00:00');
+  const diff = Math.round((d - t) / 86400000);
+  let label, cls = 'due';
+  if (diff < 0) { label = Math.abs(diff) === 1 ? 'Yesterday' : `${Math.abs(diff)}d overdue`; cls += ' over'; }
+  else if (diff === 0) { label = 'Today'; cls += ' today'; }
+  else if (diff === 1) { label = 'Tomorrow'; }
+  else if (diff < 7) { label = d.toLocaleDateString(undefined, { weekday: 'short' }); }
+  else { label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+  return { label, cls };
+}
+
+// ---- Render ----
+function visible() {
+  let t = state.tasks;
+  if (state.filter === 'todo') t = t.filter(x => !x.done);
+  else if (state.filter === 'done') t = t.filter(x => x.done);
+  // Sort: not-done first, then important first, then by due date (soonest), then newest
+  return [...t].sort((a, b) => {
+    if (a.done !== b.done) return a.done ? 1 : -1;
+    if (!!b.important !== !!a.important) return b.important ? 1 : -1;
+    if (a.due && b.due && a.due !== b.due) return a.due < b.due ? -1 : 1;
+    if (!!a.due !== !!b.due) return a.due ? -1 : 1;
+    return b.created - a.created;
+  });
+}
+
+function render() {
+  const total = state.tasks.length;
+  const done = state.tasks.filter(t => t.done).length;
+  const todo = total - done;
+  document.getElementById('n-todo').textContent = todo || '';
+  document.getElementById('n-done').textContent = done || '';
+  document.getElementById('n-all').textContent = total || '';
+  ['todo','done','all'].forEach(f => document.getElementById('f-' + f).classList.toggle('active', state.filter === f));
+
+  const pct = total ? Math.round(done / total * 100) : 0;
+  document.getElementById('progBar').style.width = pct + '%';
+  document.getElementById('progLabel').innerHTML = total
+    ? (todo ? `<b>${todo}</b> left to do` : `All done — nice work 🎉`)
+    : 'Nothing yet';
+  document.getElementById('progPct').textContent = total ? `${done}/${total} · ${pct}%` : '';
+
+  const list = document.getElementById('list');
+  const items = visible();
+  if (!items.length) {
+    const msg = state.filter === 'done'
+      ? { em: '🗂️', h: 'No finished tasks yet', p: 'Completed tasks will collect here.' }
+      : state.filter === 'todo' && total
+      ? { em: '🎉', h: 'All caught up!', p: 'Every task is done. Add another above.' }
+      : { em: '✅', h: 'Start your list', p: 'Type a task above and press Enter. Tap the circle to finish it.' };
+    list.innerHTML = `<div class="empty"><div class="em">${msg.em}</div><h3>${msg.h}</h3><p>${msg.p}</p></div>`;
+    return;
+  }
+  list.innerHTML = items.map(t => renderTask(t)).join('');
+}
+
+function renderTask(t) {
+  const multi = state.members.length > 1;
+  const m = state.members.find(x => x.id === t.assignee);
+  const di = dueInfo(t.due);
+  return `<div class="task ${t.important ? 'important' : ''} ${t.done ? 'done' : ''}" data-id="${t.id}">
+    <button class="check ${t.done ? 'on' : ''}" onclick="toggleDone('${t.id}')" aria-label="Complete">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="body">
+      <div class="title" contenteditable="true" spellcheck="false"
+           onblur="editTitle('${t.id}', this.textContent)"
+           onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}">${esc(t.title)}</div>
+      <div class="meta">
+        ${di ? `<span class="chip ${di.cls}" onclick="openDue('${t.id}')">
+            <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><path d="M5 1a1 1 0 00-1 1v1H3a2 2 0 00-2 2v8a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2h-1V2a1 1 0 10-2 0v1H6V2a1 1 0 00-1-1zM3 6h10v7H3V6z"/></svg>
+            ${di.label}</span>`
+          : `<span class="chip add-due" onclick="openDue('${t.id}')">+ Due date</span>`}
+        <button class="flag-toggle-chip chip" style="${t.important ? 'background:var(--gold-bg);color:var(--gold)' : ''}" onclick="toggleImportant('${t.id}')" title="Important">
+          ${t.important ? '★ Important' : '☆ Flag'}
+        </button>
+        ${multi ? `<button class="who" style="background:${memberColor(t.assignee||'me')}" onclick="openAssign('${t.id}')" title="${esc(m ? m.name : 'Assign')}">${initials(m ? m.name : '?')}</button>` : ''}
+      </div>
+    </div>
+    <button class="del" onclick="removeTask('${t.id}')" aria-label="Delete">&times;</button>
+  </div>`;
+}
+
+// ---- Actions ----
+function addTask(e) {
+  if (e) e.preventDefault();
+  const inp = document.getElementById('addInput');
+  const title = inp.value.trim();
+  if (!title) return;
+  state.tasks.push({
+    id: uid(), title, done: false, important: !!state.newFlag,
+    due: '', assignee: state.members[0].id, created: Date.now()
+  });
+  inp.value = '';
+  state.newFlag = false;
+  document.getElementById('flagToggle').classList.remove('on');
+  if (state.filter === 'done') state.filter = 'todo';
+  save(); render();
+  inp.focus();
+}
+function toggleNewFlag() {
+  state.newFlag = !state.newFlag;
+  document.getElementById('flagToggle').classList.toggle('on', state.newFlag);
+}
+function findTask(id) { return state.tasks.find(t => t.id === id); }
+function toggleDone(id) {
+  const t = findTask(id); if (!t) return;
+  t.done = !t.done; t.doneAt = t.done ? Date.now() : null;
+  save(); render();
+}
+function toggleImportant(id) { const t = findTask(id); if (!t) return; t.important = !t.important; save(); render(); }
+function editTitle(id, text) {
+  const t = findTask(id); if (!t) return;
+  const v = (text || '').trim();
+  if (!v) { render(); return; }      // don't allow empty; restore
+  if (v !== t.title) { t.title = v; save(); render(); }
+}
+function removeTask(id) {
+  const i = state.tasks.findIndex(t => t.id === id); if (i < 0) return;
+  lastDeleted = { idx: i, task: state.tasks[i] };
+  state.tasks.splice(i, 1);
+  save(); render();
+  toast('Task deleted', { label: 'Undo', fn: undoDelete });
+}
+function undoDelete() {
+  if (!lastDeleted) return;
+  state.tasks.splice(Math.min(lastDeleted.idx, state.tasks.length), 0, lastDeleted.task);
+  lastDeleted = null; save(); render();
+}
+function setFilter(f) { state.filter = f; save(); render(); }
+
+// ---- Due date sheet ----
+function openDue(id) {
+  const t = findTask(id); if (!t) return;
+  const addDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+  sheet(`
+    <h3>When is it due?</h3>
+    <div class="due-grid">
+      <button onclick="setDue('${id}','${todayStr()}')">📅 Today</button>
+      <button onclick="setDue('${id}','${addDays(1)}')">➡️ Tomorrow</button>
+      <button onclick="setDue('${id}','${addDays(((8-new Date().getDay())%7)||7)}')">🗓️ Next Monday</button>
+      <button onclick="setDue('${id}','${addDays(7)}')">🔁 In a week</button>
+    </div>
+    <input type="date" class="due-date" value="${t.due || ''}" onchange="setDue('${id}', this.value)">
+    ${t.due ? `<button class="due-clear" onclick="setDue('${id}','')">Remove due date</button>` : ''}
+  `);
+}
+function setDue(id, val) { const t = findTask(id); if (t) { t.due = val; save(); render(); } closeSheet(); }
+
+// ---- Assign sheet ----
+function openAssign(id) {
+  const t = findTask(id); if (!t) return;
+  sheet(`
+    <h3>Assign to</h3>
+    ${state.members.map(m => `
+      <div class="member-row ${t.assignee === m.id ? 'sel' : ''}" onclick="assign('${id}','${m.id}')">
+        <span class="who" style="background:${memberColor(m.id)}">${initials(m.name)}</span>
+        <span class="nm">${esc(m.name)}</span>
+        <span class="tick"><svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M3 8.5l3 3 7-7.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>`).join('')}
+    <button class="due-clear" style="color:var(--green-600)" onclick="closeSheet();openMembers()">+ Manage team</button>
+  `);
+}
+function assign(id, mid) { const t = findTask(id); if (t) { t.assignee = mid; save(); render(); } closeSheet(); }
+
+// ---- Members sheet ----
+function openMembers() {
+  sheet(`
+    <h3>Team members</h3>
+    ${state.members.map(m => `
+      <div class="member-row">
+        <span class="who" style="background:${memberColor(m.id)}">${initials(m.name)}</span>
+        <span class="nm">${esc(m.name)}</span>
+        ${m.id === 'me' || state.members.length === 1 ? '' : `<button class="mdel" onclick="removeMember('${m.id}')" title="Remove">&times;</button>`}
+      </div>`).join('')}
+    <div class="add-member">
+      <input id="memberName" placeholder="New member name" onkeydown="if(event.key==='Enter')addMember()">
+      <button onclick="addMember()">Add</button>
+    </div>
+    <p style="font-size:12.5px;color:var(--text-tertiary);margin-top:12px;">Add teammates, then tap a task's avatar to assign it.</p>
+  `);
+  setTimeout(() => document.getElementById('memberName')?.focus(), 60);
+}
+function addMember() {
+  const inp = document.getElementById('memberName'); const name = inp.value.trim();
+  if (!name) return;
+  state.members.push({ id: uid(), name });
+  save(); openMembers(); render();
+  toast(`Added ${name}`);
+}
+function removeMember(mid) {
+  state.members = state.members.filter(m => m.id !== mid);
+  const fallback = state.members[0].id;
+  state.tasks.forEach(t => { if (t.assignee === mid) t.assignee = fallback; });
+  save(); openMembers(); render();
+}
+
+// ---- Sheet + toast infra ----
+function sheet(html) {
+  document.getElementById('sheetRoot').innerHTML =
+    `<div class="overlay" onclick="if(event.target===this)closeSheet()"><div class="sheet"><div class="grab"></div>${html}</div></div>`;
+}
+function closeSheet() { document.getElementById('sheetRoot').innerHTML = ''; }
+
+let toastTimer = null;
+function toast(msg, action) {
+  const root = document.getElementById('toastRoot');
+  root.innerHTML = '';
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  if (action) { const b = document.createElement('button'); b.textContent = action.label; b.onclick = () => { root.innerHTML = ''; action.fn(); }; t.appendChild(b); }
+  root.appendChild(t);
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.remove(), action ? 5000 : 1800);
+}
+
+// ---- Theme ----
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme') ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = cur === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  state.theme = next; save(); updateThemeIcon();
+}
+function updateThemeIcon() {
+  const cur = document.documentElement.getAttribute('data-theme') ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const icon = document.getElementById('themeIcon'); if (!icon) return;
+  icon.innerHTML = cur === 'dark'
+    ? '<circle cx="10" cy="10" r="4"/><path d="M10 1v2M10 17v2M19 10h-2M3 10H1M16.36 3.64l-1.42 1.42M5.06 14.94l-1.42 1.42M16.36 16.36l-1.42-1.42M5.06 5.06L3.64 3.64" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>'
+    : '<path d="M10 2a8 8 0 108 8c0-.4-.03-.8-.09-1.19a5.5 5.5 0 01-7.72-7.72A8.06 8.06 0 0010 2z"/>';
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+// Init
+load(); render(); updateThemeIcon();
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', updateThemeIcon);
+</script>
+</html>
