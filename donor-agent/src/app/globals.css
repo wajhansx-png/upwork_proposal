@@ -30,3 +30,8 @@ label{display:block;font-size:.85rem;color:var(--mute);margin:8px 0 3px}
 .msg.agent{border:1px dashed var(--brand)}
 .err{color:var(--warn);font-size:.9rem}.hint{color:var(--mute);font-size:.85rem}
 .login{max-width:340px;margin:12vh auto}
+.card.warn{border-color:var(--warn)}
+code{background:var(--line);padding:1px 5px;border-radius:5px;font-size:.85em}
+.chip{font-size:.82rem;padding:5px 10px;border-radius:99px}
+.tag.done{background:var(--ok);color:#fff}.tag.missed,.tag.cancelled{background:var(--warn);color:#fff}.tag.open,.tag.review{background:var(--brand);color:var(--brand-ink)}
+.stat b.err{color:var(--warn)}

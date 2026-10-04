@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
       channel: ch,
       contact,
       note: note.join(", "),
+      flags: [],
       status: "todo",
       updatedAt: now,
     });
