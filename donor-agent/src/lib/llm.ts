@@ -1,30 +1,47 @@
 /**
- * Free-tier friendly. Any OpenAI-compatible endpoint works.
- * Set GROQ_API_KEY (free at console.groq.com) or GEMINI_API_KEY (free at aistudio.google.com),
- * or LLM_BASE_URL + LLM_API_KEY + LLM_MODEL for anything else.
- * With no key the agent still works using plain rules.
+ * AI is optional and free.
+ * Best: one free GEMINI_API_KEY (aistudio.google.com). It reads chat and screenshots.
+ * Also works: GROQ_API_KEY (console.groq.com), or any OpenAI-compatible LLM_BASE_URL + LLM_API_KEY + LLM_MODEL.
+ * With no key, text chat tries a free shared service (no screenshots), then falls back to plain rules.
+ * Set FREE_SHARED_AI=off to never use the shared service.
  */
 interface Cfg {
   base: string;
   key: string;
   model: string;
+  vision: boolean;
+  kind: "key" | "shared";
 }
 
-function cfg(): Cfg | null {
+function cfg(needVision = false): Cfg | null {
   const e = process.env;
-  if (e.LLM_API_KEY && e.LLM_BASE_URL && e.LLM_MODEL) return { base: e.LLM_BASE_URL, key: e.LLM_API_KEY, model: e.LLM_MODEL };
-  if (e.GROQ_API_KEY)
-    return { base: "https://api.groq.com/openai/v1", key: e.GROQ_API_KEY, model: e.GROQ_MODEL || "llama-3.3-70b-versatile" };
+  const list: Cfg[] = [];
+  if (e.LLM_API_KEY && e.LLM_BASE_URL && e.LLM_MODEL)
+    list.push({ base: e.LLM_BASE_URL, key: e.LLM_API_KEY, model: e.LLM_MODEL, vision: e.LLM_VISION === "1", kind: "key" });
   if (e.GEMINI_API_KEY)
-    return {
+    list.push({
       base: "https://generativelanguage.googleapis.com/v1beta/openai",
       key: e.GEMINI_API_KEY,
       model: e.GEMINI_MODEL || "gemini-2.5-flash",
-    };
-  return null;
+      vision: true,
+      kind: "key",
+    });
+  if (e.GROQ_API_KEY)
+    list.push({
+      base: "https://api.groq.com/openai/v1",
+      key: e.GROQ_API_KEY,
+      model: needVision ? e.GROQ_VISION_MODEL || "meta-llama/llama-4-scout-17b-16e-instruct" : e.GROQ_MODEL || "llama-3.3-70b-versatile",
+      vision: true,
+      kind: "key",
+    });
+  if (!needVision && e.FREE_SHARED_AI !== "off")
+    list.push({ base: "https://text.pollinations.ai/openai", key: "", model: "openai", vision: false, kind: "shared" });
+  return list.find((c) => !needVision || c.vision) ?? null;
 }
 
-export const llmEnabled = () => cfg() !== null;
+export type AiKind = "key" | "shared" | "off";
+export const aiKind = (): AiKind => cfg()?.kind ?? "off";
+export const visionEnabled = () => cfg(true) !== null;
 
 export interface LlmResult {
   text: string | null;
@@ -32,24 +49,30 @@ export interface LlmResult {
   status: string;
 }
 
-export async function llm(system: string, user: string, json = false): Promise<LlmResult> {
-  const c = cfg();
+export async function llm(system: string, user: string, opts: { json?: boolean; image?: string } = {}): Promise<LlmResult> {
+  const c = cfg(!!opts.image);
   if (!c) return { text: null, status: "off" };
   try {
+    const userContent = opts.image
+      ? [
+          { type: "text", text: user },
+          { type: "image_url", image_url: { url: opts.image } },
+        ]
+      : user;
     const res = await fetch(`${c.base.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${c.key}`, "content-type": "application/json" },
+      headers: { ...(c.key ? { Authorization: `Bearer ${c.key}` } : {}), "content-type": "application/json" },
       body: JSON.stringify({
         model: c.model,
-        temperature: 0.3,
-        max_tokens: 400,
-        ...(json ? { response_format: { type: "json_object" } } : {}),
+        temperature: 0.2,
+        max_tokens: 500,
+        ...(opts.json && c.kind === "key" ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: system },
-          { role: "user", content: user },
+          { role: "user", content: userContent },
         ],
       }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(opts.image ? 30_000 : 15_000),
     });
     if (!res.ok) return { text: null, status: `error ${res.status}: ${(await res.text()).slice(0, 120)}` };
     const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };

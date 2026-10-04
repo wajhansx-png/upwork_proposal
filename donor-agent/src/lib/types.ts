@@ -17,6 +17,9 @@ export interface Donor {
   preparedAt?: string;
   /** Reasons the "sent" mark looks unreliable. Empty means no concern. */
   flags: string[];
+  /** Screenshot of the sent DM (image id) and what the check found. */
+  proofImg?: string;
+  proofCheck?: { verdict: "match" | "mismatch" | "unclear" | "unchecked"; reason: string };
   updatedAt: string;
   /** Set only when the teammate changes the status. Used to measure activity. */
   touchedAt?: string;
@@ -25,10 +28,16 @@ export interface Donor {
 /** Each person has one private thread with the agent. */
 export interface ChatMessage {
   id: string;
+  /** Whose thread this is. The manager can also read and write in the teammate's thread. */
   owner: Role;
-  from: "user" | "agent";
+  /** "user" is the owner of the thread. In the teammate's thread, "manager" is the manager writing directly. */
+  from: "user" | "agent" | "manager";
   text: string;
   at: string;
+  /** Screenshot attached to this message (image id). */
+  img?: string;
+  /** Set on check-in messages, so the agent knows a reply is an answer to it. */
+  kind?: "checkin";
 }
 
 export type TaskStatus = "open" | "review" | "done" | "missed" | "cancelled";
@@ -60,6 +69,10 @@ export interface Settings {
   workEndHour: number;
   /** Minutes between check-ins while a task is open. */
   checkinMinutes: number;
+  /** Mark sent needs a screenshot. */
+  requireProof: boolean;
+  /** Changing this makes the old teammate link stop working. */
+  teammateKeyVersion: number;
   template: string;
 }
 
@@ -78,6 +91,8 @@ export interface AgentState {
 }
 
 export interface Db {
+  /** Screenshot fingerprints, to catch the same image used twice. hash -> label. */
+  hashes: Record<string, string>;
   settings: Settings;
   donors: Donor[];
   tasks: Task[];

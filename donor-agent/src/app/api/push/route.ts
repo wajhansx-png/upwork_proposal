@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { roleFromRequest } from "@/lib/auth";
+import { getRole } from "@/lib/auth";
 import { withDb } from "@/lib/db";
 
 export async function POST(req: NextRequest) {
-  const role = roleFromRequest(req);
+  const role = (await getRole(req));
   if (!role) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
   const sub = (await req.json().catch(() => null)) as { endpoint?: string; keys?: { p256dh?: string; auth?: string } } | null;
   if (!sub?.endpoint || !sub.keys?.p256dh || !sub.keys?.auth)

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { roleFromRequest } from "@/lib/auth";
+import { getRole } from "@/lib/auth";
 import { newId, withDb } from "@/lib/db";
 import { notify } from "@/lib/push";
 import type { Db, Role } from "@/lib/types";
@@ -9,7 +9,7 @@ const say = (d: Db, owner: Role, text: string) =>
 
 /** Buttons that do the same as chat commands. actions: complete (teammate), confirm / cancel (manager). */
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const role = roleFromRequest(req);
+  const role = (await getRole(req));
   if (!role) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
   const { id } = await ctx.params;
   const { action, note } = (await req.json().catch(() => ({}))) as { action?: string; note?: string };

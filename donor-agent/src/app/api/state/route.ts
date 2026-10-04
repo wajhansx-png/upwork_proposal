@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { roleFromRequest } from "@/lib/auth";
+import { authenticate, teammateKey } from "@/lib/auth";
 import { computeStats } from "@/lib/agent";
 import { readDb, usingRedis, withDb } from "@/lib/db";
-import { llmEnabled } from "@/lib/llm";
+import { aiKind, visionEnabled } from "@/lib/llm";
 import { pushEnabled } from "@/lib/push";
 
 export async function GET(req: NextRequest) {
-  const role = roleFromRequest(req);
-  if (!role) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+  const auth = await authenticate(req);
+  if (!auth) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
+  const { role } = auth;
 
-  let db = await readDb();
+  let db = auth.db ?? (await readDb());
   // Only write "last seen" about once a minute, to keep storage use low.
   if (role === "teammate") {
     const seen = db.agent.teammateLastSeenAt;
@@ -27,10 +28,13 @@ export async function GET(req: NextRequest) {
     settings: db.settings,
     donors: manager ? db.donors : db.donors.filter((d) => d.status === "todo" || d.sentAt),
     tasks: db.tasks.slice(-30),
+    // The manager has two threads: with the agent, and the teammate's own chat.
     messages: db.messages.filter((m) => m.owner === role).slice(-150),
+    teammateMessages: manager ? db.messages.filter((m) => m.owner === "teammate").slice(-150) : undefined,
     stats: computeStats(db),
     agent: manager ? db.agent : undefined,
-    system: manager ? { llm: llmEnabled(), push: pushEnabled(), persistent: usingRedis() } : undefined,
+    system: manager ? { ai: aiKind(), vision: visionEnabled(), push: pushEnabled(), persistent: usingRedis() } : undefined,
+    teammateKey: manager ? teammateKey(db.settings.teammateKeyVersion) : undefined,
     now: new Date().toISOString(),
     vapidPublicKey: pushEnabled() ? process.env.VAPID_PUBLIC_KEY : null,
   });

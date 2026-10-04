@@ -1,8 +1,10 @@
 import { newId, readDb, withDb } from "./db";
-import { llm, parseJson } from "./llm";
+import { kvGetImage } from "./db";
+import { llm, parseJson, visionEnabled } from "./llm";
 import { notify } from "./push";
+import { checkProof, nameMatches, readScreenshot } from "./vision";
 import { fmtDuration, fmtWhen, parseDeadline, parseLocalStamp, parseTarget, zparts } from "./time";
-import type { Db, Role, Task } from "./types";
+import type { ChatMessage, Db, Role, Task } from "./types";
 
 const MIN = 60_000;
 const ms = (iso: string) => new Date(iso).getTime();
@@ -77,14 +79,17 @@ export function summarize(db: Db, now = Date.now()): string {
     `Today: ${name} marked ${s.sentToday} DMs as sent. In total ${s.sent} sent, ${s.replied} replied, ${s.todo} waiting.`,
     `Last real work in the app: ${ago(s.lastActivityAt)}. Last opened the app: ${ago(db.agent.teammateLastSeenAt)}.`,
   ];
+  const checked = db.donors.filter((d) => d.proofCheck?.verdict === "match").length;
+  const photos = db.donors.filter((d) => d.proofImg).length;
+  if (photos) lines.push(`Screenshots: ${photos} received, ${checked} checked and matching.`);
   if (s.flagged) lines.push(`${s.flagged} sent mark(s) look unverified (open the donor list to see why).`);
   return lines.join("\n");
 }
 
 // ---------- messaging ----------
 
-function say(db: Db, owner: Role, text: string, from: "agent" | "user" = "agent") {
-  db.messages.push({ id: newId(), owner, from, text, at: new Date().toISOString() });
+function say(db: Db, owner: Role, text: string, from: "agent" | "user" | "manager" = "agent", extra: Partial<ChatMessage> = {}) {
+  db.messages.push({ id: newId(), owner, from, text, at: new Date().toISOString(), ...extra });
   if (db.messages.length > 400) db.messages = db.messages.slice(-400);
 }
 
@@ -151,7 +156,7 @@ async function classifyManager(text: string, now: number, db: Db): Promise<Inten
       `"assign" = the manager wants the teammate to do something. "status" = asks how things are going. ` +
       `"relay" = tell/remind/ask the teammate something that is not a task. Never invent a number or time the manager did not say.`,
     text,
-    true,
+    { json: true },
   );
   await recordLlm(res.status);
   const j = parseJson<{ intent?: string; title?: string; target?: number | null; kind?: string; deadline?: string | null; relay_text?: string; reply?: string }>(res.text);
@@ -181,7 +186,7 @@ async function classifyManager(text: string, now: number, db: Db): Promise<Inten
 }
 
 const HELP =
-  "I can do these:\n" +
+  "You can tell me:\n" +
   "- Assign work: \"Send 20 DMs by 5pm\" or \"Finish the thank-you list by 3pm tomorrow\"\n" +
   "- Check progress: \"How is she doing?\"\n" +
   "- Pass on a message: \"Tell her to call the Reed family today\"\n" +
@@ -232,11 +237,14 @@ export async function handleManagerMessage(text: string): Promise<void> {
         const when = fmtWhen(intent.deadline, now, tz);
         const todo = d.donors.filter((x) => x.status === "todo").length;
         const warn = intent.taskKind === "dms" && todo < target ? ` Warning: only ${todo} donors are waiting in the queue. Add more donors.` : "";
-        say(
-          d,
-          "teammate",
-          `New task from your manager: ${title}. Due ${when}. Open "Next donors", send each DM, and press "Mark sent" after each one. I will check in and verify your progress.`,
-        );
+        const how = d.settings.requireProof
+          ? 'Send each DM from "Next donors". Then press "Mark sent" and add a screenshot of the sent message.'
+          : 'Send each DM from "Next donors". Then press "Mark sent".';
+        const questions =
+          intent.taskKind === "dms"
+            ? "1. What time will you start?\n2. Do you have everything you need?\n3. Could anything stop you?"
+            : "1. What time will you start?\n2. What will you need?\n3. Could anything stop you?";
+        say(d, "teammate", `New task from your manager: ${title}\nDue: ${when}\n\nPlease answer now:\n${questions}\n\n${how}`);
         pushes.push({ role: "teammate", title: "New task", body: `${title}. Due ${when}.` });
         reply =
           `Done. I assigned ${name}: ${title}, due ${when}.` +
@@ -298,18 +306,69 @@ function extractClaim(text: string): number | null {
 
 const BLOCKER = /\b(can't|cannot|couldn't|stuck|blocked|problem|issue|not working|no access|no network|sick|unwell|ill|emergency|struggl\w+|need help|help me)\b/i;
 
-export async function handleTeammateMessage(text: string): Promise<void> {
+/** The manager writes straight into the teammate's chat. */
+export async function handleManagerToTeammate(text: string): Promise<void> {
+  const name = await withDb((d) => {
+    say(d, "teammate", text, "manager");
+    return d.settings.teammateName;
+  });
+  void name;
+  await notify("teammate", "Message from your manager", text.slice(0, 160));
+}
+
+export interface ChatImage {
+  id: string;
+  hash: string;
+  dataUrl: string;
+}
+
+export async function handleTeammateMessage(text: string, image?: ChatImage | null): Promise<void> {
   const now = Date.now();
+  let duplicateOf = "";
+  let managerTalking = false;
   const db = await withDb((d) => {
-    say(d, "teammate", text, "user");
+    const prev = [...d.messages].reverse().find((m) => m.owner === "teammate" && m.from !== "user");
+    managerTalking = !!prev && prev.from === "manager" && now - ms(prev.at) < 30 * MIN;
+    say(d, "teammate", text || "(screenshot)", "user", image ? { img: image.id } : {});
     d.agent.teammateLastSeenAt = new Date(now).toISOString();
     for (const t of d.tasks) if (t.status === "open") t.unanswered = 0;
+    if (image) {
+      const old = d.hashes[image.hash];
+      if (old) duplicateOf = old;
+      else d.hashes[image.hash] = "chat";
+    }
     return structuredClone(d);
   });
   const name = db.settings.teammateName;
+  const pushes: Push[] = [];
+
+  // Read the screenshot, if there is one and an AI key is set.
+  let shotNote = "";
+  if (image) {
+    if (visionEnabled()) {
+      const { seen } = await readScreenshot(image.dataUrl);
+      if (seen) {
+        const donor = db.donors.find((x) => seen.person_name && nameMatches(seen.person_name, x));
+        shotNote =
+          `Screenshot: ${seen.summary ?? "could not describe it"}` +
+          (seen.is_chat === false ? " It does not look like a chat." : donor ? ` It matches donor ${donor.name}.` : seen.person_name ? ` The chat is with "${seen.person_name}", who is not in the donor list.` : "");
+      } else shotNote = "Screenshot saved. I could not read it.";
+    } else shotNote = "Screenshot saved. No AI key is set, so I did not read it.";
+    if (duplicateOf) shotNote += ` Warning: this is the same image as one sent before (${duplicateOf}).`;
+  }
+
+  // The manager is talking to her now. Stay quiet and tell the manager.
+  if (managerTalking) {
+    const msg = `${name} replied: "${text.slice(0, 300)}"${shotNote ? `\n${shotNote}` : ""}`;
+    await withDb((d) => say(d, "manager", msg));
+    await sendPushes([{ role: "manager", title: `${name} replied`, body: text || "Sent a screenshot" }]);
+    return;
+  }
+
   const task = db.tasks.find((t) => t.status === "open");
   const claim = extractClaim(text);
-  const pushes: Push[] = [];
+  const lastAgent = [...db.messages].reverse().find((m) => m.owner === "teammate" && m.from === "agent");
+  const answeringCheckin = lastAgent?.kind === "checkin" && now - ms(lastAgent.at) < 3 * 3_600_000;
   let managerAlert = "";
   let verdict = "";
   let mismatch = false;
@@ -318,42 +377,84 @@ export async function handleTeammateMessage(text: string): Promise<void> {
     const p = taskProgress(db, task);
     if (claim > p.done) {
       mismatch = true;
-      verdict = `Check: you said ${claim}, but the app shows only ${p.done} marked as sent for "${task.title}". The app is what I report to your manager, so please mark the rest, or tell me what stopped you.`;
-      managerAlert = `${name} told me she did ${claim}, but the app shows ${p.done} marked sent ("${task.title}"). Her words: "${text.slice(0, 200)}"`;
+      verdict = `Check: you said ${claim}, but the app shows only ${p.done} marked as sent for "${task.title}". I report what the app shows. Please mark the rest, or tell me what stopped you.`;
+      managerAlert = `${name} said ${claim} DMs, but the app shows ${p.done} ("${task.title}"). Her words: "${text.slice(0, 200)}"`;
     } else {
       verdict =
         `Check: the app shows ${p.done} of ${p.target} marked sent for "${task.title}".` +
-        (p.flagged ? ` ${p.flagged} of them look unverified, so your manager will see that.` : "");
+        (p.flagged ? ` ${p.flagged} look unverified. Your manager will see this.` : "");
     }
+  } else if (answeringCheckin && task?.kind === "dms" && !BLOCKER.test(text) && !image) {
+    verdict = "How many DMs did you send? Please write the number, and send a screenshot of your last DM.";
   }
-  if (!managerAlert && BLOCKER.test(text)) managerAlert = `${name} reported a problem: "${text.slice(0, 300)}"`;
+  if (!managerAlert && BLOCKER.test(text)) managerAlert = `${name} has a problem: "${text.slice(0, 300)}"`;
+  if (image) {
+    managerAlert = `${managerAlert ? managerAlert + "\n" : ""}${name} sent a screenshot. ${shotNote}`;
+  }
 
-  const facts = task
-    ? `Open task: "${task.title}", due in ${fmtDuration(ms(task.deadlineAt) - now)}.`
-    : "No open task right now.";
   const next = db.donors.filter((d) => d.status === "todo").slice(0, 3).map((d) => d.name);
-  const res = await llm(
-    `You are a calm assistant who helps ${name} finish donor outreach for a foundation. Reply in 1 to 3 short sentences, plain English, no emojis. ` +
-      `Do NOT state any numbers or counts: a verified check is added to your reply separately. Do not promise anything you cannot do. ` +
-      `If she reports a problem, acknowledge it and say you told her manager. If she asks what to do next, point her to "Next donors" in the app.`,
-    `${facts}\nProblem reported to manager: ${managerAlert ? "yes" : "no"}\nNext donors: ${next.join(", ") || "none"}\nShe wrote: ${text}`,
-  );
-  await recordLlm(res.status);
+  const wantsNext = /\b(next|who|queue|which)\b/i.test(text);
+  // The AI sees no donor names and no numbers. Names for "what is next" are added by code.
+  const res = text
+    ? await llm(
+        `You are a calm assistant helping ${name} finish donor outreach for a foundation. Reply in 1 or 2 short sentences. Use very simple English. No emojis. ` +
+          `Do NOT write any numbers or counts. A checked summary is added after your reply. Never promise anything you cannot do. ` +
+          `If she reports a problem, say you told her manager.`,
+        `Task: ${task ? `"${task.title}"` : "none"}\nProblem reported to manager: ${BLOCKER.test(text) ? "yes" : "no"}\nShe wrote: ${text}`,
+      )
+    : { text: null, status: "off" };
+  if (res.status !== "off") await recordLlm(res.status);
 
   let reply = res.text;
   if (!reply) {
-    if (managerAlert && !mismatch) reply = "Thank you for telling me. I passed this to your manager.";
-    else if (/\b(next|who|queue|which)\b/i.test(text) && next.length) reply = `Next in your queue: ${next.join(", ")}. Open "Next donors" to send.`;
-    else if (task) reply = `Noted. The task is due in ${fmtDuration(ms(task.deadlineAt) - now)}. Mark each DM as sent in the app as you go.`;
-    else reply = "Noted. There is no open task right now.";
+    if (image && !text) reply = "Thank you. I saved your screenshot.";
+    else if (BLOCKER.test(text) && !mismatch) reply = "Thank you for telling me. I told your manager.";
+    else if (task) reply = `Thank you. The task is due in ${fmtDuration(ms(task.deadlineAt) - now)}. Mark each DM as sent in the app.`;
+    else reply = "Thank you. There is no open task now.";
   }
+  if (wantsNext && next.length) reply += ` Next in your list: ${next.join(", ")}.`;
   if (verdict) reply = `${reply}\n\n${verdict}`;
+  if (shotNote) reply = `${reply}\n\n${shotNote}`;
 
   await withDb((d) => {
     say(d, "teammate", reply);
     if (managerAlert) {
       say(d, "manager", managerAlert);
-      pushes.push({ role: "manager", title: mismatch ? "Update does not match the app" : `${name} reported a problem`, body: managerAlert });
+      pushes.push({
+        role: "manager",
+        title: mismatch ? "Update does not match the app" : image ? `${name} sent a screenshot` : `${name} has a problem`,
+        body: managerAlert,
+      });
+    }
+  });
+  await sendPushes(pushes);
+}
+
+/** Runs after "Mark sent". Reads the screenshot and records whether it shows that donor. */
+export async function verifyProof(donorId: string, imageId: string): Promise<void> {
+  const url = await kvGetImage(imageId);
+  const db = await readDb();
+  const donor = db.donors.find((d) => d.id === donorId);
+  if (!url || !donor || donor.proofImg !== imageId) return;
+  const check = await checkProof(url, donor);
+  const pushes: Push[] = [];
+  await withDb((d) => {
+    const x = d.donors.find((y) => y.id === donorId);
+    if (!x || x.proofImg !== imageId) return;
+    x.proofCheck = check;
+    const name = d.settings.teammateName;
+    if (check.verdict === "mismatch" || check.verdict === "unclear") {
+      const flag = check.verdict === "mismatch" ? `screenshot does not match: ${check.reason}` : `screenshot unclear: ${check.reason}`;
+      if (!x.flags.includes(flag)) x.flags.push(flag);
+    }
+    if (check.verdict === "mismatch") {
+      say(d, "teammate", `The screenshot for ${x.name} does not match. ${check.reason}\nPlease send the right screenshot, or tell me what happened.`);
+      say(d, "manager", `Screenshot problem: ${name} marked ${x.name} as sent, but ${check.reason}`);
+      pushes.push({ role: "teammate", title: "Screenshot does not match", body: `${x.name}: ${check.reason}` });
+      pushes.push({ role: "manager", title: "Screenshot does not match", body: `${x.name}: ${check.reason}` });
+    } else if (check.verdict === "unclear") {
+      say(d, "teammate", `I could not confirm the screenshot for ${x.name}. ${check.reason}\nPlease send a clearer one. Show the contact name and your sent message.`);
+      pushes.push({ role: "teammate", title: "Please send a clearer screenshot", body: x.name });
     }
   });
   await sendPushes(pushes);
@@ -413,7 +514,7 @@ export async function runAgent(nowMs = Date.now()): Promise<RunResult> {
             d,
             "manager",
             `Finished: ${name} completed "${tk.title}" (${stateLine(d)}) before the deadline.` +
-              (pr.flagged ? ` Note: ${pr.flagged} sent mark(s) look unverified.` : " All marks look genuine."),
+              (pr.flagged ? ` Note: ${pr.flagged} sent mark(s) look unverified.` : " No mark was flagged as wrong."),
           );
           pushes.push({ role: "manager", title: "Task finished", body: `${name} completed: ${tk.title}` });
           pushes.push({ role: "teammate", title: "Target reached", body: "Thank you, great work." });
@@ -478,34 +579,31 @@ export async function runAgent(nowMs = Date.now()): Promise<RunResult> {
     const since = task.lastCheckAt ?? task.createdAt;
     const interval = Math.min(settings.checkinMinutes * MIN, Math.max(10 * MIN, left / 2));
     if (nowMs - ms(since) >= interval) {
-      const active = teammateActiveSince(db, since);
       labels.push(`checkin:${task.title}`);
       plans.push({
         guard: (d) => {
           const tk = find(d, id);
           return !!tk && tk.status === "open" && (tk.lastCheckAt ?? tk.createdAt) === since;
         },
-        prompt:
-          `Write a short check-in from a foundation's assistant to ${name}. Task: "${task.title}", due in ${fmtDuration(left)}. ` +
-          `${active ? "She has been working." : "She has shown no activity since the last check."} ` +
-          `Ask for a short update and ask her to say so if something blocks her. 2 sentences, warm, not pushy, no emojis. Do not state numbers.`,
         fallback: "",
-        apply: (d, text, pushes) => {
+        apply: (d, _text, pushes) => {
           const tk = find(d, id)!;
           const quiet = !teammateActiveSince(d, since);
           tk.unanswered = quiet && tk.lastCheckAt ? tk.unanswered + 1 : 0;
           tk.lastCheckAt = nowIso;
-          const base = text ||
-            (quiet
-              ? `I have not seen any activity on "${tk.title}" for a while. Are you ok? Please reply with a short update.`
-              : `Check-in on "${tk.title}". Please reply with a short update, and tell me if something blocks you.`);
-          const body = `${base}\n\nThe app shows ${stateLine(d)}. Due in ${fmtDuration(ms(tk.deadlineAt) - nowMs)}.`;
-          say(d, "teammate", body);
-          pushes.push({ role: "teammate", title: "Check-in", body: `${tk.title}: ${stateLine(d)}. Please reply with an update.` });
+          const intro = quiet ? `I have not seen any work for a while. Are you ok?\n\n` : "";
+          const questions =
+            tk.kind === "dms"
+              ? "1. How many DMs did you send?\n2. Did anyone reply?\n3. Any problem?\nAlso send a screenshot of your last DM."
+              : "1. What have you done so far?\n2. How much is left?\n3. Any problem?";
+          const body =
+            `${intro}Check-in: ${tk.title}\nThe app shows ${stateLine(d)}. Due in ${fmtDuration(ms(tk.deadlineAt) - nowMs)}.\n\nPlease tell me:\n${questions}`;
+          say(d, "teammate", body, "agent", { kind: "checkin" });
+          pushes.push({ role: "teammate", title: "Check-in", body: `${tk.title}: ${stateLine(d)}. Please reply.` });
           if (tk.unanswered >= 2 && tk.unanswered % 2 === 0) {
-            const warn = `${name} has not responded to ${tk.unanswered} check-ins on "${tk.title}". The app shows ${stateLine(d)}. You may want to call her.`;
+            const warn = `${name} has not answered ${tk.unanswered} check-ins on "${tk.title}". The app shows ${stateLine(d)}. You may want to call.`;
             say(d, "manager", warn);
-            pushes.push({ role: "manager", title: `${name} is not responding`, body: warn });
+            pushes.push({ role: "manager", title: `${name} is not answering`, body: warn });
           }
         },
       });

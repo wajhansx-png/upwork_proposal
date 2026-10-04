@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { roleFromRequest } from "@/lib/auth";
+import { getRole } from "@/lib/auth";
 import { withDb } from "@/lib/db";
 
 /** The teammate copied or opened the message for this donor. Needed to trust a later "sent" mark. */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  if (roleFromRequest(req) !== "teammate") return NextResponse.json({ error: "Teammate only" }, { status: 403 });
+  if ((await getRole(req)) !== "teammate") return NextResponse.json({ error: "Teammate only" }, { status: 403 });
   const { id } = await ctx.params;
   await withDb((db) => {
     const d = db.donors.find((x) => x.id === id);

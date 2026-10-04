@@ -14,14 +14,17 @@ export const DEFAULT_TEMPLATE =
 function fresh(): Db {
   return {
     settings: {
-      teammateName: "Teammate",
+      teammateName: "Areeba",
       dailyTarget: 15,
       timezone: "UTC",
       workStartHour: 9,
       workEndHour: 18,
       checkinMinutes: 60,
+      requireProof: true,
+      teammateKeyVersion: 1,
       template: DEFAULT_TEMPLATE,
     },
+    hashes: {},
     donors: [],
     tasks: [],
     messages: [],
@@ -117,6 +120,29 @@ export function withDb<T>(fn: (db: Db) => T | Promise<T>): Promise<T> {
   });
   chain = run.catch(() => undefined);
   return run;
+}
+
+// ---- plain key/value for screenshots (kept out of the main record so it stays small) ----
+
+const IMG_DIR = path.join(process.cwd(), "data", "img");
+
+export async function kvSetImage(id: string, dataUrl: string) {
+  if (usingRedis()) {
+    await redis(["SET", `donor-desk:img:${id}`, dataUrl]);
+    return;
+  }
+  await fs.mkdir(IMG_DIR, { recursive: true });
+  await fs.writeFile(path.join(IMG_DIR, `${id}.txt`), dataUrl);
+}
+
+export async function kvGetImage(id: string): Promise<string | null> {
+  if (!/^[a-f0-9]{16}$/.test(id)) return null;
+  if (usingRedis()) return ((await redis(["GET", `donor-desk:img:${id}`])) as string | null) ?? null;
+  try {
+    return await fs.readFile(path.join(IMG_DIR, `${id}.txt`), "utf8");
+  } catch {
+    return null;
+  }
 }
 
 /** Read without the lock. May be a moment stale, which is fine for display and planning. */
