@@ -41,6 +41,7 @@ export async function readScreenshot(image: string): Promise<{ seen: Seen | null
 export async function checkProof(image: string, donor: Donor): Promise<Check> {
   if (!visionEnabled()) return { verdict: "unchecked", reason: "No AI key, so the screenshot was saved but not read." };
   const { seen, status } = await readScreenshot(image);
+  if (status === "limit") return { verdict: "unchecked", reason: "Today's AI limit is reached, so the screenshot was saved but not read." };
   if (!seen) return { verdict: "unchecked", reason: `Could not read the screenshot (${status}).` };
   if (seen.is_chat === false) return { verdict: "mismatch", reason: `This does not look like a chat. ${seen.summary ?? ""}`.trim() };
   if (!seen.person_name) return { verdict: "unclear", reason: `The contact name is not visible. ${seen.summary ?? ""}`.trim() };

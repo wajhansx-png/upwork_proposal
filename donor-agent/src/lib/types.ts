@@ -96,6 +96,9 @@ export interface AgentState {
   teammateLastSeenAt?: string;
   /** Wrong manager passwords in a row, and the lock time after too many. */
   loginFails?: number;
+  /** Paid AI calls made today, to keep the bill small. */
+  aiDay?: string;
+  aiCalls?: number;
   loginLockUntil?: string;
   /** "ok", "off" (no key), or the last error. Shown to the manager. */
   llmStatus?: string;

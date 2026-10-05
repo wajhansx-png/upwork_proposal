@@ -6,7 +6,11 @@
  * With no key, text chat tries a free shared service (no screenshots), then falls back to plain rules.
  * Set FREE_SHARED_AI=off to never use the shared service.
  */
+import { withDb } from "./db";
+
 interface Cfg {
+  /** "openai" gets low-detail images (about 9x cheaper per screenshot). */
+  provider?: "openai";
   base: string;
   key: string;
   model: string;
@@ -26,6 +30,7 @@ function cfg(needVision = false): Cfg | null {
       model: e.OPENAI_MODEL || "gpt-4o-mini",
       vision: true,
       kind: "key",
+      provider: "openai",
     });
   if (e.GEMINI_API_KEY)
     list.push({
@@ -58,14 +63,32 @@ export interface LlmResult {
   status: string;
 }
 
+/** Most paid AI calls per day (AI_DAILY_LIMIT, default 100). After that the app uses rules until tomorrow. */
+const dailyLimit = () => Math.max(0, Number(process.env.AI_DAILY_LIMIT ?? 100) || 0);
+
+/** Counts a paid call. Returns false when today's limit is reached. */
+async function takeCall(): Promise<boolean> {
+  const today = new Date().toISOString().slice(0, 10);
+  return withDb((d) => {
+    if (d.agent.aiDay !== today) {
+      d.agent.aiDay = today;
+      d.agent.aiCalls = 0;
+    }
+    if ((d.agent.aiCalls ?? 0) >= dailyLimit()) return false;
+    d.agent.aiCalls = (d.agent.aiCalls ?? 0) + 1;
+    return true;
+  });
+}
+
 export async function llm(system: string, user: string, opts: { json?: boolean; image?: string } = {}): Promise<LlmResult> {
   const c = cfg(!!opts.image);
   if (!c) return { text: null, status: "off" };
+  if (c.kind === "key" && !(await takeCall())) return { text: null, status: "limit" };
   try {
     const userContent = opts.image
       ? [
           { type: "text", text: user },
-          { type: "image_url", image_url: { url: opts.image } },
+          { type: "image_url", image_url: c.provider === "openai" ? { url: opts.image, detail: "low" } : { url: opts.image } },
         ]
       : user;
     const res = await fetch(`${c.base.replace(/\/$/, "")}/chat/completions`, {
@@ -74,7 +97,7 @@ export async function llm(system: string, user: string, opts: { json?: boolean; 
       body: JSON.stringify({
         model: c.model,
         temperature: 0.2,
-        max_tokens: 500,
+        max_tokens: opts.image ? 250 : 200,
         ...(opts.json && c.kind === "key" ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: system },

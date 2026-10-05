@@ -140,6 +140,7 @@ async function sendPushes(pushes: Push[]) {
 }
 
 async function recordLlm(status: string) {
+  if (status === "off") return;
   await withDb((d) => {
     if (d.agent.llmStatus !== status) d.agent.llmStatus = status;
   });
@@ -180,6 +181,15 @@ function ruleIntent(text: string, now: number, db: Db): Intent {
 }
 
 async function classifyManager(text: string, now: number, db: Db): Promise<Intent> {
+  // Cost saver: clear messages are handled by rules for free. The AI is asked only when the rules are unsure.
+  const quick = ruleIntent(text, now, db);
+  const clear =
+    quick.kind === "status" ||
+    quick.kind === "cancel" ||
+    quick.kind === "confirm" ||
+    quick.kind === "relay" ||
+    (quick.kind === "assign" && quick.deadline !== null && (quick.taskKind === "general" || quick.target !== null));
+  if (clear) return quick;
   const tz = db.settings.timezone;
   const p = zparts(now, tz);
   const local = `${p.day} ${String(p.h).padStart(2, "0")}:${String(p.mi).padStart(2, "0")}`;
@@ -457,7 +467,8 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
   const next = db.donors.filter((d) => d.status === "todo").slice(0, 3).map((d) => d.name);
   const wantsNext = /\b(next|who|queue|which)\b/i.test(text);
   // The AI sees no donor names and no numbers. Names for "what is next" are added by code.
-  const res = text
+  // Cost saver: kind ready-made replies by default. AI_FRIENDLY_REPLIES=on lets the AI word them.
+  const res = text && process.env.AI_FRIENDLY_REPLIES === "on"
     ? await llm(
         `You are a warm, friendly coworker helping ${name} finish donor outreach for a foundation. Talk like a kind person, not a robot. Reply in 1 or 2 short sentences. Use very simple English. No emojis. ` +
           `Do NOT write any numbers or counts. A checked summary is added after your reply. Never promise anything you cannot do. ` +

@@ -89,6 +89,15 @@ cd donor-agent && npm install && npm run dev
 Open http://localhost:43118/manager and enter the password from `.env.local`. Data is saved in `data/`. The agent runs every minute by itself.
 Alerts to a phone need the internet (HTTPS), so test those after you deploy.
 
+## AI cost (kept small)
+
+- Clear messages ("Areeba send 10 DMs by 5pm, check every 20 min", "How is she doing?", "cancel")
+  are handled by rules for free. The AI is asked only when your message is unclear.
+- Replies to Areeba use kind ready-made messages (free). Set `AI_FRIENDLY_REPLIES=on` to let the AI word them.
+- Screenshots go to GPT in low detail (about 9x cheaper per picture).
+- `AI_DAILY_LIMIT` (default 100) caps paid AI calls per day. After that: rules only, until tomorrow.
+- Settings shows how many AI calls were made today.
+
 ## Privacy
 The app saves donor names and contacts, Areeba's marks, her chat, her screenshots, and when she opens the app.
 Tell her this. With a Gemini or Groq key, chat text and screenshots are sent to that company to be read.

@@ -673,8 +673,13 @@ function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
           <p className="hint">The AI did not answer: {s.agent.llmStatus}. The agent uses simple rules until this is fixed. Check the key, its credit, or the model name.</p>
         </section>
       )}
-      {sys?.ai === "key" && s.agent?.llmStatus === "ok" && (
-        <section className="card"><p className="hint" style={{ margin: 0 }}>AI is working ✓</p></section>
+      {sys?.ai === "key" && (s.agent?.llmStatus === "ok" || s.agent?.llmStatus === "limit") && (
+        <section className="card">
+          <p className="hint" style={{ margin: 0 }}>
+            {s.agent.llmStatus === "ok" ? "AI is working ✓" : "Today's AI limit is reached. Simple rules until tomorrow."}
+            {s.agent.aiDay === new Date().toISOString().slice(0, 10) ? ` AI calls today: ${s.agent.aiCalls ?? 0}.` : ""}
+          </p>
+        </section>
       )}
       {sys && (!sys.push || !sys.persistent || sys.ai !== "key") && (
         <section className="card warn">
