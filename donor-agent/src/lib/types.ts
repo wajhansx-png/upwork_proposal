@@ -37,7 +37,7 @@ export interface ChatMessage {
   /** Screenshot attached to this message (image id). */
   img?: string;
   /** Set on check-in messages, so the agent knows a reply is an answer to it. */
-  kind?: "checkin";
+  kind?: "checkin" | "kickoff";
 }
 
 export type TaskStatus = "open" | "review" | "done" | "missed" | "cancelled";
@@ -55,6 +55,8 @@ export interface Task {
   lastCheckAt?: string;
   /** Check-ins in a row with no sign of work or reply. */
   unanswered: number;
+  /** Minutes between check-ins for this task, if the manager gave one ("check every 20 min"). */
+  checkEvery?: number;
   midpointSent?: boolean;
   preDeadlineSent?: boolean;
   note?: string;

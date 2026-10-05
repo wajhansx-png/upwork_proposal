@@ -6,7 +6,9 @@ and screenshots, and tells you what is real. You do not chase her.
 ## How you use it
 
 **You** open your private link. In "Tell the agent" write:
-- `Areeba send 20 DMs by 5pm`  -> the agent gives her the task and asks her questions.
+- `Areeba send 20 DMs by 5pm, check every 20 min`  -> the agent gives her the task, asks her questions,
+  and checks in every 20 minutes. When she answers, it waits another 20 minutes before asking again.
+  You get her answers as alerts.
 - `How is Areeba doing?`        -> real numbers from the app.
 - `Tell her to call the Reed family today`
 - `cancel`

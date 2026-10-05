@@ -120,3 +120,28 @@ export function parseTarget(text: string): number | null {
   const m = /(\d{1,4})\s*(?:more\s+)?(?:dms?|messages?|donors?|people|contacts?|emails?|texts?|whatsapps?)\b/i.exec(text);
   return m ? Number(m[1]) : null;
 }
+
+/**
+ * Finds "check every 20 min" / "check after 30 minutes" / "ask her every hour" and removes it from the text,
+ * so it is not mistaken for the deadline. Returns minutes (5 to 240) or null.
+ */
+export function extractCheckEvery(text: string): { minutes: number | null; rest: string } {
+  const re =
+    /[,;]?\s*(?:and\s+)?(?:(?:check(?:\s*-?in)?|ask(?:\s+her)?(?:\s+for\s+(?:an?\s+)?updates?)?|follow\s*-?up|remind(?:\s+her)?|ping(?:\s+her)?|updates?)\s+(?:with\s+her\s+|on\s+her\s+)?)?(?:every|each|after)\s+(\d{1,3}|an?|half an)?\s*(minutes?|mins?|m|hours?|hrs?|h)\b/i;
+  const m = re.exec(text);
+  if (!m) return { minutes: null, rest: text };
+  const raw = (m[1] ?? "1").toLowerCase();
+  const n = raw === "a" || raw === "an" ? 1 : raw === "half an" ? 0.5 : Number(raw);
+  const mins = Math.round(n * (m[2].toLowerCase().startsWith("h") ? 60 : 1));
+  // "after 20 min" with no check word could be a deadline ("finish after 2 hours"), so only take it with a check word or "every".
+  const hasCheckWord = /check|ask|follow|remind|ping|update|every|each/i.test(m[0]);
+  if (!hasCheckWord) return { minutes: null, rest: text };
+  return { minutes: Math.min(240, Math.max(5, mins)), rest: (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim() };
+}
+
+/** "20 minutes", "1 hour", "1 hour 30 minutes": easy to read in a chat. */
+export function fmtMinutes(mins: number) {
+  if (mins < 60) return `${mins} minutes`;
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return `${h} hour${h > 1 ? "s" : ""}${m ? ` ${m} minutes` : ""}`;
+}

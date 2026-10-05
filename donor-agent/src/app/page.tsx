@@ -511,9 +511,9 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
                 messages={s.messages}
                 label={(m) => (m.from === "user" ? "You" : "Agent")}
                 mine={(m) => m.from === "user"}
-                placeholder={`Example: ${name} send 20 DMs by 5pm`}
-                hint={`Tell me the task and the time. I ask ${name} everything, check the answers, and tell you.`}
-                chips={[`How is ${name} doing?`, `${name} send ${s.settings.dailyTarget} DMs by 5pm`, "cancel"]}
+                placeholder={`Example: ${name} send 20 DMs by 5pm, check every 20 min`}
+                hint={`Tell me the task, the time, and how often to check. Example: "${name} send 20 DMs by 5pm, check every 20 min". I talk to ${name}, wait for her answers, check them, and tell you.`}
+                chips={[`${name} send ${s.settings.dailyTarget} DMs by 5pm, check every 20 min`, `How is ${name} doing?`, "cancel"]}
                 onSend={async (text) => {
                   await api("/api/messages", "POST", { text });
                   await refresh();

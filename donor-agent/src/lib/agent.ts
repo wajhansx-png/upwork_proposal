@@ -3,7 +3,7 @@ import { kvGetImage } from "./db";
 import { llm, parseJson, visionEnabled } from "./llm";
 import { notify } from "./push";
 import { checkProof, nameMatches, readScreenshot } from "./vision";
-import { fmtDuration, fmtWhen, parseDeadline, parseLocalStamp, parseTarget, zparts } from "./time";
+import { extractCheckEvery, fmtDuration, fmtMinutes, fmtWhen, parseDeadline, parseLocalStamp, parseTarget, zparts } from "./time";
 import type { ChatMessage, Db, Role, Task } from "./types";
 
 const MIN = 60_000;
@@ -50,6 +50,16 @@ export function taskProgress(db: Db, t: Task) {
   }
   const mine = db.donors.filter((d) => d.sentAt && d.sentAt >= t.createdAt);
   return { done: mine.length, target: t.target, flagged: mine.filter((d) => d.flags.length).length };
+}
+
+/** The last time the teammate did anything: a mark in the app or a chat message. */
+function lastTeammateActivity(db: Db): string | undefined {
+  return db.donors
+    .map((d) => d.touchedAt)
+    .concat(db.messages.filter((m) => m.owner === "teammate" && m.from === "user").map((m) => m.at))
+    .filter((t): t is string => !!t)
+    .sort()
+    .at(-1);
 }
 
 function teammateActiveSince(db: Db, sinceIso: string) {
@@ -112,7 +122,7 @@ async function recordLlm(status: string) {
 // ---------- manager messages ----------
 
 type Intent =
-  | { kind: "assign"; title: string; target: number | null; taskKind: "dms" | "general"; deadline: number | null }
+  | { kind: "assign"; title: string; target: number | null; taskKind: "dms" | "general"; deadline: number | null; checkEvery: number | null }
   | { kind: "status" }
   | { kind: "relay"; text: string }
   | { kind: "cancel" }
@@ -120,7 +130,8 @@ type Intent =
   | { kind: "chat"; reply?: string };
 
 function ruleIntent(text: string, now: number, db: Db): Intent {
-  const t = text.trim();
+  const every = extractCheckEvery(text.trim());
+  const t = every.rest;
   const name = db.settings.teammateName.toLowerCase();
   const lower = t.toLowerCase();
   if (/^(cancel|undo|stop)\b/.test(lower)) return { kind: "cancel" };
@@ -135,7 +146,7 @@ function ruleIntent(text: string, now: number, db: Db): Intent {
     (deadline !== null && (target !== null || /\b(send|do|finish|complete|prepare|follow ?up|reach|call|write)\b/i.test(t))) ||
     (target !== null && /\b(send|dm|dms|message|messages|contact|reach)\b/i.test(t));
   if (looksLikeTask) {
-    return { kind: "assign", title: isDm ? "" : t, target, taskKind: isDm ? "dms" : "general", deadline };
+    return { kind: "assign", title: isDm ? "" : t, target, taskKind: isDm ? "dms" : "general", deadline, checkEvery: every.minutes };
   }
   if (relay) return { kind: "relay", text: relay[1].trim() };
   if (/\b(status|update|progress|how is|how's|how are|doing|report|done yet)\b/i.test(t)) return { kind: "status" };
@@ -152,6 +163,7 @@ async function classifyManager(text: string, now: number, db: Db): Promise<Inten
       `intent ("assign" | "status" | "relay" | "cancel" | "confirm" | "chat"), ` +
       `title (short task name, for assign), target (number of DMs, or null), kind ("dms" if the task is sending messages to donors, else "general"), ` +
       `deadline (local time as "YYYY-MM-DD HH:mm", or null if the manager gave no time), ` +
+      `check_every_minutes (number, if the manager says how often to check on the teammate, like "check every 20 min", else null), ` +
       `relay_text (the message to pass on to the teammate, for relay), reply (one short sentence, only for chat). ` +
       `"assign" = the manager wants the teammate to do something. "status" = asks how things are going. ` +
       `"relay" = tell/remind/ask the teammate something that is not a task. Never invent a number or time the manager did not say.`,
@@ -159,12 +171,14 @@ async function classifyManager(text: string, now: number, db: Db): Promise<Inten
     { json: true },
   );
   await recordLlm(res.status);
-  const j = parseJson<{ intent?: string; title?: string; target?: number | null; kind?: string; deadline?: string | null; relay_text?: string; reply?: string }>(res.text);
+  const j = parseJson<{ intent?: string; title?: string; target?: number | null; kind?: string; deadline?: string | null; check_every_minutes?: number | null; relay_text?: string; reply?: string }>(res.text);
+  const every = extractCheckEvery(text);
   const rule = ruleIntent(text, now, db);
   if (!j?.intent) return rule;
   switch (j.intent) {
     case "assign": {
-      const deadline = (j.deadline ? parseLocalStamp(j.deadline, tz) : null) ?? parseDeadline(text, now, tz, db.settings.workEndHour);
+      const deadline = (j.deadline ? parseLocalStamp(j.deadline, tz) : null) ?? parseDeadline(every.rest, now, tz, db.settings.workEndHour);
+      const llmEvery = typeof j.check_every_minutes === "number" && j.check_every_minutes > 0 ? Math.min(240, Math.max(5, Math.round(j.check_every_minutes))) : null;
       const target = typeof j.target === "number" && j.target > 0 ? Math.round(j.target) : parseTarget(text);
       return {
         kind: "assign",
@@ -172,6 +186,7 @@ async function classifyManager(text: string, now: number, db: Db): Promise<Inten
         target,
         taskKind: j.kind === "general" ? "general" : "dms",
         deadline,
+        checkEvery: every.minutes ?? llmEvery,
       };
     }
     case "status":
@@ -187,7 +202,7 @@ async function classifyManager(text: string, now: number, db: Db): Promise<Inten
 
 const HELP =
   "You can tell me:\n" +
-  "- Assign work: \"Send 20 DMs by 5pm\" or \"Finish the thank-you list by 3pm tomorrow\"\n" +
+  "- Assign work: \"Send 20 DMs by 5pm, check every 20 min\" or \"Finish the thank-you list by 3pm tomorrow\"\n" +
   "- Check progress: \"How is she doing?\"\n" +
   "- Pass on a message: \"Tell her to call the Reed family today\"\n" +
   "- Cancel the latest task: \"cancel\"\n" +
@@ -232,6 +247,7 @@ export async function handleManagerMessage(text: string): Promise<void> {
           deadlineAt: new Date(intent.deadline).toISOString(),
           status: "open",
           unanswered: 0,
+          ...(intent.checkEvery ? { checkEvery: intent.checkEvery } : {}),
         };
         d.tasks.push(task);
         const when = fmtWhen(intent.deadline, now, tz);
@@ -242,15 +258,25 @@ export async function handleManagerMessage(text: string): Promise<void> {
           : 'Send each DM from "Next donors". Then press "Mark sent".';
         const questions =
           intent.taskKind === "dms"
-            ? "1. What time will you start?\n2. Do you have everything you need?\n3. Could anything stop you?"
-            : "1. What time will you start?\n2. What will you need?\n3. Could anything stop you?";
-        say(d, "teammate", `New task from your manager: ${title}\nDue: ${when}\n\nPlease answer now:\n${questions}\n\n${how}`);
-        pushes.push({ role: "teammate", title: "New task", body: `${title}. Due ${when}.` });
+            ? "1. What time will you start?\n2. Do you have everything you need?\n3. Could anything get in the way?"
+            : "1. What time will you start?\n2. What will you need?\n3. Could anything get in the way?";
+        const cadence = intent.checkEvery ? `\n\nI will check in with you every ${fmtMinutes(intent.checkEvery)}.` : "";
+        say(
+          d,
+          "teammate",
+          `Hi ${name}, I hope your day is going well. Your manager asked me to help you with a new task:\n\n${title}\nDue: ${when}\n\nWhen you have a moment, could you tell me:\n${questions}\n\n${how}${cadence}`,
+          "agent",
+          { kind: "kickoff" },
+        );
+        pushes.push({ role: "teammate", title: "New task for you", body: `Hi ${name}, ${title}. Due ${when}. Please reply when you can.` });
         reply =
           `Done. I assigned ${name}: ${title}, due ${when}.` +
           (assumed ? ` You gave no number, so I used the default of ${target}.` : "") +
           warn +
-          ` I will chase ${name} and report to you. Reply "cancel" if I misunderstood.`;
+          (intent.checkEvery
+            ? ` I will check in with ${name} every ${fmtMinutes(intent.checkEvery)}, wait for her answers, and tell you what she says.`
+            : ` I will check in with ${name}, wait for her answers, and tell you what she says.`) +
+          ` Reply "cancel" if I misunderstood.`;
         break;
       }
       case "status":
@@ -369,6 +395,11 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
   const claim = extractClaim(text);
   const lastAgent = [...db.messages].reverse().find((m) => m.owner === "teammate" && m.from === "agent");
   const answeringCheckin = lastAgent?.kind === "checkin" && now - ms(lastAgent.at) < 3 * 3_600_000;
+  // Is this her first answer to the agent's last question? Then the manager hears what she said.
+  const firstAnswer =
+    !!lastAgent &&
+    (lastAgent.kind === "checkin" || lastAgent.kind === "kickoff") &&
+    !db.messages.some((m) => m.owner === "teammate" && m.from === "user" && m.at > lastAgent.at && m.at < new Date(now).toISOString());
   let managerAlert = "";
   let verdict = "";
   let mismatch = false;
@@ -385,19 +416,21 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
         (p.flagged ? ` ${p.flagged} look unverified. Your manager will see this.` : "");
     }
   } else if (answeringCheckin && task?.kind === "dms" && !BLOCKER.test(text) && !image) {
-    verdict = "How many DMs did you send? Please write the number, and send a screenshot of your last DM.";
+    verdict = "Thanks! How many DMs have you sent so far? Please write the number, and add a screenshot of your last DM.";
   }
   if (!managerAlert && BLOCKER.test(text)) managerAlert = `${name} has a problem: "${text.slice(0, 300)}"`;
   if (image) {
     managerAlert = `${managerAlert ? managerAlert + "\n" : ""}${name} sent a screenshot. ${shotNote}`;
   }
+  let answerNote = "";
+  if (!managerAlert && firstAnswer && text) answerNote = `${name} answered: "${text.slice(0, 300)}"`;
 
   const next = db.donors.filter((d) => d.status === "todo").slice(0, 3).map((d) => d.name);
   const wantsNext = /\b(next|who|queue|which)\b/i.test(text);
   // The AI sees no donor names and no numbers. Names for "what is next" are added by code.
   const res = text
     ? await llm(
-        `You are a calm assistant helping ${name} finish donor outreach for a foundation. Reply in 1 or 2 short sentences. Use very simple English. No emojis. ` +
+        `You are a warm, friendly coworker helping ${name} finish donor outreach for a foundation. Talk like a kind person, not a robot. Reply in 1 or 2 short sentences. Use very simple English. No emojis. ` +
           `Do NOT write any numbers or counts. A checked summary is added after your reply. Never promise anything you cannot do. ` +
           `If she reports a problem, say you told her manager.`,
         `Task: ${task ? `"${task.title}"` : "none"}\nProblem reported to manager: ${BLOCKER.test(text) ? "yes" : "no"}\nShe wrote: ${text}`,
@@ -407,10 +440,10 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
 
   let reply = res.text;
   if (!reply) {
-    if (image && !text) reply = "Thank you. I saved your screenshot.";
-    else if (BLOCKER.test(text) && !mismatch) reply = "Thank you for telling me. I told your manager.";
-    else if (task) reply = `Thank you. The task is due in ${fmtDuration(ms(task.deadlineAt) - now)}. Mark each DM as sent in the app.`;
-    else reply = "Thank you. There is no open task now.";
+    if (image && !text) reply = `Thanks, ${name}. I saved your screenshot.`;
+    else if (BLOCKER.test(text) && !mismatch) reply = `Thank you for telling me, ${name}. I have let your manager know.`;
+    else if (task) reply = `Thanks, ${name}! You have ${fmtDuration(ms(task.deadlineAt) - now)} left. Please mark each DM as sent in the app as you go.`;
+    else reply = `Thanks, ${name}. There is no open task right now.`;
   }
   if (wantsNext && next.length) reply += ` Next in your list: ${next.join(", ")}.`;
   if (verdict) reply = `${reply}\n\n${verdict}`;
@@ -418,6 +451,10 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
 
   await withDb((d) => {
     say(d, "teammate", reply);
+    if (answerNote) {
+      say(d, "manager", answerNote);
+      pushes.push({ role: "manager", title: `${name} answered`, body: text.slice(0, 160) });
+    }
     if (managerAlert) {
       say(d, "manager", managerAlert);
       pushes.push({
@@ -532,7 +569,7 @@ export async function runAgent(nowMs = Date.now()): Promise<RunResult> {
           const tk = find(d, id)!;
           tk.status = "missed";
           tk.closedAt = nowIso;
-          say(d, "teammate", `The deadline for "${tk.title}" has passed. The app shows ${stateLine(d)}. Please tell me what happened and finish what is left.`);
+          say(d, "teammate", `Hi ${name}, the time for "${tk.title}" is over. The app shows ${stateLine(d)}. No problem, please just tell me what happened so I can update your manager.`);
           say(d, "manager", `Deadline missed: "${tk.title}". The app shows ${stateLine(d)}. ${name} was told. Ask me for a status or assign a new deadline.`);
           pushes.push({ role: "manager", title: "Deadline missed", body: `${tk.title}: ${stateLine(d)}` });
           pushes.push({ role: "teammate", title: "Deadline passed", body: tk.title });
@@ -568,40 +605,69 @@ export async function runAgent(nowMs = Date.now()): Promise<RunResult> {
           const tk = find(d, id)!;
           tk.preDeadlineSent = true;
           tk.lastCheckAt = nowIso;
-          say(d, "teammate", `30 minutes left for "${tk.title}". The app shows ${stateLine(d)}. Please send an update and finish what you can.`);
-          pushes.push({ role: "teammate", title: "30 minutes left", body: `${tk.title}: ${stateLine(d)}` });
+          say(d, "teammate", `Hi ${name}, 30 minutes left on "${tk.title}". You are at ${stateLine(d)}. You can do it. Please send me a quick update when you can.`);
+          pushes.push({ role: "teammate", title: "30 minutes left", body: `Hi ${name}, 30 minutes left. You are at ${stateLine(d)}.` });
         },
       });
       continue;
     }
 
-    // Regular check-in.
-    const since = task.lastCheckAt ?? task.createdAt;
-    const interval = Math.min(settings.checkinMinutes * MIN, Math.max(10 * MIN, left / 2));
+    // Regular check-in. The clock restarts whenever she replies or works, so the agent waits for her
+    // instead of asking again right after she answered.
+    const lastCheck = task.lastCheckAt ?? task.createdAt;
+    const lastHer = lastTeammateActivity(db);
+    const since = lastHer && lastHer > lastCheck ? lastHer : lastCheck;
+    const interval = task.checkEvery
+      ? task.checkEvery * MIN
+      : Math.min(settings.checkinMinutes * MIN, Math.max(10 * MIN, left / 2));
     if (nowMs - ms(since) >= interval) {
       labels.push(`checkin:${task.title}`);
       plans.push({
         guard: (d) => {
           const tk = find(d, id);
-          return !!tk && tk.status === "open" && (tk.lastCheckAt ?? tk.createdAt) === since;
+          return !!tk && tk.status === "open" && (tk.lastCheckAt ?? tk.createdAt) === lastCheck && lastTeammateActivity(d) === lastHer;
         },
         fallback: "",
         apply: (d, _text, pushes) => {
           const tk = find(d, id)!;
-          const quiet = !teammateActiveSince(d, since);
+          const quiet = !teammateActiveSince(d, lastCheck);
           tk.unanswered = quiet && tk.lastCheckAt ? tk.unanswered + 1 : 0;
+          const n = (tk.unanswered + (tk.lastCheckAt ? 1 : 0)) % 2;
           tk.lastCheckAt = nowIso;
-          const intro = quiet ? `I have not seen any work for a while. Are you ok?\n\n` : "";
-          const questions =
-            tk.kind === "dms"
-              ? "1. How many DMs did you send?\n2. Did anyone reply?\n3. Any problem?\nAlso send a screenshot of your last DM."
-              : "1. What have you done so far?\n2. How much is left?\n3. Any problem?";
-          const body =
-            `${intro}Check-in: ${tk.title}\nThe app shows ${stateLine(d)}. Due in ${fmtDuration(ms(tk.deadlineAt) - nowMs)}.\n\nPlease tell me:\n${questions}`;
+          const state = stateLine(d);
+          const leftTxt = fmtDuration(ms(tk.deadlineAt) - nowMs);
+          const heard = lastHer ? fmtWhen(ms(lastHer), nowMs, tz) : null;
+          let body: string;
+          let pushBody: string;
+          if (tk.unanswered >= 3) {
+            body =
+              `Hi ${name}, just a gentle reminder. I still need a short update on "${tk.title}".\n` +
+              `If now is not a good time, tell me when you will be free.`;
+            pushBody = `Hi ${name}, a gentle reminder: please send a short update.`;
+          } else if (tk.unanswered === 2) {
+            body =
+              `${name}, I am still waiting to hear from you. Even one line helps, like "3 sent, no problems".\n` +
+              `If something came up, just tell me and I will let your manager know.`;
+            pushBody = `${name}, still waiting for your update. One line is enough.`;
+          } else if (quiet && tk.unanswered === 1) {
+            body =
+              `Hi ${name}, I have not heard from you${heard ? ` since ${heard}` : " yet"}. Is everything okay?\n` +
+              `The app shows ${state}, with ${leftTxt} left. A short update is enough: how many you sent, any replies, any problem?`;
+            pushBody = `Hi ${name}, is everything okay? Please send a short update.`;
+          } else if (tk.kind === "dms") {
+            body =
+              n === 0
+                ? `Hi ${name}, how is it going? I can see ${state} so far, with ${leftTxt} left.\n\nWhen you have a moment:\n1. How many DMs have you sent?\n2. Has anyone replied?\n3. Is anything in your way?\nA screenshot of your last DM would help too.`
+                : `Hi ${name}, just checking in. You are at ${state}, and the deadline is in ${leftTxt}.\nHow many have you sent so far? Any replies? Anything I can help with?\nPlease add a screenshot of your last DM.`;
+            pushBody = `Hi ${name}, how is it going? Please send a quick update.`;
+          } else {
+            body = `Hi ${name}, how is "${tk.title}" going? ${leftTxt} left.\n1. What have you done so far?\n2. How much is left?\n3. Is anything in your way?`;
+            pushBody = `Hi ${name}, how is it going? Please send a quick update.`;
+          }
           say(d, "teammate", body, "agent", { kind: "checkin" });
-          pushes.push({ role: "teammate", title: "Check-in", body: `${tk.title}: ${stateLine(d)}. Please reply.` });
+          pushes.push({ role: "teammate", title: "Quick check-in", body: pushBody });
           if (tk.unanswered >= 2 && tk.unanswered % 2 === 0) {
-            const warn = `${name} has not answered ${tk.unanswered} check-ins on "${tk.title}". The app shows ${stateLine(d)}. You may want to call.`;
+            const warn = `${name} has not answered ${tk.unanswered} check-ins on "${tk.title}"${heard ? ` (last heard ${heard})` : ""}. The app shows ${state}. You may want to call her.`;
             say(d, "manager", warn);
             pushes.push({ role: "manager", title: `${name} is not answering`, body: warn });
           }
