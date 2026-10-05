@@ -23,6 +23,17 @@ For each donor: copy the message, send it, press **Mark sent**, add a **screensh
 1. How many DMs did you send? 2. Did anyone reply? 3. Any problem? + send a screenshot.
 If her answer has no number, it asks again.
 
+## How it gets the work done
+
+- **Small goals.** Every check-in ends with a goal: "2 more by 2:40. Can you do that?" The next check-in
+  says if she hit it. Missed twice -> you are told.
+- **Her own promise.** If she says "I can do 3 more", that becomes her goal, and the agent holds her to it.
+- **Next step ready.** Every message names the next donors, so she never has to decide what to do.
+- **Praise after each DM.** "Nice work! 4 of 10. Next: Sam Lee."
+- **Early warning.** If her speed means she will miss the deadline, you are told early.
+
+No app can force a person to work. This makes the work easy to start, measured in small steps, and visible to you.
+
 ## How it checks she is telling the truth
 
 | What she does | What the app does |

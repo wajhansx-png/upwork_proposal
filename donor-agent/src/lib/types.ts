@@ -57,6 +57,12 @@ export interface Task {
   unanswered: number;
   /** Minutes between check-ins for this task, if the manager gave one ("check every 20 min"). */
   checkEvery?: number;
+  /** A small goal for the next check-in: reach `count` DMs by `by`. Set by the agent or by her own promise. */
+  goal?: { count: number; by: string; fromHer?: boolean };
+  /** Small goals missed in a row. */
+  goalMisses?: number;
+  /** The manager was already told she is too slow to finish on time. */
+  paceWarned?: boolean;
   midpointSent?: boolean;
   preDeadlineSent?: boolean;
   note?: string;

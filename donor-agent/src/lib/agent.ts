@@ -98,6 +98,32 @@ export function summarize(db: Db, now = Date.now()): string {
 
 // ---------- messaging ----------
 
+/** Minutes between check-ins for a task. */
+function intervalMs(settingsMinutes: number, t: Task, leftMs: number) {
+  return t.checkEvery ? t.checkEvery * MIN : Math.min(settingsMinutes * MIN, Math.max(10 * MIN, leftMs / 2));
+}
+
+const nextNames = (db: Db, n: number) => db.donors.filter((d) => d.status === "todo").slice(0, n).map((d) => d.name);
+
+/** After she marks a DM as sent: quick praise and the next step. Called inside the same db write. */
+export function cheerAfterMark(d: Db) {
+  const t = d.tasks.find((x) => x.status === "open" && x.kind === "dms");
+  if (!t) return;
+  const done = taskProgress(d, t).done;
+  const next = nextNames(d, 1)[0];
+  const tz = d.settings.timezone;
+  let line: string;
+  if (done >= t.target) line = `That is the last one. ${done} of ${t.target} done. Amazing work, ${d.settings.teammateName}!`;
+  else {
+    line = `Nice work! ${done} of ${t.target} done.`;
+    if (t.goal && done < t.goal.count) line += ` ${t.goal.count - done} more to reach your goal by ${fmtWhen(ms(t.goal.by), Date.now(), tz)}.`;
+    else if (t.goal && done >= t.goal.count) line += " You reached your goal. Keep going!";
+    if (next) line += ` Next: ${next}.`;
+  }
+  say(d, "teammate", line);
+}
+
+
 function say(db: Db, owner: Role, text: string, from: "agent" | "user" | "manager" = "agent", extra: Partial<ChatMessage> = {}) {
   db.messages.push({ id: newId(), owner, from, text, at: new Date().toISOString(), ...extra });
   if (db.messages.length > 400) db.messages = db.messages.slice(-400);
@@ -404,6 +430,8 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
   let verdict = "";
   let mismatch = false;
 
+  const promise = /\b(?:can|will|i'll|ill|going to|gonna|could)\b(?:(?!\b(?:at|by|around|after|before|until|till)\b)\D){0,20}?(\d{1,3})(?!\s*(?:am|pm|a\.m|p\.m|:|o'?clock|min|minutes|hours?|h\b))\b/i.exec(text);
+  const isPromise = !!promise && task?.kind === "dms";
   if (claim !== null && task?.kind === "dms") {
     const p = taskProgress(db, task);
     if (claim > p.done) {
@@ -415,7 +443,7 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
         `Check: the app shows ${p.done} of ${p.target} marked sent for "${task.title}".` +
         (p.flagged ? ` ${p.flagged} look unverified. Your manager will see this.` : "");
     }
-  } else if (answeringCheckin && task?.kind === "dms" && !BLOCKER.test(text) && !image) {
+  } else if (answeringCheckin && task?.kind === "dms" && !BLOCKER.test(text) && !image && !isPromise) {
     verdict = "Thanks! How many DMs have you sent so far? Please write the number, and add a screenshot of your last DM.";
   }
   if (!managerAlert && BLOCKER.test(text)) managerAlert = `${name} has a problem: "${text.slice(0, 300)}"`;
@@ -449,7 +477,24 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
   if (verdict) reply = `${reply}\n\n${verdict}`;
   if (shotNote) reply = `${reply}\n\n${shotNote}`;
 
+  // Her own promise ("I can do 3 more") becomes her goal. People keep their own numbers better.
+  let promised: { count: number; by: number } | null = null;
+  if (promise && task?.kind === "dms" && !mismatch) {
+    const done = taskProgress(db, task).done;
+    const leftMs = ms(task.deadlineAt) - now;
+    const by = task.goal && ms(task.goal.by) > now ? ms(task.goal.by) : Math.min(now + intervalMs(db.settings.checkinMinutes, task, leftMs), ms(task.deadlineAt));
+    promised = { count: Math.min(task.target, done + Number(promise[1])), by };
+    // Keep it short: a promise needs a clear "deal", not a lecture.
+    reply = `Deal, ${name}: ${Number(promise[1])} more by ${fmtWhen(by, now, db.settings.timezone)}. I will check then.`;
+    const next = nextNames(db, 2);
+    if (next.length) reply += ` Start with ${next.join(" and ")}.`;
+  }
+
   await withDb((d) => {
+    if (promised && task) {
+      const tk = d.tasks.find((x) => x.id === task.id);
+      if (tk && tk.status === "open") tk.goal = { count: promised.count, by: new Date(promised.by).toISOString(), fromHer: true };
+    }
     say(d, "teammate", reply);
     if (answerNote) {
       say(d, "manager", answerNote);
@@ -617,9 +662,7 @@ export async function runAgent(nowMs = Date.now()): Promise<RunResult> {
     const lastCheck = task.lastCheckAt ?? task.createdAt;
     const lastHer = lastTeammateActivity(db);
     const since = lastHer && lastHer > lastCheck ? lastHer : lastCheck;
-    const interval = task.checkEvery
-      ? task.checkEvery * MIN
-      : Math.min(settings.checkinMinutes * MIN, Math.max(10 * MIN, left / 2));
+    const interval = intervalMs(settings.checkinMinutes, task, left);
     if (nowMs - ms(since) >= interval) {
       labels.push(`checkin:${task.title}`);
       plans.push({
@@ -630,7 +673,8 @@ export async function runAgent(nowMs = Date.now()): Promise<RunResult> {
         fallback: "",
         apply: (d, _text, pushes) => {
           const tk = find(d, id)!;
-          const quiet = !teammateActiveSince(d, lastCheck);
+          const goalMet = !!tk.goal && taskProgress(d, tk).done >= tk.goal.count;
+          const quiet = !teammateActiveSince(d, lastCheck) && !goalMet;
           tk.unanswered = quiet && tk.lastCheckAt ? tk.unanswered + 1 : 0;
           const n = (tk.unanswered + (tk.lastCheckAt ? 1 : 0)) % 2;
           tk.lastCheckAt = nowIso;
@@ -663,6 +707,50 @@ export async function runAgent(nowMs = Date.now()): Promise<RunResult> {
           } else {
             body = `Hi ${name}, how is "${tk.title}" going? ${leftTxt} left.\n1. What have you done so far?\n2. How much is left?\n3. Is anything in your way?`;
             pushBody = `Hi ${name}, how is it going? Please send a quick update.`;
+          }
+          // Small goals: judge the last one, then set the next. This is what moves the work forward.
+          if (tk.kind === "dms") {
+            const done = taskProgress(d, tk).done;
+            let before = "";
+            if (tk.goal) {
+              const g = tk.goal;
+              if (done >= g.count) {
+                tk.goalMisses = 0;
+                before = g.fromHer ? `You kept your promise: ${done} done. Thank you!\n\n` : `Great job, you hit your goal: ${done} done!\n\n`;
+              } else {
+                tk.goalMisses = (tk.goalMisses ?? 0) + 1;
+                before = `The goal was ${g.count} by ${fmtWhen(ms(g.by), nowMs, tz)}. You are at ${done}. Let's catch up.\n\n`;
+                if (tk.goalMisses === 2) {
+                  const w = `${name} missed her small goal twice on "${tk.title}". She is at ${stateLine(d)} with ${fmtDuration(ms(tk.deadlineAt) - nowMs)} left.`;
+                  say(d, "manager", w);
+                  pushes.push({ role: "manager", title: `${name} is falling behind`, body: w });
+                }
+              }
+            }
+            const leftMs = ms(tk.deadlineAt) - nowMs;
+            const step = intervalMs(settings.checkinMinutes, tk, leftMs);
+            const by = Math.min(nowMs + step, ms(tk.deadlineAt));
+            const stepsLeft = Math.max(1, Math.ceil(leftMs / step));
+            const need = Math.max(1, Math.ceil((tk.target - done) / stepsLeft));
+            tk.goal = { count: Math.min(tk.target, done + need), by: new Date(by).toISOString() };
+            const next = nextNames(d, 3);
+            body =
+              before +
+              body +
+              `\n\nYour next goal: ${need} more by ${fmtWhen(by, nowMs, tz)}. Can you do that? If you can do more, tell me the number.` +
+              (next.length ? `\nStart with: ${next.join(", ")}.` : "");
+
+            // Early warning: at this speed she will not finish on time.
+            const elapsed = nowMs - ms(tk.createdAt);
+            if (!tk.paceWarned && elapsed >= 30 * MIN && done < tk.target) {
+              const projected = Math.floor(done + (done / elapsed) * leftMs);
+              if (projected < tk.target * 0.8) {
+                tk.paceWarned = true;
+                const w = `Early warning: at her current speed, ${name} will finish about ${projected} of ${tk.target} by the deadline. She is at ${stateLine(d)}. I am pushing her with small goals.`;
+                say(d, "manager", w);
+                pushes.push({ role: "manager", title: "May miss the deadline", body: w });
+              }
+            }
           }
           say(d, "teammate", body, "agent", { kind: "checkin" });
           pushes.push({ role: "teammate", title: "Quick check-in", body: pushBody });

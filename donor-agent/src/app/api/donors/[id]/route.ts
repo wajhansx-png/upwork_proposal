@@ -1,6 +1,6 @@
 import { after, NextRequest, NextResponse } from "next/server";
 import { getRole } from "@/lib/auth";
-import { verifyProof } from "@/lib/agent";
+import { cheerAfterMark, verifyProof } from "@/lib/agent";
 import { readDb, withDb } from "@/lib/db";
 import { saveImage, type Saved } from "@/lib/images";
 import { visionEnabled } from "@/lib/llm";
@@ -64,6 +64,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
         }
       }
     }
+    if (status === "sent" && role === "teammate") cheerAfterMark(db);
     if (status === "replied") {
       d.sentAt ??= now;
       d.repliedAt = now;
