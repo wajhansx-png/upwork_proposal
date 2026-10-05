@@ -419,7 +419,8 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
 
   const task = db.tasks.find((t) => t.status === "open");
   const claim = extractClaim(text);
-  const lastAgent = [...db.messages].reverse().find((m) => m.owner === "teammate" && m.from === "agent");
+  // The agent's last question (task or check-in). Praise and other notes are not questions.
+  const lastAgent = [...db.messages].reverse().find((m) => m.owner === "teammate" && m.from === "agent" && (m.kind === "checkin" || m.kind === "kickoff"));
   const answeringCheckin = lastAgent?.kind === "checkin" && now - ms(lastAgent.at) < 3 * 3_600_000;
   // Is this her first answer to the agent's last question? Then the manager hears what she said.
   const firstAnswer =

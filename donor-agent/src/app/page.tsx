@@ -19,6 +19,8 @@ interface State {
   now: string;
 }
 
+// ---------- helpers ----------
+
 async function api<T = unknown>(url: string, method = "GET", body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
@@ -64,7 +66,57 @@ const b64ToBytes = (s: string) => {
   return Uint8Array.from(raw, (ch) => ch.charCodeAt(0));
 };
 
-const clock = (iso: string) => new Date(iso).toLocaleString([], { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" });
+const time = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+const when = (iso: string) => {
+  const d = new Date(iso);
+  return d.toDateString() === new Date().toDateString() ? time(iso) : d.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+};
+function ago(nowIso: string, iso?: string) {
+  if (!iso) return "never";
+  const m = Math.max(0, Math.round((new Date(nowIso).getTime() - new Date(iso).getTime()) / 60000));
+  if (m < 1) return "just now";
+  if (m < 60) return `${m} min ago`;
+  return `${Math.floor(m / 60)} h ${m % 60} min ago`;
+}
+function until(nowIso: string, iso: string) {
+  const m = Math.round((new Date(iso).getTime() - new Date(nowIso).getTime()) / 60000);
+  if (m <= 0) return "time is up";
+  if (m < 60) return `in ${m} min`;
+  return `in ${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+const doneFor = (s: State, t: Task) =>
+  t.kind === "general" ? (t.status === "review" || t.status === "done" ? 1 : 0) : s.donors.filter((d) => d.sentAt && d.sentAt >= t.createdAt).length;
+
+const VERDICT: Record<string, [string, string]> = {
+  match: ["screenshot OK", "ok"],
+  mismatch: ["screenshot wrong", "bad"],
+  unclear: ["screenshot unclear", "mid"],
+  unchecked: ["screenshot not read", ""],
+};
+
+/** Remembers the last message the person saw, to show an unread count. */
+function useUnread(key: string, list: ChatMessage[], open: boolean, mine: (m: ChatMessage) => boolean) {
+  const [seen, setSeen] = useState<string>("");
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSeen(localStorage.getItem(key) ?? "");
+    } catch {}
+  }, [key]);
+  const last = list.at(-1)?.at ?? "";
+  useEffect(() => {
+    if (!open || !last) return;
+    try {
+      localStorage.setItem(key, last);
+    } catch {}
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSeen(last);
+  }, [open, last, key]);
+  return open ? 0 : list.filter((m) => !mine(m) && m.at > seen).length;
+}
+
+// ---------- page ----------
 
 export default function Page() {
   const [state, setState] = useState<State | null>(null);
@@ -105,8 +157,7 @@ export default function Page() {
       await refresh();
     };
     void start();
-    // Look for news only while the page is open. Push alerts cover the rest.
-    const t = setInterval(() => !document.hidden && void refresh(), 20_000);
+    const t = setInterval(() => !document.hidden && void refresh(), 15_000);
     const vis = () => !document.hidden && void refresh();
     document.addEventListener("visibilitychange", vis);
     return () => {
@@ -120,14 +171,16 @@ export default function Page() {
       <main className="login card">
         <h1>Donor Desk</h1>
         <p>{problem === "not-signed-in" ? "Please open your private link. The manager has it." : problem}</p>
-        <p className="hint">If your link stopped working, ask the manager to make a new one.</p>
+        <p className="hint">If your link stopped working, ask the manager for a new one.</p>
       </main>
     );
   if (!state) return <main><p className="hint">Loading…</p></main>;
   return state.role === "manager" ? <Manager s={state} refresh={refresh} /> : <Teammate s={state} refresh={refresh} />;
 }
 
-function Header({ s }: { s: State }) {
+// ---------- shared pieces ----------
+
+function useAlerts(s: State) {
   const [note, setNote] = useState("");
   const [env, setEnv] = useState<{ ios: boolean; installed: boolean; granted: boolean } | null>(null);
   useEffect(() => {
@@ -136,14 +189,13 @@ function Header({ s }: { s: State }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setEnv({ ios, installed, granted: "Notification" in window && Notification.permission === "granted" });
   }, []);
-
   const enable = async () => {
     try {
       if (!("Notification" in window) || !("serviceWorker" in navigator))
-        return setNote("This browser cannot show alerts. On iPhone, add the app to your Home Screen first (see the box below).");
+        return setNote("This browser cannot show alerts. On iPhone, add the app to your Home Screen first.");
       const perm = await Notification.requestPermission();
-      if (perm !== "granted") return setNote("Alerts are blocked. Allow them in your browser or phone settings, then try again.");
-      if (!s.vapidPublicKey) return setNote("Allowed. But the server has no push keys, so alerts only show while this page is open.");
+      if (perm !== "granted") return setNote("Alerts are blocked. Allow them in your phone settings, then try again.");
+      if (!s.vapidPublicKey) return setNote("Allowed. The server has no push keys yet, so alerts only show while the app is open.");
       const reg = await navigator.serviceWorker.register("/sw.js");
       await navigator.serviceWorker.ready;
       const sub =
@@ -151,65 +203,79 @@ function Header({ s }: { s: State }) {
         (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(s.vapidPublicKey) }));
       await api("/api/push", "POST", sub.toJSON());
       setEnv((e) => (e ? { ...e, granted: true } : e));
-      setNote("Alerts are on for this phone. Press Send test to check. They work even when the app is closed.");
+      setNote("Alerts are on for this phone. They work even when the app is closed.");
     } catch (e) {
       setNote((e as Error).message);
     }
   };
+  const test = async () => setNote(await api("/api/push/test", "POST").then(() => "Test sent. Close the app and wait a few seconds.", (e: Error) => e.message));
+  return { env, note, enable, test };
+}
 
+/** A small banner, shown only until alerts are on. */
+function AlertsBanner({ s, who }: { s: State; who: string }) {
+  const a = useAlerts(s);
+  if (!a.env || (a.env.granted && !a.note)) return null;
+  const iosFirst = a.env.ios && !a.env.installed;
   return (
-    <>
-      <header>
-        <h1>Donor Desk · {s.role === "manager" ? "Manager" : s.settings.teammateName}</h1>
+    <section className="card warn">
+      {iosFirst ? (
+        <p style={{ margin: 0 }}>
+          <b>iPhone:</b> tap <b>Share</b> → <b>Add to Home Screen</b>, then open Donor Desk from your Home Screen. Then you can turn on alerts.
+        </p>
+      ) : !a.env.granted ? (
         <div className="row">
-          <button onClick={enable}>{env?.granted ? "Check alerts again" : "Turn on alerts"}</button>
-          {env?.granted && (
-            <button onClick={async () => setNote(await api("/api/push/test", "POST").then(() => "Test sent. Close the app and wait a few seconds.", (e: Error) => e.message))}>
-              Send test
-            </button>
-          )}
+          <p className="grow" style={{ margin: 0 }}>Turn on alerts so {who}.</p>
+          <button className="primary small" onClick={a.enable}>Turn on</button>
         </div>
-        {note && <p className="hint" style={{ width: "100%", margin: 0 }}>{note}</p>}
-      </header>
-      {env?.ios && !env.installed && (
-        <section className="card warn">
-          <h2>iPhone: do this first</h2>
-          <p style={{ margin: 0 }}>
-            Apple only allows alerts for apps on the Home Screen. In Safari tap <b>Share</b>, then <b>Add to Home Screen</b>. Open <b>Donor Desk</b> from the Home Screen.
-            Then press <b>Turn on alerts</b>. You need iOS 16.4 or newer.
-          </p>
-        </section>
-      )}
-    </>
+      ) : null}
+      {a.note && <p className="hint" style={{ marginTop: 6 }}>{a.note}</p>}
+    </section>
   );
 }
 
-function Thread({
+function Tabs<T extends string>({ tabs, value, onChange }: { tabs: { id: T; icon: string; label: string; badge?: number }[]; value: T; onChange: (t: T) => void }) {
+  return (
+    <nav className="tabs" aria-label="Sections">
+      <div>
+        {tabs.map((t) => (
+          <button key={t.id} className={value === t.id ? "on" : ""} onClick={() => onChange(t.id)} aria-current={value === t.id ? "page" : undefined}>
+            <b aria-hidden>{t.icon}</b>
+            {t.label}
+            {!!t.badge && <span className="dot">{t.badge}</span>}
+          </button>
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+function ChatView({
   messages,
   label,
-  mine,
+  kind,
   placeholder,
-  hint,
-  chips,
-  onSend,
+  empty,
+  chips = [],
   canAttach,
+  onSend,
 }: {
   messages: ChatMessage[];
   label: (m: ChatMessage) => string;
-  mine: (m: ChatMessage) => boolean;
+  kind: (m: ChatMessage) => "me" | "agent" | "boss" | "";
   placeholder: string;
-  hint: string;
-  chips: string[];
-  onSend: (text: string, image?: string) => Promise<void>;
+  empty: string;
+  chips?: string[];
   canAttach?: boolean;
+  onSend: (text: string, image?: string) => Promise<void>;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const box = useRef<HTMLDivElement>(null);
   const file = useRef<HTMLInputElement>(null);
+  const end = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    box.current?.scrollTo({ top: box.current.scrollHeight });
+    end.current?.scrollIntoView({ block: "end" });
   }, [messages.length, busy]);
   const send = async (t: string, image?: string) => {
     if ((!t.trim() && !image) || busy) return;
@@ -226,11 +292,11 @@ function Thread({
   };
   return (
     <>
-      <div className="chat" ref={box}>
-        {messages.length === 0 && <p className="hint">{hint}</p>}
+      <div className="chat">
+        {messages.length === 0 && <p className="hint">{empty}</p>}
         {messages.map((m) => (
-          <div key={m.id} className={`msg ${mine(m) ? "me" : m.from === "agent" ? "agent" : ""}`}>
-            <small>{label(m)} · {clock(m.at)}</small>
+          <div key={m.id} className={`msg ${kind(m)}`}>
+            <small>{label(m)} · {when(m.at)}</small>
             {m.img && (
               <a href={`/api/img/${m.img}`} target="_blank" rel="noreferrer">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -240,16 +306,17 @@ function Thread({
             {m.text}
           </div>
         ))}
-        {busy && <div className="msg agent"><small>Agent</small>Thinking…</div>}
+        {busy && <div className="msg agent"><small>Agent</small>Typing…</div>}
+        <div ref={end} />
       </div>
       {chips.length > 0 && (
-        <div className="row" style={{ marginBottom: 8 }}>
+        <div className="chips">
           {chips.map((c) => (
             <button key={c} className="chip" disabled={busy} onClick={() => send(c)}>{c}</button>
           ))}
         </div>
       )}
-      <div className="row">
+      <div className="composer">
         {canAttach && (
           <>
             <input
@@ -264,14 +331,14 @@ function Thread({
                 try {
                   await send(text, await shrink(f));
                 } catch {
-                  setErr("Could not read that image.");
+                  setErr("Could not read that picture.");
                 }
               }}
             />
-            <button onClick={() => file.current?.click()} disabled={busy} aria-label="Add screenshot">📎</button>
+            <button onClick={() => file.current?.click()} disabled={busy} aria-label="Send a screenshot">📎</button>
           </>
         )}
-        <input style={{ flex: 1 }} value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send(text)} />
+        <input className="grow" value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send(text)} aria-label="Message" />
         <button className="primary" onClick={() => send(text)} disabled={busy}>Send</button>
       </div>
       {err && <p className="err">{err}</p>}
@@ -279,170 +346,179 @@ function Thread({
   );
 }
 
-function TaskBar({ s, t }: { s: State; t: Task }) {
-  const mine = s.donors.filter((d) => d.sentAt && d.sentAt >= t.createdAt);
-  const done = t.kind === "general" ? (t.status === "review" || t.status === "done" ? 1 : 0) : mine.length;
-  const pct = Math.min(100, Math.round((done / t.target) * 100));
-  const flagged = mine.filter((d) => d.flags.length).length;
-  return (
-    <>
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <b>{t.title}</b>
-        <span className={`tag ${t.status}`}>{t.status}</span>
-      </div>
-      <div className="bar"><i style={{ width: `${pct}%` }} /></div>
-      <p className="hint" style={{ margin: 0 }}>
-        {done} of {t.target} done · due {clock(t.deadlineAt)}
-        {flagged > 0 && <span className="err"> · {flagged} not verified</span>}
-      </p>
-    </>
-  );
+// ---------- manager ----------
+
+type MTab = "home" | "chat" | "donors" | "settings";
+
+function statusOf(s: State) {
+  const name = s.settings.teammateName;
+  const t = [...s.tasks].reverse().find((x) => x.status === "open" || x.status === "review");
+  if (!t) {
+    const last = s.tasks.at(-1);
+    if (!last) return { t: null, pill: "none", label: "No task yet", line: `Give ${name} a task below.` };
+    const d = doneFor(s, last);
+    const good = last.status === "done";
+    return { t: null, pill: good ? "ok" : "bad", label: good ? "Last task done" : `Last task ${last.status}`, line: `${last.title}: ${d} of ${last.target}.` };
+  }
+  if (t.status === "review") return { t, pill: "mid", label: "Needs your OK", line: `${name} says it is done. Check her note and confirm.` };
+  const late = new Date(t.deadlineAt).getTime() < new Date(s.now).getTime();
+  if (t.unanswered >= 2) return { t, pill: "bad", label: "Not answering", line: `${name} ignored ${t.unanswered} check-ins. Maybe call her.` };
+  if (late || (t.goalMisses ?? 0) >= 1 || t.paceWarned) return { t, pill: "mid", label: "Behind", line: "The agent is pushing her with small goals." };
+  return { t, pill: "ok", label: "On track", line: "Nothing for you to do." };
 }
 
-const VERDICT: Record<string, string> = { match: "screenshot OK", mismatch: "screenshot wrong", unclear: "screenshot unclear", unchecked: "screenshot not read" };
-
-function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
-  const [copied, setCopied] = useState("");
-  const [err, setErr] = useState("");
-  const [busyId, setBusyId] = useState("");
-  const pick = useRef<HTMLInputElement>(null);
-  const pickFor = useRef("");
-  const open = s.tasks.filter((t) => t.status === "open");
-  const todo = s.donors.filter((d) => d.status === "todo");
-  const done = s.donors.filter((d) => d.status === "sent" || d.status === "replied").slice().reverse();
-  const run = async (fn: () => Promise<unknown>) => {
-    try {
-      setErr("");
-      await fn();
-      await refresh();
-    } catch (e) {
-      setErr((e as Error).message);
-    }
-  };
-  const prepare = (id: string) => api(`/api/donors/${id}/prepare`, "POST").catch(() => undefined);
-  const set = (id: string, status: Donor["status"], extra: object = {}) => run(() => api(`/api/donors/${id}`, "PATCH", { status, ...extra }));
-  const markSent = (id: string) => {
-    if (!s.settings.requireProof) return set(id, "sent");
-    pickFor.current = id;
-    pick.current?.click();
-  };
+function Manager({ s, refresh }: { s: State; refresh: () => void }) {
+  const [tab, setTab] = useState<MTab>("home");
+  const name = s.settings.teammateName;
+  const herMsgs = s.teammateMessages ?? [];
+  const unreadHer = useUnread("dd-m-her", herMsgs, tab === "chat", (m) => m.from === "manager");
+  const updates = s.messages.filter((m) => m.from === "agent");
+  const unreadUpd = useUnread("dd-m-upd", updates, tab === "home", () => false);
   return (
     <main>
-      <Header s={s} />
-      <input
-        ref={pick}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={async (e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          const id = pickFor.current;
-          if (!f || !id) return;
-          setBusyId(id);
-          try {
-            await set(id, "sent", { image: await shrink(f) });
-          } finally {
-            setBusyId("");
-          }
-        }}
-      />
-      <div className="grid two">
-        <div>
-          <section className="card">
-            <h2>Your task</h2>
-            {open.length === 0 && <p className="hint">No task now. Your manager will give you one.</p>}
-            {open.map((t) => (
-              <div key={t.id} style={{ marginBottom: 10 }}>
-                <TaskBar s={s} t={t} />
-                {t.kind === "general" && (
-                  <p>
-                    <button
-                      className="primary"
-                      onClick={() => {
-                        const note = prompt("What did you do? Write a short note.");
-                        if (note) void run(() => api(`/api/tasks/${t.id}`, "PATCH", { action: "complete", note }));
-                      }}
-                    >
-                      I finished this
-                    </button>
-                  </p>
-                )}
-              </div>
-            ))}
-            {err && <p className="err">{err}</p>}
-          </section>
-          <section className="card">
-            <h2>Next donors ({todo.length})</h2>
-            <p className="hint">Copy the message, send it, then press Mark sent{s.settings.requireProof ? " and add a screenshot of what you sent" : ""}.</p>
-            {todo.length === 0 && <p className="hint">All done. Well done.</p>}
-            {todo.slice(0, 10).map((d) => {
-              const text = fill(s.settings.template, d, s.settings.teammateName);
-              const link = dmLink(d, text);
-              return (
-                <div className="donor" key={d.id}>
-                  <div className="row"><b>{d.name}</b><span className="tag">{d.channel}</span><span className="hint">{d.contact}</span></div>
-                  {d.note && <p>Note: {d.note}</p>}
-                  <p>{text}</p>
-                  <div className="row">
-                    <button onClick={async () => { void prepare(d.id); await navigator.clipboard.writeText(text).catch(() => undefined); setCopied(d.id); }}>
-                      {copied === d.id ? "Copied" : "Copy message"}
-                    </button>
-                    {link && <a href={link} target="_blank" rel="noreferrer" onClick={() => void prepare(d.id)}><button>Open {d.channel}</button></a>}
-                    <button className="primary" disabled={busyId === d.id} onClick={() => markSent(d.id)}>{busyId === d.id ? "Sending…" : "Mark sent"}</button>
-                    <button onClick={() => set(d.id, "skipped")}>Skip</button>
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-          <section className="card">
-            <h2>Sent ({done.length})</h2>
-            {done.length === 0 && <p className="hint">Nothing sent yet.</p>}
-            {done.map((d) => (
-              <div className="donor" key={d.id}>
-                <div className="row">
-                  <b>{d.name}</b>
-                  <span className={`tag ${d.status}`}>{d.status}</span>
-                  {d.proofCheck && <span className={`tag v-${d.proofCheck.verdict}`}>{VERDICT[d.proofCheck.verdict]}</span>}
-                  {d.status === "sent" && (
-                    <button onClick={() => { const r = prompt(`Paste what ${d.name} replied. This is your proof.`); if (r) void set(d.id, "replied", { replyText: r }); }}>They replied</button>
-                  )}
-                  <button onClick={() => set(d.id, "todo")}>Undo</button>
-                </div>
-                {d.proofCheck && d.proofCheck.verdict !== "match" && d.proofCheck.verdict !== "unchecked" && <p className="err">{d.proofCheck.reason}</p>}
-              </div>
-            ))}
-          </section>
-        </div>
-        <section className="card">
-          <h2>Chat</h2>
-          <Thread
-            messages={s.messages}
-            label={(m) => (m.from === "user" ? "You" : m.from === "manager" ? "Manager" : "Agent")}
-            mine={(m) => m.from === "user"}
-            placeholder="Write your answer"
-            hint="Your answers show here. You can add a screenshot with the 📎 button."
-            chips={["Going well", "I have a problem", "What is next?"]}
-            canAttach
-            onSend={async (text, image) => {
-              await api("/api/messages", "POST", { text, image });
+      <div className="top">
+        <h1>Donor Desk</h1>
+        <span className="hint">{name}&apos;s manager</span>
+      </div>
+      {tab === "home" && <ManagerHome s={s} refresh={refresh} />}
+      {tab === "chat" && (
+        <>
+          <p className="hint" style={{ marginBottom: 10 }}>Everything {name} and the agent say. If you write here, the agent stays quiet for 30 minutes.</p>
+          <ChatView
+            messages={herMsgs}
+            label={(m) => (m.from === "user" ? name : m.from === "manager" ? "You" : "Agent")}
+            kind={(m) => (m.from === "manager" ? "me" : m.from === "agent" ? "agent" : "boss")}
+            placeholder={`Write to ${name}`}
+            empty={`No messages with ${name} yet.`}
+            onSend={async (text) => {
+              await api("/api/messages", "POST", { text, to: "teammate" });
               await refresh();
             }}
           />
-        </section>
-      </div>
+        </>
+      )}
+      {tab === "donors" && <ManagerDonors s={s} refresh={refresh} />}
+      {tab === "settings" && <ManagerSettings s={s} refresh={refresh} />}
+      <Tabs<MTab>
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "home", icon: "🏠", label: "Today", badge: unreadUpd },
+          { id: "chat", icon: "💬", label: `${name}`, badge: unreadHer },
+          { id: "donors", icon: "👥", label: "Donors" },
+          { id: "settings", icon: "⚙️", label: "Settings" },
+        ]}
+      />
     </main>
   );
 }
 
-function Manager({ s, refresh }: { s: State; refresh: () => void }) {
-  const [tab, setTab] = useState<"agent" | "her">("agent");
+function ManagerHome({ s, refresh }: { s: State; refresh: () => void }) {
+  const name = s.settings.teammateName;
+  const st = statusOf(s);
+  const t = st.t;
+  const done = t ? doneFor(s, t) : 0;
+  const lastHer = [s.stats.lastActivityAt, (s.teammateMessages ?? []).filter((m) => m.from === "user").at(-1)?.at].filter(Boolean).sort().at(-1);
+  const mine = t ? s.donors.filter((d) => d.sentAt && d.sentAt >= t.createdAt) : [];
+  const ok = mine.filter((d) => d.proofCheck?.verdict === "match").length;
+  const bad = mine.filter((d) => d.flags.length).length;
+  const [all, setAll] = useState(false);
+  const updates = s.messages.filter((m) => m.from === "agent").slice().reverse();
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const tell = async (v: string) => {
+    if (!v.trim() || busy) return;
+    setBusy(true);
+    setErr("");
+    try {
+      await api("/api/messages", "POST", { text: v });
+      setText("");
+      await refresh();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <AlertsBanner s={s} who={`you hear about ${name} without opening the app`} />
+
+      <section className="card status" aria-label="Status">
+        <div className="row" style={{ justifyContent: "space-between" }}>
+          <b>{name}</b>
+          <span className={`pill ${st.pill}`}>{st.label}</span>
+        </div>
+        {t ? (
+          <>
+            <div className="big">{done}<small> of {t.target} done</small></div>
+            <div className="bar"><i style={{ width: `${Math.min(100, Math.round((done / t.target) * 100))}%` }} /></div>
+            <div className="facts">
+              <div><span>Task</span>{t.title}</div>
+              <div><span>Due</span>{when(t.deadlineAt)} ({until(s.now, t.deadlineAt)})</div>
+              <div><span>Last heard</span>{ago(s.now, lastHer)}</div>
+              <div><span>Proof</span>{ok} OK{bad ? <b style={{ color: "var(--warn)" }}> · {bad} to check</b> : ""}</div>
+              {t.goal && t.status === "open" && <div><span>Her next goal</span>{t.goal.count} by {time(t.goal.by)}</div>}
+              {t.checkEvery && <div><span>Check-ins</span>every {t.checkEvery} min</div>}
+            </div>
+          </>
+        ) : null}
+        <p className="hint">{st.line}</p>
+        {t?.status === "review" && (
+          <div className="row">
+            {t.note && <p className="grow" style={{ margin: 0 }}>“{t.note}”</p>}
+            <button className="primary small" onClick={async () => { await api(`/api/tasks/${t.id}`, "PATCH", { action: "confirm" }); refresh(); }}>Confirm done</button>
+          </div>
+        )}
+      </section>
+
+      <section className="card">
+        <h2>Give {name} a task</h2>
+        <div className="row">
+          <input className="grow" value={text} placeholder={`${name} send 10 DMs by 5pm, check every 20 min`} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && tell(text)} aria-label="Task for the agent" />
+          <button className="primary" disabled={busy} onClick={() => tell(text)}>{busy ? "…" : "Send"}</button>
+        </div>
+        <div className="chips">
+          {[`${name} send ${s.settings.dailyTarget} DMs by 5pm, check every 20 min`, `How is ${name} doing?`, "cancel"].map((c) => (
+            <button key={c} className="chip" disabled={busy} onClick={() => tell(c)}>{c}</button>
+          ))}
+        </div>
+        {err && <p className="err">{err}</p>}
+      </section>
+
+      <section className="card">
+        <h2>Updates</h2>
+        {updates.length === 0 && <p className="hint">The agent will post updates here and send them to your phone.</p>}
+        <div className="feed">
+          {(all ? updates : updates.slice(0, 6)).map((m) => {
+            const herWords = /^.{0,40}(answered|replied|has a problem|sent a screenshot)/.test(m.text);
+            const alarm = /not answering|not answered|missed|Deadline missed|does not match|Early warning|Screenshot problem|Warning/i.test(m.text);
+            return (
+              <div key={m.id} className={`upd ${alarm ? "alert" : herWords ? "her" : ""}`}>
+                <small>{when(m.at)}</small>
+                {m.text}
+              </div>
+            );
+          })}
+        </div>
+        {updates.length > 6 && (
+          <p style={{ marginBottom: 0 }}>
+            <button className="small" onClick={() => setAll(!all)}>{all ? "Show less" : `Show all ${updates.length}`}</button>
+          </p>
+        )}
+      </section>
+    </>
+  );
+}
+
+function ManagerDonors({ s, refresh }: { s: State; refresh: () => void }) {
+  const name = s.settings.teammateName;
   const [lines, setLines] = useState("");
   const [msg, setMsg] = useState("");
   const [copied, setCopied] = useState(false);
-  const [form, setForm] = useState<Settings>(s.settings);
-  const name = s.settings.teammateName;
+  const [sure, setSure] = useState(false);
+  const link = typeof window !== "undefined" && s.teammateKey ? `${location.origin}/?k=${s.teammateKey}` : "";
   const run = async (fn: () => Promise<unknown>) => {
     try {
       setMsg("");
@@ -452,170 +528,310 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
       setMsg((e as Error).message);
     }
   };
-  const st = s.stats;
-  const ago = (t?: string) => {
-    if (!t) return "never";
-    const m = Math.max(0, Math.round((new Date(s.now).getTime() - new Date(t).getTime()) / 60000));
-    return m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`;
-  };
-  const active = s.tasks.filter((t) => t.status === "open" || t.status === "review");
-  const past = s.tasks.filter((t) => !(t.status === "open" || t.status === "review")).slice(-5).reverse();
-  const flagged = s.donors.filter((d) => d.sentAt && d.flags.length);
-  const link = typeof window !== "undefined" && s.teammateKey ? `${location.origin}/?k=${s.teammateKey}` : "";
+  const order: Record<string, number> = { sent: 0, replied: 1, todo: 2, skipped: 3 };
+  const list = s.donors.slice().sort((a, b) => order[a.status] - order[b.status]);
+  return (
+    <>
+      <section className="card">
+        <h2>{name}&apos;s link</h2>
+        <p className="hint">Send this to {name}. She taps it and she is in. Keep it private.</p>
+        <div className="row" style={{ marginTop: 8 }}>
+          <input className="grow" readOnly value={link} onFocus={(e) => e.currentTarget.select()} aria-label={`${name}'s link`} />
+          <button className="primary" onClick={async () => { await navigator.clipboard.writeText(link).catch(() => undefined); setCopied(true); }}>{copied ? "Copied" : "Copy"}</button>
+        </div>
+        <p style={{ marginBottom: 0 }}>
+          {!sure ? (
+            <button className="small" onClick={() => setSure(true)}>Make a new link</button>
+          ) : (
+            <span className="row">
+              <span className="hint">The old link will stop working.</span>
+              <button className="small primary" onClick={() => { setSure(false); void run(() => api("/api/teammate-link", "POST")); }}>Yes, new link</button>
+              <button className="small" onClick={() => setSure(false)}>No</button>
+            </span>
+          )}
+        </p>
+      </section>
+      <section className="card">
+        <h2>Add donors</h2>
+        <p className="hint">One per line: name, channel, contact, note</p>
+        <textarea value={lines} placeholder={"Amina Bello, whatsapp, +2348012345678, gave in March\nJohn Reed, email, john@example.com"} onChange={(e) => setLines(e.target.value)} aria-label="Donors to add" />
+        <p style={{ marginBottom: 0 }}><button className="primary" onClick={() => run(async () => { await api("/api/donors", "POST", { lines }); setLines(""); })}>Add</button></p>
+        {msg && <p className="err">{msg}</p>}
+      </section>
+      <section className="card">
+        <h2>Donors ({s.donors.length})</h2>
+        {s.donors.length === 0 && <p className="hint">None yet.</p>}
+        {list.map((d) => (
+          <div className="item" key={d.id}>
+            <div className="row">
+              <b className="grow">{d.name}</b>
+              <span className="tag">{d.status}</span>
+              {d.proofCheck && <span className={`tag ${VERDICT[d.proofCheck.verdict][1]}`}>{VERDICT[d.proofCheck.verdict][0]}</span>}
+            </div>
+            {d.flags.length > 0 && <p className="err" style={{ margin: 0 }}>{d.flags.join("; ")}</p>}
+            {d.replyText && <p className="hint">Reply: “{d.replyText}”</p>}
+            {d.proofImg && (
+              <details>
+                <summary>See screenshot</summary>
+                <a href={`/api/img/${d.proofImg}`} target="_blank" rel="noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={`/api/img/${d.proofImg}`} alt={`Proof for ${d.name}`} className="shot" />
+                </a>
+                {d.proofCheck && <p className="hint">{d.proofCheck.reason}</p>}
+              </details>
+            )}
+            {d.status === "todo" && (
+              <p style={{ margin: 0 }}><button className="small" onClick={() => run(() => api(`/api/donors/${d.id}`, "DELETE"))}>Remove</button></p>
+            )}
+          </div>
+        ))}
+      </section>
+    </>
+  );
+}
+
+function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
+  const [form, setForm] = useState<Settings>(s.settings);
+  const [msg, setMsg] = useState("");
+  const a = useAlerts(s);
   const sys = s.system;
-  const aiBad = s.agent?.llmStatus?.startsWith("error") && sys?.ai === "key";
   const field = (k: keyof Settings, label: string, type = "text") => (
     <>
-      <label>{label}</label>
-      <input type={type} value={String(form[k])} onChange={(e) => setForm({ ...form, [k]: type === "number" ? Number(e.target.value) : e.target.value })} />
+      <label htmlFor={`f-${k}`}>{label}</label>
+      <input id={`f-${k}`} type={type} value={String(form[k])} onChange={(e) => setForm({ ...form, [k]: type === "number" ? Number(e.target.value) : e.target.value })} />
     </>
   );
   return (
-    <main>
-      <Header s={s} />
-      {sys && (!sys.push || !sys.persistent || sys.ai !== "key" || aiBad) && (
+    <>
+      <section className="card">
+        <h2>Alerts on this phone</h2>
+        <div className="row">
+          <button className="primary" onClick={a.enable}>{a.env?.granted ? "Check alerts again" : "Turn on alerts"}</button>
+          {a.env?.granted && <button onClick={a.test}>Send test</button>}
+        </div>
+        {a.note && <p className="hint" style={{ marginTop: 8 }}>{a.note}</p>}
+      </section>
+      {sys && (!sys.push || !sys.persistent || sys.ai !== "key") && (
         <section className="card warn">
           <h2>Still to set up</h2>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
-            {!sys.push && <li>Alerts for a closed app need push keys. See the setup steps.</li>}
-            {!sys.persistent && <li>No database yet. Your data is saved on this computer only. On the internet it would be lost.</li>}
-            {sys.ai !== "key" && <li>No AI key. The agent understands short clear sentences only, and does <b>not</b> read screenshots. Add one free Gemini key to fix both.</li>}
-            {aiBad && <li>The AI key has an error: {s.agent?.llmStatus}</li>}
+            {!sys.push && <li>Push keys: needed for alerts when the app is closed.</li>}
+            {!sys.persistent && <li>Database: needed when the app is online.</li>}
+            {sys.ai !== "key" && <li>Free Gemini key: so the agent reads screenshots and understands more.</li>}
           </ul>
         </section>
       )}
       <section className="card">
-        <div className="stats">
-          <div className="stat"><b>{st.sentToday}</b><span>sent today</span></div>
-          <div className="stat"><b>{st.todo}</b><span>waiting</span></div>
-          <div className="stat"><b>{st.replied}</b><span>replied</span></div>
-          <div className="stat"><b className={st.flagged ? "err" : ""}>{st.flagged}</b><span>not verified</span></div>
-          <div className="stat"><b>{ago(st.lastActivityAt)}</b><span>last real work</span></div>
-          <div className="stat"><b>{ago(s.agent?.teammateLastSeenAt)}</b><span>last opened app</span></div>
-        </div>
-        <p className="hint" style={{ marginBottom: 0 }}>
-          Agent checked {ago(s.agent?.lastRunAt)}.{" "}
-          <button onClick={() => run(async () => { const r = await api<{ actions: string[] }>("/api/agent/run", "POST"); setMsg(r.actions.length ? `Done: ${r.actions.join(", ")}` : "Checked. Nothing to do."); })}>Check now</button>
-          {msg && <span> {msg}</span>}
+        <h2>Settings</h2>
+        {field("teammateName", "Teammate name")}
+        {field("timezone", "Your timezone (example: Asia/Karachi)")}
+        {field("checkinMinutes", "Check-in every (minutes), if a task does not say", "number")}
+        {field("dailyTarget", "DMs per task, if you give no number", "number")}
+        {field("workStartHour", "Work starts (hour, 0-23)", "number")}
+        {field("workEndHour", "Work ends (hour, 1-24). Daily report then.", "number")}
+        <label className="row" style={{ color: "var(--ink)", fontSize: "1rem" }}>
+          <input type="checkbox" style={{ width: "auto" }} checked={form.requireProof} onChange={(e) => setForm({ ...form, requireProof: e.target.checked })} />
+          Each DM needs a screenshot
+        </label>
+        <label htmlFor="f-template">Message she sends. Use {"{name}"} and {"{teammate}"}.</label>
+        <textarea id="f-template" value={form.template} onChange={(e) => setForm({ ...form, template: e.target.value })} />
+        <p style={{ marginBottom: 0 }}>
+          <button className="primary" onClick={async () => { try { await api("/api/settings", "PUT", form); setMsg("Saved."); refresh(); } catch (e) { setMsg((e as Error).message); } }}>Save</button>
+          {msg && <span className="hint"> {msg}</span>}
         </p>
       </section>
-      <div className="grid two">
-        <div>
-          <section className="card">
-            <div className="row" style={{ marginBottom: 10 }}>
-              <button className={tab === "agent" ? "primary" : ""} onClick={() => setTab("agent")}>Tell the agent</button>
-              <button className={tab === "her" ? "primary" : ""} onClick={() => setTab("her")}>{name}&apos;s chat</button>
+    </>
+  );
+}
+
+// ---------- Areeba ----------
+
+type TTab = "task" | "chat";
+
+function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
+  const [tab, setTab] = useState<TTab>("task");
+  const unread = useUnread("dd-t-chat", s.messages, tab === "chat", (m) => m.from === "user");
+  return (
+    <main>
+      <div className="top">
+        <h1>Hi {s.settings.teammateName}</h1>
+        <span className="hint">Donor Desk</span>
+      </div>
+      {tab === "task" ? (
+        <TeammateTask s={s} refresh={refresh} openChat={() => setTab("chat")} unread={unread} />
+      ) : (
+        <ChatView
+          messages={s.messages}
+          label={(m) => (m.from === "user" ? "You" : m.from === "manager" ? "Manager" : "Agent")}
+          kind={(m) => (m.from === "user" ? "me" : m.from === "manager" ? "boss" : "agent")}
+          placeholder="Write your answer"
+          empty="The agent will message you here about your task."
+          chips={["Going well", "I can do 3 more", "I have a problem", "What is next?"]}
+          canAttach
+          onSend={async (text, image) => {
+            await api("/api/messages", "POST", { text, image });
+            await refresh();
+          }}
+        />
+      )}
+      <Tabs<TTab>
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "task", icon: "✅", label: "My task" },
+          { id: "chat", icon: "💬", label: "Chat", badge: unread },
+        ]}
+      />
+    </main>
+  );
+}
+
+function TeammateTask({ s, refresh, openChat, unread }: { s: State; refresh: () => void; openChat: () => void; unread: number }) {
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState("");
+  const [replyFor, setReplyFor] = useState("");
+  const [reply, setReply] = useState("");
+  const [note, setNote] = useState("");
+  const pick = useRef<HTMLInputElement>(null);
+  const t = s.tasks.find((x) => x.status === "open");
+  const todo = s.donors.filter((d) => d.status === "todo");
+  const next = todo[0];
+  const sent = s.donors.filter((d) => d.status === "sent" || d.status === "replied").slice().reverse();
+  const done = t ? doneFor(s, t) : 0;
+  const run = async (fn: () => Promise<unknown>) => {
+    try {
+      setErr("");
+      setBusy(true);
+      await fn();
+      await refresh();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const prepare = (id: string) => api(`/api/donors/${id}/prepare`, "POST").catch(() => undefined);
+  const set = (id: string, status: Donor["status"], extra: object = {}) => run(() => api(`/api/donors/${id}`, "PATCH", { status, ...extra }));
+  const text = next ? fill(s.settings.template, next, s.settings.teammateName) : "";
+  const link = next ? dmLink(next, text) : null;
+
+  return (
+    <>
+      <AlertsBanner s={s} who="the agent can reach you" />
+      {unread > 0 && (
+        <section className="card" style={{ borderColor: "var(--brand)" }}>
+          <div className="row">
+            <p className="grow" style={{ margin: 0 }}>The agent sent you {unread} new message{unread > 1 ? "s" : ""}.</p>
+            <button className="primary small" onClick={openChat}>Read and reply</button>
+          </div>
+        </section>
+      )}
+
+      <section className="card status">
+        {t ? (
+          <>
+            <b>{t.title}</b>
+            <div className="big">{done}<small> of {t.target} done</small></div>
+            <div className="bar"><i style={{ width: `${Math.min(100, Math.round((done / t.target) * 100))}%` }} /></div>
+            <div className="facts">
+              <div><span>Due</span>{when(t.deadlineAt)} ({until(s.now, t.deadlineAt)})</div>
+              {t.goal && <div><span>Your next goal</span>{Math.max(0, t.goal.count - done) || "Done! "} {t.goal.count - done > 0 ? `more by ${time(t.goal.by)}` : ""}</div>}
             </div>
-            {tab === "agent" ? (
-              <Thread
-                messages={s.messages}
-                label={(m) => (m.from === "user" ? "You" : "Agent")}
-                mine={(m) => m.from === "user"}
-                placeholder={`Example: ${name} send 20 DMs by 5pm, check every 20 min`}
-                hint={`Tell me the task, the time, and how often to check. Example: "${name} send 20 DMs by 5pm, check every 20 min". I talk to ${name}, wait for her answers, check them, and tell you.`}
-                chips={[`${name} send ${s.settings.dailyTarget} DMs by 5pm, check every 20 min`, `How is ${name} doing?`, "cancel"]}
-                onSend={async (text) => {
-                  await api("/api/messages", "POST", { text });
-                  await refresh();
+            {t.kind === "general" && (
+              <div className="row">
+                <input className="grow" value={note} placeholder="What did you do?" onChange={(e) => setNote(e.target.value)} aria-label="What you did" />
+                <button className="primary" disabled={busy} onClick={() => run(async () => { await api(`/api/tasks/${t.id}`, "PATCH", { action: "complete", note }); setNote(""); })}>I finished</button>
+              </div>
+            )}
+          </>
+        ) : (
+          <p style={{ margin: 0 }}>No task right now. You will get an alert when your manager gives you one.</p>
+        )}
+      </section>
+
+      {(t?.kind === "dms" || (!t && todo.length > 0)) && (
+        <section className="card now">
+          {next ? (
+            <>
+              <p className="hint" style={{ marginBottom: 4 }}>Do this now</p>
+              <div className="who">{next.name}</div>
+              <p className="hint">{next.channel} · {next.contact}{next.note ? ` · ${next.note}` : ""}</p>
+              <div className="msgbox" style={{ margin: "10px 0" }}>{text}</div>
+              <div className="row" style={{ marginBottom: 8 }}>
+                <button className="grow" onClick={async () => { void prepare(next.id); await navigator.clipboard.writeText(text).catch(() => undefined); setCopied(next.id); }}>
+                  {copied === next.id ? "Copied ✓" : "1. Copy message"}
+                </button>
+                {link && (
+                  <a className="grow" href={link} target="_blank" rel="noreferrer" onClick={() => void prepare(next.id)} style={{ display: "flex" }}>
+                    <button className="grow">2. Open {next.channel}</button>
+                  </a>
+                )}
+              </div>
+              <input
+                ref={pick}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (!f) return;
+                  try {
+                    const image = await shrink(f);
+                    await set(next.id, "sent", { image });
+                  } catch {
+                    setErr("Could not read that picture.");
+                  }
                 }}
               />
-            ) : (
-              <>
-                <p className="hint" style={{ marginTop: 0 }}>You see everything the agent and {name} write. If you write here, the agent stays quiet for 30 minutes.</p>
-                <Thread
-                  messages={s.teammateMessages ?? []}
-                  label={(m) => (m.from === "user" ? name : m.from === "manager" ? "You" : "Agent")}
-                  mine={(m) => m.from === "manager"}
-                  placeholder={`Write to ${name}`}
-                  hint={`No messages with ${name} yet.`}
-                  chips={[]}
-                  onSend={async (text) => {
-                    await api("/api/messages", "POST", { text, to: "teammate" });
-                    await refresh();
-                  }}
-                />
-              </>
-            )}
-          </section>
-          <section className="card">
-            <h2>Tasks</h2>
-            {active.length === 0 && <p className="hint">No open task. Tell the agent what to assign.</p>}
-            {active.map((t) => (
-              <div className="donor" key={t.id}>
-                <TaskBar s={s} t={t} />
-                {t.note && <p>{name}&apos;s note: {t.note}</p>}
-                <div className="row" style={{ marginTop: 6 }}>
-                  {t.status === "review" && <button className="primary" onClick={() => run(() => api(`/api/tasks/${t.id}`, "PATCH", { action: "confirm" }))}>Confirm done</button>}
-                  <button onClick={() => run(() => api(`/api/tasks/${t.id}`, "PATCH", { action: "cancel" }))}>Cancel</button>
-                </div>
-              </div>
-            ))}
-            {past.length > 0 && <h2 style={{ marginTop: 14 }}>Recent</h2>}
-            {past.map((t) => (<div className="donor" key={t.id}><TaskBar s={s} t={t} /></div>))}
-          </section>
-          {flagged.length > 0 && (
-            <section className="card">
-              <h2>Marks to check</h2>
-              <p className="hint">The app cannot see the DMs. These marks looked wrong. Ask {name} about them.</p>
-              {flagged.map((d) => (<div className="donor" key={d.id}><b>{d.name}</b><p>{d.flags.join("; ")}</p></div>))}
-            </section>
+              <button
+                className="primary bigbtn"
+                disabled={busy}
+                onClick={() => (s.settings.requireProof ? pick.current?.click() : set(next.id, "sent"))}
+              >
+                {busy ? "Saving…" : s.settings.requireProof ? "3. Sent! Add screenshot" : "3. I sent it"}
+              </button>
+              <p style={{ margin: "8px 0 0" }}>
+                <button className="small" onClick={() => set(next.id, "skipped")}>Skip this donor</button>
+              </p>
+            </>
+          ) : (
+            <p style={{ margin: 0 }}>All donors are done. Great work!</p>
           )}
-        </div>
-        <div>
-          <section className="card">
-            <h2>{name}&apos;s link</h2>
-            <p className="hint">Send this link to {name}. She opens it and she is in. No password. Keep it private.</p>
-            <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} />
-            <div className="row" style={{ marginTop: 8 }}>
-              <button className="primary" onClick={async () => { await navigator.clipboard.writeText(link).catch(() => undefined); setCopied(true); }}>{copied ? "Copied" : "Copy link"}</button>
-              <button onClick={() => { if (confirm(`Make a new link? The old link stops working for ${name}.`)) void run(() => api("/api/teammate-link", "POST")); }}>Make new link</button>
-            </div>
-          </section>
-          <section className="card">
-            <h2>Add donors</h2>
-            <p className="hint">One per line: name, channel, contact, note. Channels: whatsapp, email, instagram, linkedin, other.</p>
-            <textarea value={lines} placeholder={"Amina Bello, whatsapp, +2348012345678, gave in March\nJohn Reed, email, john@example.com"} onChange={(e) => setLines(e.target.value)} />
-            <p><button className="primary" onClick={() => run(async () => { await api("/api/donors", "POST", { lines }); setLines(""); })}>Add to list</button></p>
-          </section>
-          <section className="card">
-            <h2>Donors ({s.donors.length})</h2>
-            {s.donors.length === 0 && <p className="hint">None yet.</p>}
-            {s.donors.map((d) => (
-              <div className="donor" key={d.id}>
+          {err && <p className="err">{err}</p>}
+        </section>
+      )}
+
+      {sent.length > 0 && (
+        <section className="card">
+          <details>
+            <summary>Sent ({sent.length}). Tap if a donor replied.</summary>
+            {sent.map((d) => (
+              <div className="item" key={d.id}>
                 <div className="row">
-                  <b>{d.name}</b><span className="tag">{d.channel}</span><span className={`tag ${d.status}`}>{d.status}</span>
-                  {d.proofCheck && <span className={`tag v-${d.proofCheck.verdict}`}>{VERDICT[d.proofCheck.verdict]}</span>}
-                  <button onClick={() => run(() => api(`/api/donors/${d.id}`, "DELETE"))}>Remove</button>
+                  <b className="grow">{d.name}</b>
+                  {d.status === "replied" && <span className="tag ok">replied</span>}
+                  {d.proofCheck && d.proofCheck.verdict !== "unchecked" && <span className={`tag ${VERDICT[d.proofCheck.verdict][1]}`}>{VERDICT[d.proofCheck.verdict][0]}</span>}
                 </div>
-                {d.proofImg && (
-                  <p>
-                    <a href={`/api/img/${d.proofImg}`} target="_blank" rel="noreferrer">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={`/api/img/${d.proofImg}`} alt={`Proof for ${d.name}`} className="shot" />
-                    </a>
-                    {d.proofCheck && <span className="hint">{d.proofCheck.reason}</span>}
-                  </p>
-                )}
-                {d.flags.length > 0 && <p className="err">{d.flags.join("; ")}</p>}
-                {d.replyText && <p>Reply: &quot;{d.replyText}&quot;</p>}
+                {d.proofCheck && (d.proofCheck.verdict === "mismatch" || d.proofCheck.verdict === "unclear") && <p className="err" style={{ margin: 0 }}>{d.proofCheck.reason}</p>}
+                {d.status === "sent" &&
+                  (replyFor === d.id ? (
+                    <div className="row">
+                      <input className="grow" value={reply} placeholder={`Paste what ${d.name} replied`} onChange={(e) => setReply(e.target.value)} aria-label="Donor reply" />
+                      <button className="primary small" onClick={() => { void set(d.id, "replied", { replyText: reply }); setReplyFor(""); setReply(""); }}>Save</button>
+                    </div>
+                  ) : (
+                    <div className="row">
+                      <button className="small" onClick={() => setReplyFor(d.id)}>They replied</button>
+                      <button className="small" onClick={() => set(d.id, "todo")}>Undo</button>
+                    </div>
+                  ))}
               </div>
             ))}
-          </section>
-          <section className="card">
-            <h2>Settings</h2>
-            {field("teammateName", "Teammate name")}
-            {field("dailyTarget", "DMs per task when you give no number", "number")}
-            {field("timezone", "Your timezone (example: Africa/Lagos)")}
-            {field("workStartHour", "Work starts (hour, 0-23)", "number")}
-            {field("workEndHour", "Work ends (hour, 1-24). Daily report is sent then.", "number")}
-            {field("checkinMinutes", "Ask for an update every (minutes)", "number")}
-            <label><input type="checkbox" style={{ width: "auto" }} checked={form.requireProof} onChange={(e) => setForm({ ...form, requireProof: e.target.checked })} /> Every &quot;Mark sent&quot; needs a screenshot</label>
-            <label>Message template. Use {"{name}"} and {"{teammate}"}.</label>
-            <textarea value={form.template} onChange={(e) => setForm({ ...form, template: e.target.value })} />
-            <p><button className="primary" onClick={() => run(() => api("/api/settings", "PUT", form))}>Save</button></p>
-          </section>
-        </div>
-      </div>
-    </main>
+          </details>
+        </section>
+      )}
+    </>
   );
 }
