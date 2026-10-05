@@ -5,7 +5,12 @@ and screenshots, and tells you what is real. You do not chase her.
 
 ## How you use it
 
-**You** open your private link. In "Tell the agent" write:
+**Two different pages:**
+- **You:** `https://YOUR-APP/manager`. Enter your password once per phone. Five wrong tries lock it for 15 minutes.
+- **Areeba:** her own private link (copy it from the Donors tab). It opens only her task and her chat.
+  She cannot open your page without your password, and the server refuses all your data to her.
+
+**You** open your page. In "Give Areeba a task" write:
 - `Areeba send 20 DMs by 5pm, check every 20 min`  -> the agent gives her the task, asks her questions,
   and checks in every 20 minutes. When she answers, it waits another 20 minutes before asking again.
   You get her answers as alerts.
@@ -62,14 +67,17 @@ Free plans change. Check the limits and terms. Vercel's free plan is for non-com
 6. **cron-job.org**: make a free job, every 1 minute, URL
    `https://YOUR-APP.vercel.app/api/agent/run?key=YOUR_CRON_SECRET`
    (Vercel's own free cron is once a day. That is too slow.)
-7. Open `https://YOUR-APP.vercel.app/?k=YOUR_MANAGER_KEY`. This is **your private link**. Save it.
-   Set your timezone in Settings. Add donors. Copy **Areeba's link** and send it to her.
+7. Open `https://YOUR-APP.vercel.app/manager` and enter your password (MANAGER_PASSWORD).
+   Set your timezone in Settings. Add donors. Copy **Areeba's link** (Donors tab) and send it to her.
 8. On both phones press **Turn on alerts**, then **Send test**.
 
-Never share your own link. If Areeba's link leaks, press **Make new link**.
+Never share your password. If Areeba's link leaks, press **Make a new link**.
 
 ### Alerts when the app is closed
-- **Android / computer**: press "Turn on alerts" once. Works with the browser closed.
+- **Android phone**: press "Turn on alerts" once. Alerts arrive even when Chrome is closed and the phone is locked.
+  Do not "Force stop" Chrome in phone settings, and turn off battery saving for Chrome if alerts come late.
+- **Computer**: Chrome must still be running in the background (on Windows: Chrome settings -> System ->
+  "Continue running background apps"). If Chrome is fully quit, alerts wait until it opens.
 - **iPhone** (iOS 16.4 or newer): Safari -> Share -> **Add to Home Screen**. Open it from the Home Screen,
   then press "Turn on alerts". Do this on Areeba's phone too. The link is saved in the Home Screen app,
   so it opens already signed in.
@@ -78,7 +86,7 @@ Never share your own link. If Areeba's link leaks, press **Make new link**.
 ```bash
 cd donor-agent && npm install && npm run dev
 ```
-Open http://localhost:43118/?k=manager-dev-key . Data is saved in `data/`. The agent runs every minute by itself.
+Open http://localhost:43118/manager and enter the password from `.env.local`. Data is saved in `data/`. The agent runs every minute by itself.
 Alerts to a phone need the internet (HTTPS), so test those after you deploy.
 
 ## Privacy

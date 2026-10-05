@@ -23,7 +23,8 @@ export async function notify(role: Role, title: string, body: string) {
   await Promise.all(
     subs.map(async (s) => {
       try {
-        await webpush.sendNotification(s.sub, JSON.stringify({ title, body }));
+        // High urgency wakes a sleeping phone. TTL keeps the alert for a day if the phone is off.
+        await webpush.sendNotification(s.sub, JSON.stringify({ title, body }), { TTL: 86_400, urgency: "high" });
       } catch (e) {
         const code = (e as { statusCode?: number }).statusCode;
         if (code === 404 || code === 410) dead.push(s.sub.endpoint);
