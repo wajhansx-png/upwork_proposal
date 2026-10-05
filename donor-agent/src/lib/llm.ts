@@ -1,6 +1,7 @@
 /**
  * AI is optional and free.
- * Best: one free GEMINI_API_KEY (aistudio.google.com). It reads chat and screenshots.
+ * OPENAI_API_KEY (GPT, paid by use) reads chat and screenshots. Model: OPENAI_MODEL, default gpt-4o-mini.
+ * Free option: GEMINI_API_KEY (aistudio.google.com). It also reads chat and screenshots.
  * Also works: GROQ_API_KEY (console.groq.com), or any OpenAI-compatible LLM_BASE_URL + LLM_API_KEY + LLM_MODEL.
  * With no key, text chat tries a free shared service (no screenshots), then falls back to plain rules.
  * Set FREE_SHARED_AI=off to never use the shared service.
@@ -18,6 +19,14 @@ function cfg(needVision = false): Cfg | null {
   const list: Cfg[] = [];
   if (e.LLM_API_KEY && e.LLM_BASE_URL && e.LLM_MODEL)
     list.push({ base: e.LLM_BASE_URL, key: e.LLM_API_KEY, model: e.LLM_MODEL, vision: e.LLM_VISION === "1", kind: "key" });
+  if (e.OPENAI_API_KEY)
+    list.push({
+      base: e.OPENAI_BASE_URL || "https://api.openai.com/v1",
+      key: e.OPENAI_API_KEY,
+      model: e.OPENAI_MODEL || "gpt-4o-mini",
+      vision: true,
+      kind: "key",
+    });
   if (e.GEMINI_API_KEY)
     list.push({
       base: "https://generativelanguage.googleapis.com/v1beta/openai",

@@ -667,13 +667,22 @@ function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
         </div>
         {a.note && <p className="hint" style={{ marginTop: 8 }}>{a.note}</p>}
       </section>
+      {sys?.ai === "key" && s.agent?.llmStatus?.startsWith("error") && (
+        <section className="card warn">
+          <h2>AI key problem</h2>
+          <p className="hint">The AI did not answer: {s.agent.llmStatus}. The agent uses simple rules until this is fixed. Check the key, its credit, or the model name.</p>
+        </section>
+      )}
+      {sys?.ai === "key" && s.agent?.llmStatus === "ok" && (
+        <section className="card"><p className="hint" style={{ margin: 0 }}>AI is working ✓</p></section>
+      )}
       {sys && (!sys.push || !sys.persistent || sys.ai !== "key") && (
         <section className="card warn">
           <h2>Still to set up</h2>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
             {!sys.push && <li>Push keys: needed for alerts when the app is closed.</li>}
             {!sys.persistent && <li>Database: needed when the app is online.</li>}
-            {sys.ai !== "key" && <li>Free Gemini key: so the agent reads screenshots and understands more.</li>}
+            {sys.ai !== "key" && <li>AI key (GPT or free Gemini): so the agent reads screenshots and understands more.</li>}
           </ul>
         </section>
       )}
