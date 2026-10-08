@@ -9,7 +9,7 @@
 import { withDb } from "./db";
 
 interface Cfg {
-  /** "openai" gets low-detail images (about 9x cheaper per screenshot). */
+  /** "openai" gets high-detail images, so names and message text are read correctly. */
   provider?: "openai";
   base: string;
   key: string;
@@ -63,8 +63,8 @@ export interface LlmResult {
   status: string;
 }
 
-/** Most paid AI calls per day (AI_DAILY_LIMIT, default 100). After that the app uses rules until tomorrow. */
-const dailyLimit = () => Math.max(0, Number(process.env.AI_DAILY_LIMIT ?? 100) || 0);
+/** Most paid AI calls per day (AI_DAILY_LIMIT, default 400). A safety net only: normal work stays far below it. After that the app uses rules until tomorrow. */
+const dailyLimit = () => Math.max(0, Number(process.env.AI_DAILY_LIMIT ?? 400) || 0);
 
 /** Counts a paid call. Returns false when today's limit is reached. */
 async function takeCall(): Promise<boolean> {
@@ -88,7 +88,7 @@ export async function llm(system: string, user: string, opts: { json?: boolean; 
     const userContent = opts.image
       ? [
           { type: "text", text: user },
-          { type: "image_url", image_url: c.provider === "openai" ? { url: opts.image, detail: "low" } : { url: opts.image } },
+          { type: "image_url", image_url: c.provider === "openai" ? { url: opts.image, detail: "high" } : { url: opts.image } },
         ]
       : user;
     const modernGpt = /^gpt-5/.test(c.model);
@@ -97,7 +97,8 @@ export async function llm(system: string, user: string, opts: { json?: boolean; 
       headers: { ...(c.key ? { Authorization: `Bearer ${c.key}` } : {}), "content-type": "application/json" },
       body: JSON.stringify({
         model: c.model,
-        ...(modernGpt ? { max_completion_tokens: opts.image ? 500 : 350 } : { temperature: 0.2, max_tokens: opts.image ? 250 : 200 }),
+        // GPT-5 style models also spend tokens on hidden thinking. A small limit gives an EMPTY reply, so give room and ask for little thinking.
+        ...(modernGpt ? { max_completion_tokens: 2000, reasoning_effort: "minimal" } : { temperature: 0.1, max_tokens: opts.image ? 600 : 500 }),
         ...(opts.json && c.kind === "key" ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: system },

@@ -19,6 +19,15 @@ export function checkDelay(task: Task) {
   return Math.max(2, Math.min(task.checkEvery ?? 5, 10));
 }
 
+/** Minutes until the next report request. The manager's "check every N min" applies while she is working. */
+export function nextDelayMin(task: Task): number {
+  const phase = taskPhase(task);
+  if (phase === "awaiting-start") return 3;
+  if (phase === "blocked") return 10;
+  if (phase === "awaiting-proof") return 5;
+  return task.checkEvery ?? 5;
+}
+
 export function nextCheck(task: Task, now: number) {
   return new Date(now + checkDelay(task) * 60_000).toISOString();
 }

@@ -15,6 +15,7 @@ const fakeDb = { readDb: async () => structuredClone(db), withDb: async (fn) => 
 const load = Module._load;
 Module._load = function (request, parent, ...rest) {
   const from = parent?.filename ?? '';
+  if (from.endsWith(path.join('lib', 'understand.ts')) && request === './llm') return { llm: async () => ({ text: null, status: 'off' }), parseJson: () => null };
   if (from.endsWith(path.join('lib', 'evaluate.ts')) || from.endsWith(path.join('lib', 'agent.ts'))) {
     if (request === './db') return fakeDb;
     if (request === './push') return { notify: async (...a) => pushes.push(a) };

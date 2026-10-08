@@ -10,12 +10,15 @@ let vision = {is_chat:false,message_sent:false,summary:'A promotional poster'};
 const pushes=[];
 const original = Module._load;
 Module._load = function(request,parent,...rest){
-  if(parent?.filename.endsWith(path.join('lib','agent.ts'))){
+  const from = parent?.filename ?? '';
+  if(from.endsWith(path.join('lib','agent.ts'))){
     if(request === './db') return {readDb:async()=>structuredClone(db),withDb:async fn=>fn(db),newId:()=>crypto.randomUUID(),kvGetImage:async()=>null};
     if(request === './push') return {notify:async(...args)=>pushes.push(args)};
-    if(request === './llm') return {llm:async()=>({text:'Please tell me your progress.',status:'ok'}),parseJson:JSON.parse,visionEnabled:()=>true};
+    if(request === './llm') return {visionEnabled:()=>true};
     if(request === './vision') return {readScreenshot:async()=>({seen:vision,status:'ok'}),nameMatches:()=>false,checkProof:async()=>null};
   }
+  // No AI here: the rules read the messages, so this test is deterministic.
+  if(from.endsWith(path.join('lib','understand.ts')) && request === './llm') return {llm:async()=>({text:null,status:'off'}),parseJson:()=>null};
   return original.call(this,request,parent,...rest);
 };
 const {handleTeammateMessage,runAgent}=require('../src/lib/agent.ts');

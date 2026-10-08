@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start -p 43118",
     "lint": "eslint",
-    "vapid": "web-push generate-vapid-keys"
+    "vapid": "web-push generate-vapid-keys",
+    "test": "node scripts/nlp-regression.cjs && node scripts/understand-regression.cjs && node scripts/regression.cjs && node scripts/storage-regression.cjs && node scripts/evaluate-regression.cjs"
   },
   "dependencies": {
     "@vercel/blob": "2.8.0",

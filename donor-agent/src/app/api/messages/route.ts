@@ -12,19 +12,23 @@ export async function POST(req: NextRequest) {
   const text = String(body.text ?? "").trim().slice(0, 2000);
   if (!text && !body.image) return NextResponse.json({ error: "Write a message first." }, { status: 400 });
 
+  // Slow work (phone alerts, reading screenshots, reviews) runs after the reply, so nobody waits for it.
+  const defer = (fn: () => Promise<void>) => after(() => fn().catch((e) => console.error("background work failed", e)));
   try {
     if (role === "manager") {
       if (!text) return NextResponse.json({ error: "Write a message first." }, { status: 400 });
-      await (body.to === "teammate" ? handleManagerToTeammate(text) : handleManagerMessage(text));
+      await (body.to === "teammate" ? handleManagerToTeammate(text, { defer }) : handleManagerMessage(text, { defer }));
     } else {
       const image: ChatImage | null = body.image ? await saveImage(body.image) : null;
-      await handleTeammateMessage(text, image);
+      await handleTeammateMessage(text, image, { defer });
     }
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
-  await ensureFollowup().catch(() => undefined);
-  // A task that just became ready for review gets its quality review, without making the sender wait.
-  after(() => evaluatePending().catch((e) => console.error("task review failed", e)));
+  defer(async () => {
+    await ensureFollowup().catch(() => undefined);
+    // A task that just became ready for review gets its quality review.
+    await evaluatePending();
+  });
   return NextResponse.json({ ok: true });
 }
