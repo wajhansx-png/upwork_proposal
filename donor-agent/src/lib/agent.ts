@@ -378,15 +378,12 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
         d.tasks.push(task);
         d.agent.pendingAssignment = undefined;
         const when = fmtWhen(deadline, now, tz);
-        const how = intent.taskKind === "dms"
-          ? "Send the DMs in WhatsApp using the list and instructions your manager already gave you. Report your total here; you do not need to add donors to this app."
-          : "Complete the task and report your result here.";
         const cadence = intent.gapMinutes ? `\n\nYour DM timer is on: one reminder every ${fmtMinutes(intent.gapMinutes)}.` : "";
         const extra = intent.brief ? `\nSpecial instructions: ${intent.brief}` : "";
         say(
           d,
           "teammate",
-          `NEW TASK\n\n${title}\nDue: ${when}${extra}\n\n${how}${cadence}\n\nReply “I started” when you begin. Use the + button or tell me how many you have sent in total. If anything blocks you, tell me here.`,
+          `New task: ${title}\nDue ${when}${extra}${cadence}\n\nTap “I started” when you begin. Tap + for each DM.`,
           "agent",
           { kind: "kickoff" },
         );
@@ -553,13 +550,13 @@ function buildReply(u: Understood, t: Task | undefined, d: Db, now: number, info
   const parts: string[] = [u.sentence ?? ruleSentence(u, info.reportedNow)];
   if (info.reportedNow && t.kind === "dms") {
     parts.push(
-      info.clampedFrom ? `You wrote ${info.clampedFrom}, but the task is ${t.target}. I recorded ${t.target}.` : `Recorded: ${reported} of ${t.target} DMs.`,
+      info.clampedFrom ? `You wrote ${info.clampedFrom}, but the task is ${t.target}. I recorded ${t.target}.` : `${reported} of ${t.target} done.`,
     );
   }
   if (info.imageRejectedNow) parts.push(info.imageRejectedNow);
   else if (info.imageChecking) parts.push("I am checking your screenshot now.");
   else if (u.start === "started") parts.push(`I will check in again in ${fmtMinutes(nextDelayMin(t))}.`);
-  else if (!u.blocked && !u.question && !u.ack) {
+  else if (!u.blocked && !u.question && !u.ack && !info.reportedNow) {
     const step = nextStep(t);
     if (step && !parts[0].includes(step)) parts.push(step);
   } else if (u.blocked) parts.push(nextStep(t));
@@ -707,8 +704,8 @@ export async function setProgress(total: number, opts: { defer?: Defer } = {}): 
   const pushes: Push[] = [];
   await withDb((d) => {
     const name = d.settings.teammateName;
-    const t = [...d.tasks].reverse().find((x) => x.status === "open" && x.kind === "dms");
-    if (!t) throw new Error("There is no open DM task.");
+    const t = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.kind === "dms");
+    if (!t) throw new Error("There is no DM task.");
     const next = Math.max(0, Math.min(t.target, Math.round(total)));
     d.agent.teammateLastSeenAt = iso(now);
     t.unanswered = 0;

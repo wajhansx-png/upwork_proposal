@@ -73,5 +73,7 @@ const myChat=()=>db.messages.filter(m=>m.owner==='manager');
   await setProgress(10);
   assert.equal(db.tasks[0].status,'review','all sent moves the task to review');
   assert.match(liveUpdate(db.tasks[0]).detail,/10 of 10 DMs sent/);
+  db.tasks.push({...makeTask(),id:'late',status:'missed',reportedDone:2});
+  await setProgress(7); assert.equal(db.tasks.at(-1).reportedDone,7,'+ and − still work after the deadline');
   console.log('PASS: start check-in, 4-minute nudges with no limit, manager silent until she replies, her count counts, no screenshot asks, pictures saved, quiet +/- progress, completion.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

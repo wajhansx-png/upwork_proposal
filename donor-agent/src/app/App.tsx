@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { AgentState, ChatMessage, Role, Settings, Task } from "@/lib/types";
 
 interface State {
@@ -175,6 +175,55 @@ function useAlerts(s: State) {
   return { subscribed, note, enable, test };
 }
 
+// ---------- shared pieces ----------
+
+type Tone = "good" | "warn" | "bad" | "idle";
+
+/** A progress ring. The number sits inside it. */
+function Ring({ value, max, tone, size, children }: { value: number; max: number; tone: Tone; size: number; children: ReactNode }) {
+  const stroke = Math.max(8, Math.round(size / 18));
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const pct = max ? Math.min(1, value / max) : 0;
+  return (
+    <div className={`ring ${tone}`} style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <circle className="ring-track" cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} fill="none" />
+        <circle
+          className="ring-fill"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          strokeWidth={stroke}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - pct)}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+      <div className="ring-center">{children}</div>
+    </div>
+  );
+}
+
+function Bubble({ m, who }: { m: ChatMessage; who: string }) {
+  const mine = m.from === "user";
+  return (
+    <div className={`bubble ${mine ? "mine" : m.from === "manager" ? "boss" : "them"}`}>
+      {!mine && <span className="bubble-who">{who}</span>}
+      {m.img && (
+        <a href={`/api/img/${m.img}`} target="_blank" rel="noreferrer">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/api/img/${m.img}`} alt="Picture" className="shot" />
+        </a>
+      )}
+      <span className="bubble-text">{m.text}</span>
+      <span className="bubble-time">{time(m.at)}</span>
+    </div>
+  );
+}
+
 // ---------- manager ----------
 
 function Manager({ s, refresh }: { s: State; refresh: () => void }) {
@@ -202,12 +251,10 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
       setOptimistic(null);
     }
   }, [busy, lastAgentId]);
-  const send = async () => {
-    if (busy || !text.trim()) return;
-    const outgoing = text.trim();
+  const post = async (outgoing: string) => {
+    if (busy || !outgoing.trim()) return;
     lastAgentAtSend.current = lastAgentId;
     setOptimistic({ id: `pending-${Date.now()}`, owner: "manager", from: "user", text: outgoing, at: new Date().toISOString() });
-    setText("");
     setBusy(true);
     setError("");
     try {
@@ -219,46 +266,74 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
       setOptimistic(null);
     }
   };
+  const send = () => {
+    const t = text.trim();
+    setText("");
+    void post(t);
+  };
   const sent = task?.kind === "dms" ? task.reportedDone ?? 0 : task && (task.status === "review" || task.status === "done") ? 1 : 0;
   const target = task?.kind === "dms" ? task.target : task ? 1 : 0;
+  const open = task?.status === "open";
+  const tone: Tone = !task ? "idle" : task.status === "review" || task.status === "done" ? "good" : task.blockedReason || task.status === "missed" ? "bad" : task.unanswered >= 2 ? "warn" : "good";
+  const label = !task
+    ? "No task"
+    : task.status === "review" || task.status === "done"
+      ? "Done"
+      : task.blockedReason
+        ? "Needs help"
+        : task.status === "missed"
+          ? "Missed"
+          : task.status === "cancelled"
+            ? "Cancelled"
+            : task.unanswered >= 2
+              ? "No update"
+              : task.startedAt
+                ? "Working"
+                : "Not started";
   return (
-    <main className="mgr">
-      <header className="mgr-top">
-        <button className="small" aria-label="Settings" onClick={() => setSettingsOpen(true)}>⚙</button>
+    <main className="p-shell">
+      <header className="p-top">
+        <div>
+          <p className="p-eyebrow">{name}</p>
+          <h1 className="p-title">{task ? task.title : "No task yet"}</h1>
+        </div>
+        <button className="icon-btn" aria-label="Settings" onClick={() => setSettingsOpen(true)}>⚙</button>
       </header>
-      <section className={`mgr-center ${chatOpen ? "up" : ""}`} aria-live="polite">
-        <strong className="mgr-count">{sent}/{target}</strong>
-        <div className="bar mgr-bar"><i style={{ width: `${target ? Math.min(100, Math.round((sent / target) * 100)) : 0}%` }} /></div>
-        {!task && <p className="hint">No task yet. Open the chat to give {name} one.</p>}
+
+      <section className={`p-hero ${chatOpen ? "compact" : ""}`} aria-live="polite">
+        <Ring value={sent} max={target} tone={tone} size={chatOpen ? 150 : 250}>
+          <strong className="ring-num">{sent}</strong>
+          <span className="ring-of">of {target}</span>
+        </Ring>
+        <span className={`status-pill ${tone}`}><i />{label}</span>
+        {task && open && <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} />}
       </section>
-      <button className="chat-toggle" aria-expanded={chatOpen} onClick={() => setChatOpen(!chatOpen)}>
-        Chat {chatOpen ? "▴" : "▾"}
+
+      <button className={`chat-pill ${chatOpen ? "on" : ""}`} aria-expanded={chatOpen} onClick={() => setChatOpen(!chatOpen)}>
+        {chatOpen ? "Hide chat" : "Chat"}
+        <span aria-hidden>{chatOpen ? "▴" : "▾"}</span>
       </button>
+
       {chatOpen && (
-        <section className="desk-conversation">
-          <div className="desk-messages" ref={thread}>
-            {!conversation.length && <p className="hint">Tell me the task, like: “{name} send 100 DMs by 9pm”.</p>}
-            {displayed.map((m) => (
-              <div key={m.id} className={`desk-message ${m.from === "user" ? "mine" : "agent"}`}>
-                <small>{m.from === "user" ? "You" : AGENT} · {time(m.at)}</small>
-                {m.img && (
-                  <a href={`/api/img/${m.img}`} target="_blank" rel="noreferrer">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`/api/img/${m.img}`} alt="Picture from Areeba" className="shot" />
-                  </a>
-                )}
-                {m.text}
-              </div>
-            ))}
-            {busy && <p className="typing-indicator"><i /><i /><i /> typing</p>}
+        <section className="p-chat">
+          <div className="p-thread" ref={thread}>
+            {!conversation.length && <p className="p-empty">Type a task, like “{name} send 100 DMs by 9pm”.</p>}
+            {displayed.map((m) => <Bubble key={m.id} m={m} who={AGENT} />)}
+            {busy && <p className="typing"><i /><i /><i /></p>}
           </div>
-          <form className="desk-composer" onSubmit={(e) => { e.preventDefault(); void send(); }}>
-            <input aria-label={`Talk to ${AGENT}`} placeholder="Give a task or ask for an update…" value={text} onChange={(e) => setText(e.target.value)} />
-            <button className="primary" disabled={busy || !text.trim()}>Send</button>
+          <div className="p-chips">
+            <button disabled={busy} onClick={() => void post(`How is ${name} doing?`)}>How is she?</button>
+            {open && <button disabled={busy} onClick={() => void post("Tell her to send your update now")}>Remind her</button>}
+            {open && <button disabled={busy} onClick={() => confirm("Cancel this task?") && void post("cancel")}>Cancel task</button>}
+          </div>
+          <form className="p-composer" onSubmit={(e) => { e.preventDefault(); send(); }}>
+            <input aria-label={`Talk to ${AGENT}`} placeholder="Give a task…" value={text} onChange={(e) => setText(e.target.value)} />
+            <button className="send-btn" aria-label="Send" disabled={busy || !text.trim()}>➤</button>
           </form>
           {error && <p role="alert" className="err">{error}</p>}
         </section>
       )}
+
       {settingsOpen && (
         <div className="modal-backdrop" onMouseDown={() => setSettingsOpen(false)}>
           <section className="settings-modal" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(e) => e.stopPropagation()}>
@@ -268,6 +343,21 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
         </div>
       )}
     </main>
+  );
+}
+
+function DueLine({ deadlineAt, tz }: { deadlineAt: string; tz?: string }) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const left = new Date(deadlineAt).getTime() - nowMs;
+  const at = new Date(deadlineAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz || undefined });
+  return (
+    <p className={`due ${left <= 0 ? "over" : ""}`}>
+      <i /> Due {at} · <b>{left > 0 ? countdown(left) : "time is up"}</b>
+    </p>
   );
 }
 
@@ -331,21 +421,16 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [local, setLocal] = useState<number | null>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const done = task?.reportedDone ?? 0;
   const target = task?.target ?? 0;
   const value = local ?? done;
   const [optimistic, setOptimistic] = useState<ChatMessage | null>(null);
-  const messages = s.messages;
+  const messages = s.messages.slice(-60);
   const displayed = optimistic ? [...messages, optimistic] : messages;
   const lastAgentId = messages.filter((m) => m.from !== "user").at(-1)?.id;
   const lastAgentAtSend = useRef<string | undefined>(undefined);
   const list = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
   const lastShownId = displayed.at(-1)?.id;
   useEffect(() => {
     const el = list.current;
@@ -376,10 +461,12 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
       setOptimistic(null);
     }
   };
+  const canCount = !!task && task.kind === "dms" && (task.status === "open" || task.status === "missed");
   const tap = (next: number) => {
-    if (!task || task.kind !== "dms") return;
+    if (!canCount) return;
     const v = Math.max(0, Math.min(target, next));
     setLocal(v);
+    navigator.vibrate?.(10);
     // Wait until she stops tapping, then save once.
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(async () => {
@@ -391,58 +478,59 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
         setErr((e as Error).message);
         setLocal(null);
       }
-    }, 1200);
+    }, 1000);
   };
-  const pct = target ? Math.min(100, Math.round((value / target) * 100)) : 0;
-  const leftMs = task ? new Date(task.deadlineAt).getTime() - nowMs : 0;
+  const tone: Tone = !task ? "idle" : task.status === "missed" ? "bad" : "good";
   return (
-    <main className="simple-shell">
-      <header className="simple-top">
-        <h1>Hi {name}</h1>
-        {alerts.subscribed === false && <button className="small primary" onClick={alerts.enable}>Turn on alerts</button>}
+    <main className="p-shell">
+      <header className="p-top">
+        <div>
+          <p className="p-eyebrow">Hi {name}</p>
+          <h1 className="p-title">{task ? task.title : "No task right now"}</h1>
+        </div>
+        {alerts.subscribed === false && <button className="alert-btn" onClick={alerts.enable}>🔔 Alerts</button>}
       </header>
       {alerts.note && <p className="hint">{alerts.note}</p>}
-      {task ? (
-        <section className="simple-progress" aria-label="Your task">
-          <b>{task.title}</b>
-          <p className="due-red">DUE {new Date(task.deadlineAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: s.settings.timezone || undefined })} · {countdown(leftMs)}</p>
+
+      {task && (
+        <section className="p-card">
+          <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} />
           {task.kind === "dms" ? (
-            <>
-              <div className="simple-counter">
-                <button className="round" aria-label="One less" disabled={value <= 0 || task.status !== "open"} onClick={() => tap(value - 1)}>−</button>
-                <div className="simple-numbers"><strong>{value}</strong><span>of {target} sent</span></div>
-                <button className="round" aria-label="One more" disabled={value >= target || task.status !== "open"} onClick={() => tap(value + 1)}>+</button>
-              </div>
-              <div className="bar"><i style={{ width: `${pct}%` }} /></div>
-            </>
+            <div className="counter">
+              <button className="minus" aria-label="One less" disabled={!canCount || value <= 0} onClick={() => tap(value - 1)}>−</button>
+              <Ring value={value} max={target} tone={tone} size={150}>
+                <strong className="ring-num">{value}</strong>
+                <span className="ring-of">of {target}</span>
+              </Ring>
+              <button className="plus" aria-label="One more" disabled={!canCount || value >= target} onClick={() => tap(value + 1)}>+</button>
+            </div>
           ) : (
-            <p className="hint">Reply here when it is done.</p>
+            <p className="hint">Tell {AGENT} when it is done.</p>
           )}
         </section>
-      ) : (
-        <section className="simple-progress"><p style={{ margin: 0 }}>No task right now.</p></section>
       )}
-      <section className="simple-chat">
-        <div className="simple-messages" ref={list} aria-live="polite">
-          {!messages.length && <p className="hint" style={{ textAlign: "center" }}>Say &ldquo;I started&rdquo; when you begin.</p>}
-          {displayed.map((m) => (
-            <div key={m.id} className={`simple-msg ${m.from === "user" ? "me" : m.from === "manager" ? "boss" : "agent"}`}>
-              <small>{m.from === "user" ? "You" : m.from === "manager" ? "Manager" : AGENT} · {time(m.at)}</small>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {m.img && <a href={`/api/img/${m.img}`} target="_blank" rel="noreferrer"><img src={`/api/img/${m.img}`} alt="" className="shot" /></a>}
-              {m.text}
-            </div>
-          ))}
-          {busy && <p className="typing-indicator"><i /><i /><i /></p>}
+
+      <section className="p-chat">
+        <div className="p-thread" ref={list} aria-live="polite">
+          {!messages.length && <p className="p-empty">Your tasks and messages show here.</p>}
+          {displayed.map((m) => <Bubble key={m.id} m={m} who={m.from === "manager" ? "Manager" : AGENT} />)}
+          {busy && <p className="typing"><i /><i /><i /></p>}
         </div>
-        <SimpleComposer onSend={send} busy={busy} />
+        {task && (task.status === "open" || task.status === "missed") && (
+          <div className="p-chips">
+            {!task.startedAt && <button className="hot" disabled={busy} onClick={() => void send("I started")}>I started</button>}
+            <button disabled={busy} onClick={() => void send("I have a problem")}>I have a problem</button>
+            {task.kind !== "dms" && <button disabled={busy} onClick={() => void send("All done")}>All done</button>}
+          </div>
+        )}
+        <Composer onSend={send} busy={busy} placeholder={`Message ${AGENT}…`} />
         {err && <p className="err">{err}</p>}
       </section>
     </main>
   );
 }
 
-function SimpleComposer({ onSend, busy }: { onSend: (text: string, image?: string) => Promise<void>; busy: boolean }) {
+function Composer({ onSend, busy, placeholder }: { onSend: (text: string, image?: string) => Promise<void>; busy: boolean; placeholder: string }) {
   const [text, setText] = useState("");
   const file = useRef<HTMLInputElement>(null);
   const submit = async () => {
@@ -451,7 +539,7 @@ function SimpleComposer({ onSend, busy }: { onSend: (text: string, image?: strin
     await onSend(t);
   };
   return (
-    <form className="simple-composer" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+    <form className="p-composer" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
       <input
         ref={file}
         type="file"
@@ -469,9 +557,9 @@ function SimpleComposer({ onSend, busy }: { onSend: (text: string, image?: strin
           }
         }}
       />
-      <button type="button" aria-label="Send a picture" onClick={() => file.current?.click()} disabled={busy}>📎</button>
-      <input className="grow" value={text} placeholder={`Write to ${AGENT}…`} onChange={(e) => setText(e.target.value)} disabled={busy} />
-      <button className="primary" type="submit" disabled={busy || !text.trim()}>Send</button>
+      <button type="button" className="attach-btn" aria-label="Send a picture" onClick={() => file.current?.click()} disabled={busy}>📎</button>
+      <input value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} disabled={busy} aria-label="Message" />
+      <button className="send-btn" type="submit" aria-label="Send" disabled={busy || !text.trim()}>➤</button>
     </form>
   );
 }
