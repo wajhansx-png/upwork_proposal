@@ -240,3 +240,34 @@ html{-webkit-tap-highlight-color:transparent}
 button,a,input{-webkit-tap-highlight-color:transparent}
 .counter button:focus,.counter button:focus-visible,.p-chips button:focus,.send-btn:focus,.attach-btn:focus,.chat-pill:focus,.icon-btn:focus{outline:none}
 .counter button{-webkit-user-select:none;-webkit-touch-callout:none}
+
+/* ===== Areeba: chat gets the room ===== */
+.p-chips{flex-wrap:wrap}
+.her{gap:10px}
+.her-top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex:none}
+.her-top h1{margin:0;font-size:1.15rem;font-weight:750;letter-spacing:-.01em}
+.her-top .alert-btn{min-height:36px;padding:6px 14px;font-size:.88rem}
+.her-card{flex:none;display:flex;flex-direction:column;gap:10px;padding:12px 14px;border-radius:22px;background:var(--glass),var(--card);border:1px solid var(--edge);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.her-card-head{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0}
+.her-task{font-size:1rem;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.her .due{padding:4px 10px;font-size:.8rem;gap:6px;flex:none;align-self:flex-start;white-space:nowrap}
+.her .due i{width:6px;height:6px}
+.her .counter{padding:0 4px}
+.her .ring-num{font-size:2.3rem}
+.her .ring-of{font-size:.8rem;margin-top:2px}
+.her .minus{width:52px;height:52px;font-size:1.7rem}
+.her .plus{width:70px;height:70px;font-size:2.4rem}
+.her-slim{flex:none;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:16px;background:var(--glass),var(--card);border:1px solid var(--edge)}
+.her-slim>b{font-size:1rem;font-variant-numeric:tabular-nums;white-space:nowrap}
+.her-slim .due{align-self:center}
+.her .p-chat{padding:10px;border-radius:22px}
+.her .p-thread{gap:8px}
+.her .bubble{max-width:84%;padding:8px 12px 6px;border-radius:18px}
+.her .bubble-text{font-size:.97rem;line-height:1.45}
+.her .bubble-who{font-size:.68rem;margin-bottom:2px}
+.her .bubble-time{font-size:.64rem;margin-top:2px}
+.her .p-chips{flex-wrap:nowrap;overflow:hidden;gap:6px;padding:8px 0}
+.her .p-chips button{flex:1 1 0;min-width:0;min-height:40px;padding:6px 8px;font-size:.86rem;overflow:hidden;text-overflow:ellipsis}
+.her .p-composer{padding:4px}
+.her .p-composer input:not([type=file]){padding:9px 10px}
+.her .send-btn,.her .attach-btn{width:42px;height:42px}

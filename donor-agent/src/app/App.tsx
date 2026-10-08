@@ -244,11 +244,11 @@ function herChips(task: Task | undefined, messages: ChatMessage[], nowMs: number
   const left = new Date(task.deadlineAt).getTime() - nowMs;
   const out: Chip[] = [];
   if (task.breakUntil && new Date(task.breakUntil).getTime() > nowMs) return [{ label: "I'm back", text: "I'm back, continuing now", hot: true }];
-  if (task.blockedReason) return [{ label: "It's fixed now", text: "It's fixed now, back to work", hot: true }, { label: "Still not working", text: "Still not working, I need help" }];
+  if (task.blockedReason) return [{ label: "Fixed now", text: "It's fixed now, back to work", hot: true }, { label: "Still broken", text: "Still not working, I need help" }];
   if (!task.startedAt) {
     out.push({ label: "I started", text: "I started", hot: true });
-    out.push(task.brief ? { label: "What's my task?", text: "What is my task?" } : { label: "What should I write?", text: "What should I write in the DM?" });
-    out.push({ label: "I have a problem", text: "I have a problem" });
+    out.push(task.brief ? { label: "My task", text: "What is my task?" } : { label: "What to write?", text: "What should I write in the DM?" });
+    out.push({ label: "Problem", text: "I have a problem" });
     return out;
   }
   if (task.kind === "dms") {
@@ -260,15 +260,15 @@ function herChips(task: Task | undefined, messages: ChatMessage[], nowMs: number
       }
       if (done > 0) out.push({ label: `Still ${done}`, text: `Still ${done}, sending more now` });
     }
-    if (left <= 0) out.push({ label: "Need more time", text: "Can I get more time?" });
-    else if (left < 45 * 60_000 && done < task.target) out.push({ label: "Need more time", text: "Can I get more time?" });
+    if (left <= 0) out.push({ label: "More time?", text: "Can I get more time?" });
+    else if (left < 45 * 60_000 && done < task.target) out.push({ label: "More time?", text: "Can I get more time?" });
   } else {
     out.push({ label: "All done", text: "All done", hot: true });
   }
-  if (out.length < 3) out.push({ label: "How many left?", text: "What is my count?" });
-  if (out.length < 4 && left > 45 * 60_000) out.push({ label: "Can I take a break?", text: "Can I take a break?" });
-  if (out.length < 5) out.push({ label: "I have a problem", text: "I have a problem" });
-  return out.slice(0, 5);
+  if (out.length < 3) out.push({ label: "My count", text: "What is my count?" });
+  if (out.length < 4 && left > 45 * 60_000) out.push({ label: "Break?", text: "Can I take a break?" });
+  if (out.length < 5) out.push({ label: "Problem", text: "I have a problem" });
+  return out.slice(0, 3);
 }
 
 /** What the manager most likely wants next: answer her question first, then act on how the task is going. */
@@ -435,7 +435,7 @@ function DueLine({ deadlineAt, tz }: { deadlineAt: string; tz?: string }) {
   const at = new Date(deadlineAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz || undefined });
   return (
     <p className={`due ${left <= 0 ? "over" : ""}`}>
-      <i /> Due {at} · <b>{left > 0 ? countdown(left) : "time is up"}</b>
+      <i /> {left > 0 ? <>Due {at} · <b>{countdown(left)}</b></> : <>Was due {at} · <b>late</b></>}
     </p>
   );
 }
@@ -517,6 +517,7 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [local, setLocal] = useState<number | null>(null);
+  const [typing, setTyping] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const done = task?.reportedDone ?? 0;
   const target = task?.target ?? 0;
@@ -578,23 +579,28 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
   };
   const tone: Tone = !task ? "idle" : task.status === "missed" ? "bad" : "good";
   return (
-    <main className="p-shell">
-      <header className="p-top">
-        <div>
-          <p className="p-eyebrow">Hi {name}</p>
-          <h1 className="p-title">{task ? task.title : "No task right now"}</h1>
-        </div>
-        {alerts.subscribed === false && <button className="alert-btn" onClick={alerts.enable}>🔔 Alerts</button>}
+    <main className={`p-shell her ${typing ? "is-typing" : ""}`}>
+      <header className="her-top">
+        <h1>Hi {name}</h1>
+        {alerts.subscribed === false && <button className="alert-btn" onClick={alerts.enable}>🔔 Turn on alerts</button>}
       </header>
       {alerts.note && <p className="hint">{alerts.note}</p>}
 
-      {task && (
-        <section className="p-card">
+      {task && (typing ? (
+        <section className="her-slim" aria-label="Your task">
+          <b>{task.kind === "dms" ? `${value} of ${target}` : task.title}</b>
           <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} />
+        </section>
+      ) : (
+        <section className="her-card" aria-label="Your task">
+          <div className="her-card-head">
+            <b className="her-task">{task.title}</b>
+            <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} />
+          </div>
           {task.kind === "dms" ? (
             <div className="counter">
               <button className="minus" aria-label="One less" disabled={!canCount || value <= 0} onClick={() => tap(value - 1)}>−</button>
-              <Ring value={value} max={target} tone={tone} size={150}>
+              <Ring value={value} max={target} tone={tone} size={112}>
                 <strong className="ring-num">{value}</strong>
                 <span className="ring-of">of {target}</span>
               </Ring>
@@ -604,7 +610,7 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
             <p className="hint">Tell {AGENT} when it is done.</p>
           )}
         </section>
-      )}
+      ))}
 
       <section className="p-chat">
         <div className="p-thread" ref={list} aria-live="polite">
@@ -613,14 +619,14 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
           {busy && <p className="typing"><i /><i /><i /></p>}
         </div>
         <ChipRow chips={herChips(task, messages, new Date(s.now).getTime())} busy={busy} onPick={(t) => void send(t)} />
-        <Composer onSend={send} busy={busy} placeholder={`Message ${AGENT}…`} />
+        <Composer onSend={send} busy={busy} placeholder={`Message ${AGENT}…`} onFocusChange={setTyping} />
         {err && <p className="err">{err}</p>}
       </section>
     </main>
   );
 }
 
-function Composer({ onSend, busy, placeholder }: { onSend: (text: string, image?: string) => Promise<void>; busy: boolean; placeholder: string }) {
+function Composer({ onSend, busy, placeholder, onFocusChange }: { onSend: (text: string, image?: string) => Promise<void>; busy: boolean; placeholder: string; onFocusChange?: (on: boolean) => void }) {
   const [text, setText] = useState("");
   const file = useRef<HTMLInputElement>(null);
   const submit = async () => {
@@ -648,7 +654,7 @@ function Composer({ onSend, busy, placeholder }: { onSend: (text: string, image?
         }}
       />
       <button type="button" className="attach-btn" aria-label="Send a picture" onClick={() => file.current?.click()} disabled={busy}>📎</button>
-      <input value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} disabled={busy} aria-label="Message" />
+      <input value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} disabled={busy} aria-label="Message" onFocus={() => onFocusChange?.(true)} onBlur={() => setTimeout(() => onFocusChange?.(false), 150)} />
       <button className="send-btn" type="submit" aria-label="Send" disabled={busy || !text.trim()}>➤</button>
     </form>
   );
