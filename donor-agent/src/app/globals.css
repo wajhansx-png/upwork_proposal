@@ -277,3 +277,9 @@ button,a,input{-webkit-tap-highlight-color:transparent}
 .bubble.cont{margin-top:-4px}
 .p-chat{position:relative}
 .new-pill{position:absolute;left:50%;transform:translateX(-50%);bottom:118px;z-index:3;min-height:36px;padding:6px 16px;border-radius:999px;border:0;background:var(--grad);color:#06120e;font-weight:750;font-size:.88rem;box-shadow:var(--glow);animation:rise .2s ease-out}
+/* Wajdan's teddy */
+.brow{display:flex;align-items:flex-end;gap:7px;max-width:92%;align-self:flex-start;flex-shrink:0}
+.brow .bubble{max-width:none;min-width:0;flex:0 1 auto}
+.avatar{width:32px;height:32px;border-radius:50%;flex:none;box-shadow:0 2px 8px rgba(0,0,0,.3),0 0 0 2px rgba(255,143,177,.35)}
+.avatar-space{width:32px;flex:none}
+.her .brow{max-width:90%}

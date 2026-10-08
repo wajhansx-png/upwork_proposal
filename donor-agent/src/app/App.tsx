@@ -209,7 +209,8 @@ function Ring({ value, max, tone, size, children }: { value: number; max: number
 
 function Bubble({ m, who, showWho = true, fresh = false }: { m: ChatMessage; who: string; showWho?: boolean; fresh?: boolean }) {
   const mine = m.from === "user";
-  return (
+  const agent = m.from === "agent";
+  const bubble = (
     <div className={`bubble ${mine ? "mine" : m.from === "manager" ? "boss" : "them"}${fresh ? " fresh" : ""}${showWho ? "" : " cont"}`}>
       {!mine && showWho && <span className="bubble-who">{who}</span>}
       {m.img && (
@@ -220,6 +221,14 @@ function Bubble({ m, who, showWho = true, fresh = false }: { m: ChatMessage; who
       )}
       <span className="bubble-text">{m.text}</span>
       <span className="bubble-time">{time(m.at)}</span>
+    </div>
+  );
+  if (!agent) return bubble;
+  return (
+    <div className="brow">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {showWho ? <img src="/teddy.svg" alt="" className="avatar" /> : <span className="avatar-space" />}
+      {bubble}
     </div>
   );
 }
