@@ -1,12 +1,12 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { NextRequest } from "next/server";
-import { readDb } from "./db";
-import type { Db, Role } from "./types";
+import type { Role } from "./types";
 
-export const COOKIE = "dd_session";
+/** Separate cookies, so the manager's page and Areeba's page can both be open in one browser. */
+export const MANAGER_COOKIE = "dd_m";
 export const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
-/** Server secret. Signs sessions and makes the teammate's link. In production it must be set and long. */
+/** Server secret. Signs the manager's session. */
 function secret(): string {
   const k = process.env.MANAGER_KEY;
   if (k) {
@@ -17,58 +17,39 @@ function secret(): string {
   return "manager-dev-key";
 }
 
-/** The manager's password. Set MANAGER_PASSWORD. Never stored in the code. */
-function password(): string {
-  const p = process.env.MANAGER_PASSWORD;
-  if (p) return p;
-  if (process.env.NODE_ENV === "production") throw new Error("MANAGER_PASSWORD is not set");
+/** The code inside the manager's private link (/manager?k=CODE). */
+function managerCode(): string {
+  const c = process.env.MANAGER_LINK_CODE || process.env.MANAGER_PASSWORD;
+  if (c) return c;
+  if (process.env.NODE_ENV === "production") throw new Error("MANAGER_LINK_CODE is not set");
   return "manager";
 }
 
 const hmac = (v: string) => createHmac("sha256", secret()).update(v).digest("hex");
 const sha = (v: string) => createHash("sha256").update(v).digest();
-
-/** The teammate's link key. Changing the version makes a new link. */
-export const teammateKey = (version: number) => hmac(`teammate-link:${version}`).slice(0, 40);
-
 const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
-/** Only the teammate signs in with a link. The manager uses the password. */
-export function teammateForKey(key: string, version: number): boolean {
-  return !!key && same(key, teammateKey(version));
-}
+export const codeMatches = (code: string) => timingSafeEqual(sha(code), sha(managerCode()));
 
-export function passwordMatches(pw: string): boolean {
-  return timingSafeEqual(sha(pw), sha(password()));
-}
+/** Changes when the code changes, so old manager sessions end. */
+const stamp = () => hmac(`code:${managerCode()}`).slice(0, 16);
 
-/** Changes when the password changes, so old manager sessions end. */
-const passwordStamp = () => hmac(`pw:${password()}`).slice(0, 16);
+export const managerToken = () => `manager.${stamp()}.${hmac(`session:manager:${stamp()}`)}`;
 
-export function makeToken(role: Role, version: number) {
-  const v = role === "teammate" ? String(version) : passwordStamp();
-  return `${role}.${v}.${hmac(`session:${role}:${v}`)}`;
-}
-
-export interface Auth {
-  role: Role;
-  /** Loaded only for the teammate (to check the link version). */
-  db?: Db;
-}
-
-/** Who is calling. The teammate's session ends when the manager makes a new link. */
-export async function authenticate(req: NextRequest): Promise<Auth | null> {
-  const token = req.cookies.get(COOKIE)?.value;
-  if (!token) return null;
+function isManager(req: NextRequest): boolean {
+  const token = req.cookies.get(MANAGER_COOKIE)?.value;
+  if (!token) return false;
   const [role, v, sig] = token.split(".");
-  if ((role !== "manager" && role !== "teammate") || !sig || !v) return null;
-  if (!same(sig, hmac(`session:${role}:${v}`))) return null;
-  if (role === "manager") return v === passwordStamp() ? { role } : null;
-  const db = await readDb();
-  if (Number(v) !== db.settings.teammateKeyVersion) return null;
-  return { role, db };
+  return role === "manager" && !!sig && v === stamp() && same(sig, hmac(`session:manager:${v}`));
 }
 
+/**
+ * Who is calling. Each page says who it is (x-as header).
+ * Areeba's page is open: no key needed. The manager needs his cookie from the private link.
+ */
 export async function getRole(req: NextRequest): Promise<Role | null> {
-  return (await authenticate(req))?.role ?? null;
+  const as = req.headers.get("x-as");
+  if (as === "teammate") return "teammate";
+  if (as === "manager") return isManager(req) ? "manager" : null;
+  return isManager(req) ? "manager" : "teammate";
 }

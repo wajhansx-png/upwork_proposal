@@ -1,6 +1,5 @@
-import App from "./App";
+import { redirect } from "next/navigation";
 
-/** Areeba's page. She opens it with her private link (/?k=...). */
 export default function Page() {
-  return <App entry="teammate" />;
+  redirect("/areeba");
 }

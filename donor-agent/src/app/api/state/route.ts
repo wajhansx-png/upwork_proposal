@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authenticate, teammateKey } from "@/lib/auth";
+import { getRole } from "@/lib/auth";
 import { computeStats } from "@/lib/agent";
 import { readDb, usingPersistentStore, withDb } from "@/lib/db";
 import { aiKind, visionEnabled } from "@/lib/llm";
 import { pushEnabled } from "@/lib/push";
 
 export async function GET(req: NextRequest) {
-  const auth = await authenticate(req);
-  if (!auth) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
-  const { role } = auth;
+  const role = await getRole(req);
+  if (!role) return NextResponse.json({ error: "Not allowed" }, { status: 401 });
 
-  let db = auth.db ?? (await readDb());
+  let db = await readDb();
   // Only write "last seen" about once a minute, to keep storage use low.
   if (role === "teammate") {
     const seen = db.agent.teammateLastSeenAt;
@@ -34,7 +33,6 @@ export async function GET(req: NextRequest) {
     stats: computeStats(db),
     agent: manager ? db.agent : undefined,
     system: manager ? { ai: aiKind(), vision: visionEnabled(), push: pushEnabled(), persistent: usingPersistentStore() } : undefined,
-    teammateKey: manager ? teammateKey(db.settings.teammateKeyVersion) : undefined,
     now: new Date().toISOString(),
     vapidPublicKey: pushEnabled() ? process.env.VAPID_PUBLIC_KEY : null,
   });

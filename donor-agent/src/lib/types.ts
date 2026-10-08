@@ -37,7 +37,7 @@ export interface ChatMessage {
   /** Screenshot attached to this message (image id). */
   img?: string;
   /** Set on check-in messages, so the agent knows a reply is an answer to it. */
-  kind?: "checkin" | "kickoff" | "clarification" | "task" | "update" | "manager-input" | "agent";
+  kind?: "checkin" | "kickoff" | "clarification" | "task" | "update" | "manager-input" | "agent" | "progress";
 }
 
 export interface PendingAssignment {
@@ -84,6 +84,8 @@ export interface Task {
   reminderPausedUntil?: string;
   lastMilestone?: number;
   lastSilentAlertAt?: string;
+  noUpdateMsgId?: string;
+  silentSince?: string;
   deadlineAlerted?: boolean;
   alertsProblemAt?: string;
   reminderCount?: number;

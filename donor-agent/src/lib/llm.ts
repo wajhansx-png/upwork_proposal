@@ -98,7 +98,7 @@ export async function llm(system: string, user: string, opts: { json?: boolean; 
       body: JSON.stringify({
         model: c.model,
         // GPT-5 style models also spend tokens on hidden thinking. A small limit gives an EMPTY reply, so give room and ask for little thinking.
-        ...(modernGpt ? { max_completion_tokens: 2000, reasoning_effort: "minimal" } : { temperature: 0.1, max_tokens: opts.image ? 600 : 500 }),
+        ...(modernGpt ? { max_completion_tokens: 2000, reasoning_effort: "low" } : { temperature: 0.1, max_tokens: opts.image ? 600 : 500 }),
         ...(opts.json && c.kind === "key" ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: system },

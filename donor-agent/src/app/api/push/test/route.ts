@@ -14,11 +14,11 @@ export async function POST(req: NextRequest) {
   const devices = db.subs.filter((s) => s.role === target).length;
   if (!devices) {
     const who = target === "teammate" ? db.settings.teammateName : "this device";
-    return NextResponse.json({ error: `${who} has no subscribed phone yet. Open Donor Desk on that phone and press “Turn on alerts” first.` }, { status: 400 });
+    return NextResponse.json({ error: target === "teammate" ? `${who} has not turned on alerts yet. She must open her link on her own phone and press “Turn on alerts”.` : "This phone has no alerts yet. Press “Turn on alerts” first." }, { status: 400 });
   }
   const delivery = await notify(
     target,
-    target === "teammate" ? "Donor Desk test from your manager" : "Donor Desk test",
+    target === "teammate" ? "Test from Wajdan" : "Donor Desk test",
     target === "teammate" ? "Notifications are working. No action is needed for this test." : "Notifications are working, even when the app is closed.",
   );
   if (!delivery.accepted) return NextResponse.json({ error: "The push service did not accept this alert. Re-enable alerts on the receiving device and try again." }, { status: 502 });

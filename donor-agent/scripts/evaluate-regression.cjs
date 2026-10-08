@@ -32,53 +32,46 @@ const fresh = (task) => ({ settings: { teammateName: 'Areeba', timezone: 'Asia/K
 const base = (o = {}) => ({ id: 't1', title: 'Send 10 DMs', kind: 'dms', target: 10, status: 'review', createdAt: new Date(now - 60 * MIN).toISOString(), deadlineAt: new Date(now + 60 * MIN).toISOString(), startedAt: new Date(now - 55 * MIN).toISOString(), reviewAt: new Date(now).toISOString(), unanswered: 0, ...o });
 
 (async () => {
-  // 1. Numbers: perfect proven work scores high; claims without proof score low.
-  db = fresh(base({ reportedDone: 10, evidence: ev(10) }));
+  // 1. Numbers: her count is the count. All sent scores high; few sent scores low.
+  db = fresh(base({ reportedDone: 10 }));
   const perfect = ruleScore(taskFacts(db.tasks[0], db, now));
-  assert.ok(perfect >= 9, `perfect work should score >= 9, got ${perfect}`);
-  db = fresh(base({ reportedDone: 10, evidence: ev(3) }));
-  const claimed = ruleScore(taskFacts(db.tasks[0], db, now));
-  assert.ok(claimed <= 5, `10 claimed but 3 proven should score <= 5, got ${claimed}`);
-  db = fresh(base({ reportedDone: 10, evidence: [...ev(8), { imageId: 'd', at: '', verdict: 'rejected', reason: 'Duplicate image; no new work verified.' }] }));
-  assert.ok(ruleScore(taskFacts(db.tasks[0], db, now)) < perfect, 'a duplicate screenshot must lower the score');
+  assert.ok(perfect >= 8, `all 10 sent should score >= 8, got ${perfect}`);
+  db = fresh(base({ reportedDone: 3, status: 'missed', closedAt: new Date(now).toISOString() }));
+  const low = ruleScore(taskFacts(db.tasks[0], db, now));
+  assert.ok(low <= 5, `3 of 10 and missed should score <= 5, got ${low}`);
 
-  // 2. GPT cannot inflate: it says 10, numbers say ~4 → kept within 1.5 points.
-  db = fresh(base({ reportedDone: 10, evidence: ev(3) }));
+  // 2. GPT cannot inflate: kept within 1.5 points of the numbers.
   aiReply = { score: 10, good: ['Great effort'], problems: [], advice: 'Thank her.' };
   assert.equal(await evaluatePending(), 1);
   const e = db.tasks[0].evaluation;
   assert.equal(e.by, 'ai');
-  assert.ok(e.score <= claimed + 1.5 + 1e-9, `GPT score must stay within 1.5 of ${claimed}, got ${e.score}`);
+  assert.ok(e.score <= low + 1.5 + 1e-9, `GPT score must stay within 1.5 of ${low}, got ${e.score}`);
   assert.match(db.messages.at(-1).text, /Score: .*\/10/);
-  assert.match(db.messages.at(-1).text, /3 of 10 verified, 10 claimed/);
+  assert.match(db.messages.at(-1).text, /Sent: 3 of 10/);
   assert.match(aiCalls.at(-1), /"verified":3/, 'GPT must be given the app numbers');
-  assert.ok(pushes.some((p) => p[0] === 'manager' && /Task review/.test(p[1])), 'manager gets a review alert');
 
   // 3. Reviewed once only.
   assert.equal(await evaluatePending(), 0, 'a reviewed task is not reviewed again');
 
-  // 4. AI fails → a review from the numbers, still useful.
-  db = fresh(base({ reportedDone: 10, evidence: ev(3) }));
+  // 4. AI fails: a review from the numbers.
+  db = fresh(base({ reportedDone: 10 }));
   aiReply = null;
   await evaluatePending();
   assert.equal(db.tasks[0].evaluation.by, 'rules');
-  assert.ok(db.tasks[0].evaluation.problems.some((p) => /Said 10, but only 3 are proven/.test(p)));
+  assert.ok(db.tasks[0].evaluation.good.some((g) => /All 10 sent/.test(g)));
 
-  // 5. The manager's "check every 20 min" is used for report requests.
-  db = fresh(base({ status: 'open', reviewAt: undefined, checkEvery: 20, nextCheckAt: new Date(now - 1000).toISOString(), startedAt: new Date(now - 10 * MIN).toISOString(), evidence: [] }));
-  await runAgent(now);
-  assert.equal(new Date(db.tasks[0].nextCheckAt).getTime(), now + 20 * MIN, 'next check must be 20 minutes later');
-
-  // 6. After the deadline: 3 final requests 10 minutes apart, then closed as missed (no endless alerts).
-  db = fresh(base({ status: 'open', reviewAt: undefined, deadlineAt: new Date(now - MIN).toISOString(), nextCheckAt: new Date(now - 1000).toISOString(), evidence: ev(2) }));
-  const urgent = () => pushes.filter((p) => p[1] === 'Urgent: final report').length;
-  const before = urgent();
-  for (let i = 0; i < 6; i++) await runAgent(now + i * 10 * MIN);
-  assert.equal(urgent() - before, 3, 'exactly 3 final requests');
+  // 5. After the deadline: 3 final requests 4 minutes apart, then closed as missed. No manager pushes from the clock.
+  db = fresh(base({ status: 'open', reviewAt: undefined, deadlineAt: new Date(now - MIN).toISOString(), reportedDone: 2 }));
+  const finals = () => pushes.filter((p) => p[1] === 'Final report please').length;
+  const before = finals();
+  const mBefore = pushes.filter((p) => p[0] === 'manager').length;
+  for (let i = 0; i < 6; i++) await runAgent(now + i * 4 * MIN);
+  assert.equal(finals() - before, 3, 'exactly 3 final requests');
   assert.equal(db.tasks[0].status, 'missed');
+  assert.equal(pushes.filter((p) => p[0] === 'manager').length, mBefore, 'the clock never pushes the manager');
   aiReply = { score: 3, good: [], problems: ['Deadline missed.'], advice: 'Talk to her.' };
   await evaluatePending();
   assert.ok(db.tasks[0].evaluation, 'a missed task gets a review');
 
-  console.log('PASS: rule score, GPT kept within 1.5 points, single review, rules fallback, check-every honored, 3 final requests then missed + reviewed.');
+  console.log('PASS: count-based score, GPT kept within 1.5 points, single review, rules fallback, 3 final requests then missed, no clock pushes to manager.');
 })().catch((e) => { console.error(e); process.exitCode = 1; });

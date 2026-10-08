@@ -1,21 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { teammateForKey } from "@/lib/auth";
-import { readDb } from "@/lib/db";
 
 /**
  * The install manifest for the Home Screen app.
  * Teammate: the start page carries her key, so the app opens signed in.
  * Manager (?for=manager): opens /manager, which asks for the password once.
  */
-export async function GET(req: NextRequest) {
+export function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
-  let start: string;
-  if (q.get("for") === "manager") start = "/manager";
-  else {
-    const key = q.get("k") ?? "";
-    if (!teammateForKey(key, (await readDb()).settings.teammateKeyVersion)) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    start = `/?k=${encodeURIComponent(key)}`;
-  }
+  const start = q.get("for") === "manager" ? "/manager" : "/areeba";
   return new NextResponse(
     JSON.stringify({
       name: "Donor Desk",

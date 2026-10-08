@@ -1,8 +1,7 @@
 import { newId, readDb, withDb } from "./db";
 import { kvGetImage } from "./db";
-import { visionEnabled } from "./llm";
 import { notify } from "./push";
-import { checkProof, readScreenshot } from "./vision";
+import { checkProof } from "./vision";
 import { fmtDuration, fmtMinutes, fmtWhen, parseDeadline, parseTarget, zparts } from "./time";
 import { extractCheckEvery } from "./time";
 import { extractGap, extractInstructions, isAck, parseManager } from "./nlp";
@@ -81,9 +80,7 @@ export function summarize(db: Db, now = Date.now()): string {
   const state = task.status === "open" ? "in progress" : task.status === "review" ? "reported done, waiting for you" : task.status;
   lines.push(`${task.title}: ${state}.`);
   if (task.kind === "dms") {
-    const proven = evidenceCount(task);
-    const reported = task.reportedDone ?? 0;
-    lines.push(`${name} says she sent ${reported} of ${task.target}. Proven by screenshot: ${proven}.${reported > proven ? ` ${reported - proven} not proven yet.` : ""}`);
+    lines.push(`${name} has sent ${task.reportedDone ?? 0} of ${task.target}.`);
   } else if (task.note) lines.push(`Her note: “${task.note}”`);
   const left = ms(task.deadlineAt) - now;
   lines.push(left > 0 ? `Due ${fmtWhen(ms(task.deadlineAt), now, tz)}, ${fmtDuration(left)} left.` : `The deadline passed ${fmtDuration(-left)} ago.`);
@@ -143,7 +140,7 @@ async function sendPushes(pushes: Push[], defer?: Defer) {
     p.role,
     p.title,
     p.body.slice(0, 160),
-    p.role === "teammate" ? { persistent: p.persistent ?? true, tag: p.tag ?? "donor-desk-action", url: "/", receiptId: p.receiptId, taskId: p.taskId } : {},
+    p.role === "teammate" ? { persistent: p.persistent ?? true, tag: p.tag ?? "donor-desk-action", url: "/areeba", receiptId: p.receiptId, taskId: p.taskId } : { tag: p.tag, url: "/manager" },
     )));
   };
   // Alerts go out after the reply, so nobody waits for the phone network.
@@ -165,7 +162,8 @@ function milestoneText(task: Task, now: number, tz: string) {
   const onTrack = etaMs !== null && etaMs <= ms(task.deadlineAt);
   // Only show an ETA that is in the future and inside this task's window.
   const etaText = etaMs !== null && etaMs > now && etaMs <= ms(task.deadlineAt) + 24 * 3600_000 ? `, finish about ${fmtWhen(etaMs, now, tz)}` : "";
-  return `${claimed}/${task.target} claimed, ${verified} proven by screenshot, ${onTrack ? "on track" : "behind"}${etaText}`;
+  void verified;
+  return `${claimed}/${task.target} sent, ${onTrack ? "on track" : "behind"}${etaText}`;
 }
 
 // ---------- manager messages ----------
@@ -388,7 +386,7 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
         say(
           d,
           "teammate",
-          `NEW TASK\n\n${title}\nDue: ${when}${extra}\n\n${how}${cadence}\n\nReply “I started” when you begin. For each update, tell me how many you have sent in total and attach a screenshot of a sent message. If anything blocks you, tell me here.`,
+          `NEW TASK\n\n${title}\nDue: ${when}${extra}\n\n${how}${cadence}\n\nReply “I started” when you begin. Use the + button or tell me how many you have sent in total. If anything blocks you, tell me here.`,
           "agent",
           { kind: "kickoff" },
         );
@@ -398,7 +396,7 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
           `Sent to ${name}.\n${title}\nDue: ${when}` +
           (intent.brief ? `\nInstructions I gave her: ${intent.brief}` : "") +
           (intent.gapMinutes ? `\nShe must wait ${fmtMinutes(intent.gapMinutes)} between DMs.` : "") +
-          `\nI will ask her to confirm she started within 3 minutes, then ask for a report every ${intent.checkEvery ?? 5} minutes. A DM only counts as proven when she sends a screenshot. I will alert you at every 10 DMs, and review the task when it ends.` +
+          `\nI will ask her to confirm she started within 3 minutes, then keep asking until she replies. You get an alert only when she replies.` +
           (pace < 1 ? `\nNote: that is less than 1 minute per DM. It is very tight.` : "");
         managerReplyKind = "task";
         break;
@@ -473,7 +471,6 @@ export interface ChatImage {
 }
 
 const iso = (t: number) => new Date(t).toISOString();
-const normName = (s: string) => s.toLowerCase().replace(/\W/g, "");
 
 /** Plain facts for the AI: no internal fields, times in words, nothing to guess. */
 function teammateFacts(task: Task | undefined, db: Db, now: number, lastAsk?: string): TeammateFacts {
@@ -505,14 +502,12 @@ function nextStep(task: Task | undefined): string {
       return "Please tell me when you start.";
     case "blocked":
       return "Tell me when the problem is fixed, or what you need from your manager.";
-    case "awaiting-proof":
-      return "Please send a screenshot that shows the person and your sent message.";
     case "missed":
-      return "Please send your final total and a screenshot, or tell me what is unfinished.";
+      return "Please send your final total, or tell me what is unfinished.";
     case "review":
       return "Your manager is reviewing your work.";
     default:
-      return task.kind === "dms" ? "When you send more, tell me your total and add a screenshot of a sent message." : "Tell me when it is done and what you did.";
+      return task.kind === "dms" ? "When you send more, press + or tell me your total." : "Tell me when it is done and what you did.";
   }
 }
 
@@ -545,7 +540,6 @@ function buildReply(u: Understood, t: Task | undefined, d: Db, now: number, info
   if (!t) return u.sentence && !u.question ? `${u.sentence}\nThere is no active task right now. Your manager will send the next one here.` : "There is no active task right now. Your manager will send the next one here.";
   const left = ms(t.deadlineAt) - now;
   const reported = t.reportedDone ?? 0;
-  const proven = evidenceCount(t);
 
   // Questions the app can answer exactly are answered from facts, never by the AI.
   if (u.question === "deadline")
@@ -553,7 +547,7 @@ function buildReply(u: Understood, t: Task | undefined, d: Db, now: number, info
   if (u.question === "next") return [nextStep(t), t.brief ? `Your manager's instructions: ${t.brief}.` : ""].filter(Boolean).join("\n");
   if (u.question === "progress")
     return t.kind === "dms"
-      ? `You told me ${reported} of ${t.target}. Proven by screenshot: ${proven}.${reported > proven ? ` ${nextStep(t)}` : ""}`
+      ? `You have sent ${reported} of ${t.target}.`
       : `Your task is ${t.status === "review" ? "waiting for your manager" : "still open"}. ${nextStep(t)}`;
 
   const parts: string[] = [u.sentence ?? ruleSentence(u, info.reportedNow)];
@@ -561,11 +555,9 @@ function buildReply(u: Understood, t: Task | undefined, d: Db, now: number, info
     parts.push(
       info.clampedFrom ? `You wrote ${info.clampedFrom}, but the task is ${t.target}. I recorded ${t.target}.` : `Recorded: ${reported} of ${t.target} DMs.`,
     );
-    parts.push(`Proven by screenshot: ${proven}.`);
   }
   if (info.imageRejectedNow) parts.push(info.imageRejectedNow);
   else if (info.imageChecking) parts.push("I am checking your screenshot now.");
-  else if (t.kind === "dms" && reported > proven && !u.blocked) parts.push("Please send a screenshot that shows the person and your sent message.");
   else if (u.start === "started") parts.push(`I will check in again in ${fmtMinutes(nextDelayMin(t))}.`);
   else if (!u.blocked && !u.question && !u.ack) {
     const step = nextStep(t);
@@ -582,20 +574,14 @@ function afterProgress(d: Db, t: Task, now: number, pushes: Push[], name: string
   if (milestone >= 10 && milestone > (t.lastMilestone ?? 0)) {
     t.lastMilestone = milestone;
     const update = milestoneText(t, now, d.settings.timezone);
-    say(d, "manager", update, "agent", { kind: "update" });
-    pushes.push({ role: "manager", title: `${milestone}/${t.target} reported, ${evidenceCount(t)} proven`, body: update });
+    void update;
   }
   if (t.status !== "open" || confirmed < t.target) return;
-  const proven = evidenceCount(t);
-  const canVerify = visionEnabled();
-  if (proven >= t.target || !canVerify) {
-    t.status = "review";
-    t.reviewAt ??= iso(now);
-    t.note = text.trim() ? text.trim().slice(0, 300) : canVerify ? "All DMs are proven by screenshot." : "The AI is off: screenshots are saved but were not checked.";
-    pushes.push({ role: "manager", title: `${name} finished`, body: `${t.title}: ${proven} of ${t.target} proven.` });
-  } else {
-    t.note = "She says it is complete, but the screenshots do not prove every DM yet.";
-  }
+  t.status = "review";
+  t.reviewAt ??= iso(now);
+  t.note = text.trim() ? text.trim().slice(0, 300) : `All ${t.target} sent.`;
+  say(d, "manager", `${name} finished: ${t.target} of ${t.target} sent.`, "agent", { kind: "update" });
+  pushes.push({ role: "manager", title: `${name} finished`, body: `${t.title}: ${t.target} of ${t.target} sent.` });
 }
 
 export async function handleTeammateMessage(text: string, image?: ChatImage | null, opts: { defer?: Defer } = {}): Promise<void> {
@@ -624,7 +610,6 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
   const u = await understandTeammate(text, teammateFacts(task, db, now, lastAsk), name);
 
   const pushes: Push[] = [];
-  let screenshotTask: string | undefined;
   await withDb((d) => {
     if (u.status !== "off" && d.agent.llmStatus !== u.status) d.agent.llmStatus = u.status;
     say(d, "teammate", text || "(screenshot)", "user", image ? { img: image.id } : {});
@@ -672,12 +657,9 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
           info.imageRejectedNow = "I already received this exact image, so it does not count. Please send a new screenshot.";
           t.evidence = [...(t.evidence ?? []), { imageId: image.id, at: iso(now), verdict: "rejected" as const, reason: "This image was already submitted." }].slice(-300);
           t.proofCount = t.evidence.length;
-        } else if (visionEnabled()) {
-          info.imageChecking = true;
-          screenshotTask = t.id;
         } else {
-          info.imageRejectedNow = "I saved your screenshot for your manager. The AI is off, so I cannot check it myself.";
-          t.evidence = [...(t.evidence ?? []), { imageId: image.id, at: iso(now), verdict: "unclear" as const, reason: "Saved, not checked: the AI is off." }].slice(-300);
+          info.imageRejectedNow = "Saved. Your manager can see it.";
+          t.evidence = [...(t.evidence ?? []), { imageId: image.id, at: iso(now), verdict: "unclear" as const, reason: "Saved for the manager." }].slice(-300);
           t.proofCount = t.evidence.length;
         }
         t.lastProofAt = iso(now);
@@ -697,11 +679,15 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
         managerLine = phaseNote.line;
         managerPush = phaseNote.push;
       } else if (info.reportedNow && !managerLine) {
-        managerLine = `${name} reports ${t.reportedDone} of ${t.target} DMs. Proven by screenshot: ${evidenceCount(t)}.`;
+        managerLine = `${name}: ${t.reportedDone} of ${t.target} sent.`;
       }
       if (u.resolved && !u.blocked) managerLine = managerLine || `${name} says the problem is fixed.`;
+      if (!managerLine) managerLine = image && !text.trim() ? `${name} sent a picture.` : `${name}: “${text.slice(0, 300)}”`;
+      if (!managerPush) managerPush = { title: `${name} replied`, body: info.reportedNow && t.kind === "dms" ? `${t.reportedDone} of ${t.target} sent. “${text.slice(0, 100)}”` : text.slice(0, 140) || "Sent a picture." };
+      t.noUpdateMsgId = undefined;
+      t.silentSince = undefined;
       afterProgress(d, t, now, pushes, name, u.all ? text : "");
-    } else if (u.question === "break" || u.question === "extension" || u.question === "other" || u.blocked) {
+    } else {
       managerLine = `${name} wrote: “${text.slice(0, 300)}”`;
       managerPush = { title: `${name} wrote`, body: text.slice(0, 140) };
     }
@@ -713,61 +699,37 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
     }
   });
   await sendPushes(pushes, opts.defer);
-
-  if (screenshotTask && image) {
-    const taskId = screenshotTask;
-    const finish = () => checkScreenshot(taskId, image, opts.defer);
-    if (opts.defer) opts.defer(finish);
-    else await finish();
-  }
 }
 
-/** Reads one screenshot (the slow part), then records what it shows and tells both people. */
-async function checkScreenshot(taskId: string, image: ChatImage, defer?: Defer): Promise<void> {
-  const db = await readDb();
-  const task = db.tasks.find((t) => t.id === taskId);
-  if (!task) return;
-  const name = db.settings.teammateName;
-  const scan = await readScreenshot(image.dataUrl, `${task.title}${task.brief ? `. Instructions: ${task.brief}` : ""}`);
-  const seen = scan.seen;
-  const supported = seen?.is_chat === true && seen.message_sent === true && !!seen.person_name && !!seen.message_text;
-  const quality = supported && typeof seen!.message_quality === "number" ? Math.min(5, Math.max(1, Math.round(seen!.message_quality))) : undefined;
-  const issues = supported && Array.isArray(seen!.quality_issues) ? seen!.quality_issues.filter((x): x is string => typeof x === "string" && !!x.trim()).slice(0, 3) : [];
+/** The + and − buttons. Sets her total without chat noise. The manager gets one alert that updates in place. */
+export async function setProgress(total: number, opts: { defer?: Defer } = {}): Promise<void> {
   const now = Date.now();
   const pushes: Push[] = [];
   await withDb((d) => {
-    if (scan.status !== "off" && d.agent.llmStatus !== scan.status) d.agent.llmStatus = scan.status;
-    const t = d.tasks.find((x) => x.id === taskId && ["open", "review", "missed"].includes(x.status));
-    if (!t) return;
-    const already = supported && (t.evidence ?? []).some((e) => e.verdict === "supported" && e.recipient && normName(e.recipient) === normName(seen!.person_name!));
-    const verdict: "supported" | "rejected" | "unclear" = already ? "rejected" : supported ? "supported" : seen?.is_chat === false || seen?.message_sent === false ? "rejected" : "unclear";
-    const reason = already
-      ? `${seen!.person_name} was already counted, so this does not add a new DM. Please send a screenshot of a different person.`
-      : supported
-        ? `I can see a sent message to ${seen!.person_name}. That counts as one proven DM.`
-        : seen?.summary
-          ? `This does not prove a sent DM: ${seen.summary.replace(/[.\s]+$/, "")}. Please send a screenshot that shows the person's name and your sent message.`
-          : "I could not read this image. Please send a clearer screenshot that shows the person's name and your sent message.";
-    t.evidence = [
-      ...(t.evidence ?? []),
-      { imageId: image.id, at: iso(now), verdict, reason, ...(verdict === "supported" && seen?.person_name ? { recipient: seen.person_name } : {}), ...(quality !== undefined ? { quality } : {}), ...(issues.length ? { issues } : {}) },
-    ].slice(-300);
-    t.proofCount = t.evidence.length;
-    t.lastProofAt = iso(now);
-    if (verdict === "supported") {
-      t.startedAt ??= iso(now);
-      t.lastProgressAt = iso(now);
-      t.nextCheckAt = iso(now + nextDelayMin(t) * MIN);
-    }
+    const name = d.settings.teammateName;
+    const t = [...d.tasks].reverse().find((x) => x.status === "open" && x.kind === "dms");
+    if (!t) throw new Error("There is no open DM task.");
+    const next = Math.max(0, Math.min(t.target, Math.round(total)));
+    d.agent.teammateLastSeenAt = iso(now);
+    t.unanswered = 0;
+    t.noUpdateMsgId = undefined;
+    t.silentSince = undefined;
+    if (next === (t.reportedDone ?? 0)) return;
+    t.reportedDone = next;
+    t.startedAt ??= iso(now);
+    t.lastProgressAt = iso(now);
+    t.lastReportAt = iso(now);
+    t.nextCheckAt = iso(now + nextDelayMin(t) * MIN);
+    const line = `${name}: ${next} of ${t.target} sent.`;
+    const last = d.messages.at(-1);
+    if (last && last.owner === "manager" && last.kind === "progress") {
+      last.text = line;
+      last.at = iso(now);
+    } else say(d, "manager", line, "agent", { kind: "progress" });
+    pushes.push({ role: "manager", title: `${name}: ${next}/${t.target} sent`, body: t.title, tag: `progress-${t.id}` });
     afterProgress(d, t, now, pushes, name, "");
-    const proven = evidenceCount(t);
-    const tip = verdict === "supported" && quality !== undefined && quality <= 2 && issues.length ? ` About your message: ${issues[0].replace(/[.\s]+$/, "")}.` : "";
-    say(d, "teammate", `${reason} Proven so far: ${proven} of ${t.target}.${tip}`);
-    const line = `${name} sent a screenshot. ${verdict === "supported" ? `Proven: ${seen!.person_name}${quality !== undefined ? `, message quality ${quality}/5` : ""}.` : `Not counted: ${reason}`} Proven so far: ${proven} of ${t.target}.`;
-    say(d, "manager", line, "agent", { kind: "update", img: image.id });
-    pushes.push({ role: "manager", title: verdict === "supported" ? `${name}: ${proven}/${t.target} proven` : `${name}: screenshot not counted`, body: line });
   });
-  await sendPushes(pushes, defer);
+  await sendPushes(pushes, opts.defer);
 }
 
 /** Runs after "Mark sent". Reads the screenshot and records whether it shows that donor. */
@@ -822,8 +784,6 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
     const confirmed = confirmedCount(task);
     const expected = task.kind === "dms" ? Math.min(task.target, Math.floor((elapsed / span) * task.target)) : 0;
     const behindBy = Math.max(0, expected - confirmed);
-    const lastHeard = ms(lastTeammateActivity(d) ?? task.createdAt);
-    const silentMin = Math.round((nowMs - Math.max(lastHeard, ms(task.lastReminderAt ?? task.lastCheckAt ?? task.createdAt))) / MIN);
 
     if (task.remindersEnabled === false) return { pushes, actions };
     if (task.reminderPausedUntil && nowMs < ms(task.reminderPausedUntil)) return { pushes, actions };
@@ -833,54 +793,54 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
       if ((task.finalRequests ?? 0) >= 3) {
         task.status = "missed";
         task.closedAt = nowIso;
-        say(d, "teammate", `The task "${task.title}" is closed as missed. You can still send proof here; your manager will see it.`, "agent", { kind: "update" });
-        say(d, "manager", `${name}: "${task.title}" closed as missed. ${evidenceCount(task)} of ${task.target} proven${task.reportedDone ? `, ${task.reportedDone} reported` : ""}. A review follows.`, "agent", { kind: "update" });
-        pushes.push({ role: "manager", title: "Task missed", body: `${task.title}: ${evidenceCount(task)} of ${task.target} proven.` });
+        say(d, "teammate", `The task "${task.title}" is closed as missed. You can still send your total here; your manager will see it.`, "agent", { kind: "update" });
+        say(d, "manager", `${name}: "${task.title}" closed as missed. ${task.reportedDone ?? 0} of ${task.target} sent.`, "agent", { kind: "update" });
         actions.push("missed");
         return { pushes, actions };
       }
-      const due = ms(task.lastReminderAt ?? task.deadlineAt) + 10 * MIN;
+      const due = ms(task.lastReminderAt ?? task.deadlineAt) + 4 * MIN;
       if (nowMs < due && (task.finalRequests ?? 0) > 0) return { pushes, actions };
       task.finalRequests = (task.finalRequests ?? 0) + 1;
       task.lastReminderAt = nowIso;
       if (!task.deadlineAlerted) {
         task.deadlineAlerted = true;
-        say(d, "teammate", "The deadline passed. Please send your final total and a screenshot of your last DM.", "agent", { kind: "checkin" });
+        say(d, "teammate", "The deadline passed. Please send your final total now.", "agent", { kind: "checkin" });
         say(d, "manager", `${name}: deadline passed; final total requested.`, "agent", { kind: "update" });
-        pushes.push({ role: "manager", title: "Deadline passed", body: `${name}: final total requested.` });
       }
       pushes.push({ role: "teammate", title: "Final report please", body: "The deadline passed. Please send your final total now.", persistent: true, tag: `deadline-${task.id}`, receiptId: newId(), taskId: task.id });
       actions.push("deadline");
       return { pushes, actions };
     }
 
-    // 2. Silent-retry: she hasn't answered the LAST planned check-in. Keep nudging her, firmer each time.
-    //    Only kicks in while she is actively mid-task. For "please start" we don't retry; the planned check-ins repeat anyway.
-    if (task.unanswered >= 1 && task.startedAt && taskPhase(task) !== "blocked") {
+    // 2. She has not answered: push her every 4 minutes until she replies or the deadline. No limit.
+    //    The manager is not pushed. One "No update" line in his chat keeps the count.
+    if (task.unanswered >= 1 && taskPhase(task) !== "blocked") {
       const lastSent = ms(task.lastReminderAt ?? task.lastCheckAt ?? task.createdAt);
-      const retryGaps = [15, 20, 30]; // minutes between retries
-      const retryIndex = Math.min(task.unanswered - 1, retryGaps.length - 1);
-      if (nowMs < lastSent + retryGaps[retryIndex] * MIN) return { pushes, actions };
-      // Give up after 3 retries. The manager has been told twice; the planned check-ins will keep coming.
-      if (task.unanswered >= 4) return { pushes, actions };
+      if (nowMs < lastSent + 4 * MIN) return { pushes, actions };
       const n = task.unanswered + 1;
-      const retryText =
-        n === 2 ? `${name}, please reply with your count, even one line.` :
-        n === 3 ? `${name}, still waiting. If you are stuck, say so now.` :
-        `${name}, I need your update now. Your manager has been told.`;
+      const ask = !task.startedAt ? `Have you started "${task.title}"?` : task.kind === "dms" ? "How many DMs have you sent?" : `How is "${task.title}" going?`;
+      const lines = [
+        `${name}, please reply. ${ask}`,
+        `${name}, still no reply. ${ask}`,
+        `${name}, I am waiting. One line is enough.`,
+        `${name}, your manager is waiting for your update. Reply now.`,
+      ];
+      const retryText = `${lines[(n - 2) % lines.length]} (asked ${n} times)`;
       say(d, "teammate", retryText, "agent", { kind: "checkin" });
       task.unanswered = n;
       task.lastReminderAt = nowIso;
       task.reminderCount = (task.reminderCount ?? 0) + 1;
       const receiptId = newId();
-      task.pushReceipts = [...(task.pushReceipts ?? []), { id: receiptId, label: `silent retry ${n}`, issuedAt: nowIso }].slice(-80);
-      pushes.push({ role: "teammate", title: "Please reply", body: retryText, persistent: true, tag: `silent-${task.id}`, receiptId, taskId: task.id });
-      // One alert to the manager at 2, another at 4. Then stop (silence after that is her decision).
-      if ((n === 2 || n === 4) && (!task.lastSilentAlertAt || nowMs >= ms(task.lastSilentAlertAt) + 20 * MIN)) {
-        task.lastSilentAlertAt = nowIso;
-        const line = `${name} ignored ${n} nudges. ${task.kind === "dms" ? `${evidenceCount(task)}/${task.target} proven, ${task.reportedDone ?? 0} claimed.` : ""} Maybe call her.`;
-        say(d, "manager", line, "agent", { kind: "update" });
-        pushes.push({ role: "manager", title: `${name} is not answering`, body: line });
+      task.pushReceipts = [...(task.pushReceipts ?? []), { id: receiptId, label: `nudge ${n}`, issuedAt: nowIso }].slice(-80);
+      pushes.push({ role: "teammate", title: "Reply please", body: retryText, persistent: true, tag: `silent-${task.id}`, receiptId, taskId: task.id });
+      task.silentSince ??= new Date(lastSent).toISOString();
+      const since = new Date(task.silentSince).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz });
+      const noUpdate = `No update from ${name}. Asked ${n} times since ${since}.`;
+      const existing = task.noUpdateMsgId && d.messages.find((m) => m.id === task.noUpdateMsgId);
+      if (existing) existing.text = noUpdate;
+      else {
+        say(d, "manager", noUpdate, "agent", { kind: "update" });
+        task.noUpdateMsgId = d.messages.at(-1)!.id;
       }
       actions.push("retry");
       return { pushes, actions };
@@ -890,9 +850,8 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
     // Only alert about pace once she has actually started and had time to make progress.
     if (task.kind === "dms" && !task.paceWarned && task.startedAt && (nowMs - ms(task.startedAt)) >= 20 * MIN && behindBy >= Math.max(5, Math.round(task.target * 0.2))) {
       task.paceWarned = true;
-      const line = `${name} is behind pace. Expected about ${expected}/${task.target} by now, has ${confirmed} proven (${task.reportedDone ?? 0} claimed).`;
+      const line = `${name} is behind pace. Expected about ${expected}/${task.target} by now, has ${confirmed}.`;
       say(d, "manager", line, "agent", { kind: "update" });
-      pushes.push({ role: "manager", title: "Behind pace", body: line });
       actions.push("pace");
     }
 
@@ -907,14 +866,12 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
       ? `Hi ${name}, can you start "${task.title}" now? Reply "I started" when you begin.`
       : phase === "blocked"
       ? "Your manager has been told about the blocker. Has it been resolved?"
-      : phase === "awaiting-proof"
-      ? `You reported ${task.reportedDone} DMs. Please send a screenshot of your last sent message.`
       : almostDone
-      ? `${name}, ${minutesLeft} min left. Please send a screenshot of your last DM and your total count.`
+      ? `${name}, ${minutesLeft} min left. What is your total count?`
       : task.kind === "dms"
       ? (behindBy > 0
-        ? `${name}, you are behind pace. What is your count now? Attach a screenshot if you can.`
-        : `Quick update, ${name}: how many have you sent? Add a screenshot of your last DM.`)
+        ? `${name}, you are behind pace. What is your count now?`
+        : `Quick update, ${name}: how many have you sent?`)
       : `How is "${task.title}" going? Tell me what is finished and what remains.`;
     say(d, "teammate", message, "agent", { kind: "checkin" });
     task.lastCheckAt = nowIso;
@@ -923,14 +880,13 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
     task.reminderCount = (task.reminderCount ?? 0) + 1;
     const receiptId = newId();
     task.pushReceipts = [...(task.pushReceipts ?? []), { id: receiptId, label: `check-in ${task.reminderCount}`, issuedAt: nowIso }].slice(-80);
-    pushes.push({ role: "teammate", title: beforeStart ? "Please confirm you started" : phase === "awaiting-proof" ? "Proof needed" : almostDone ? "Final push" : "Quick update", body: message, persistent: true, tag: `check-${task.id}`, receiptId, taskId: task.id });
+    pushes.push({ role: "teammate", title: beforeStart ? "Please confirm you started" : almostDone ? "Final push" : "Quick update", body: message, persistent: true, tag: `check-${task.id}`, receiptId, taskId: task.id });
 
     // Alert the manager if she didn't start on time (first planned push already fired, but no startedAt).
     if (beforeStart && !task.alertsProblemAt && elapsed >= 15 * MIN) {
       task.alertsProblemAt = nowIso;
       const line = `${name} has not confirmed she started. ${minutesLeft} min left on the task.`;
       say(d, "manager", line, "agent", { kind: "update" });
-      pushes.push({ role: "manager", title: "Not started yet", body: line });
     }
 
     void tz;
