@@ -706,6 +706,10 @@ function ruleSentence(u: Understood, hadReport: boolean): string {
 
 interface ReplyInfo {
   reportedNow: boolean;
+  /** Goal / milestone lines after new progress. */
+  coach?: string[];
+  /** She promised "N in M minutes". */
+  promised?: boolean;
   /** She is back from a break or says she keeps working. */
   resuming?: boolean;
   clampedFrom?: number;
@@ -728,6 +732,68 @@ function statusLine(t: Task, now: number, tz: string, withTime = true): string {
   const perHour = Math.ceil(remaining / Math.max(hours, 1 / 60));
   const pace = hours >= 1 ? ` You need about ${perHour} per hour.` : ` That is about ${Math.ceil(remaining / Math.max(1, Math.round(left / MIN)))} per minute.`;
   return `${done} of ${t.target} done, ${remaining} to go.${withTime ? ` ${fmtDuration(left)} left.` : ""}${pace}`;
+}
+
+/** A small, doable next goal: the share of what is left that fits the next half hour (or 20 min when late). */
+function makeGoal(t: Task, now: number): { count: number; by: string } | undefined {
+  if (t.kind !== "dms") return undefined;
+  const done = t.reportedDone ?? 0;
+  const remaining = t.target - done;
+  if (remaining <= 0) return undefined;
+  const minsLeft = (ms(t.deadlineAt) - now) / MIN;
+  const window = minsLeft > 45 ? 30 : minsLeft > 10 ? Math.round(minsLeft) : 20;
+  // The pace the deadline needs...
+  const needed = minsLeft > 10 ? Math.ceil((remaining * window) / minsLeft) : remaining;
+  // ...her own speed so far, stretched a little (a goal should pull, not coast)...
+  const workedMin = t.startedAt ? (now - ms(t.startedAt)) / MIN : 0;
+  const ownPace = workedMin >= 15 && done > 0 ? Math.ceil((done / workedMin) * window * 1.1) : 0;
+  // ...and never less than 5 per half hour.
+  const floor = Math.ceil((5 * window) / 30);
+  const step = Math.max(needed, ownPace, floor);
+  return { count: done + Math.max(1, Math.min(remaining, step)), by: iso(now + window * MIN) };
+}
+
+function goalLine(t: Task, now: number, tz: string): string {
+  if (!t.goal) return "";
+  const more = t.goal.count - (t.reportedDone ?? 0);
+  return more > 0 ? `Next goal: reach ${t.goal.count} by ${fmtWhen(ms(t.goal.by), now, tz)} (just ${more} more).` : "";
+}
+
+/** Honest encouragement when she crosses a real milestone. */
+function milestoneCheer(prev: number, done: number, target: number): string {
+  const pct = (n: number) => (n / Math.max(1, target)) * 100;
+  if (done >= target) return "";
+  if (target - done <= 10 && target - prev > 10) return `Only ${target - done} left. You are almost there!`;
+  if (pct(prev) < 75 && pct(done) >= 75) return "Three quarters done. Strong finish now!";
+  if (pct(prev) < 50 && pct(done) >= 50) return "Halfway! The second half always goes faster.";
+  if (pct(prev) < 25 && pct(done) >= 25) return "A quarter done. Good rhythm, keep it going.";
+  return "";
+}
+
+/** After new progress: praise a reached goal, cheer milestones, and set the next small goal. Returns lines for her. */
+function progressCoach(t: Task, prev: number, now: number, tz: string): string[] {
+  if (t.kind !== "dms" || t.status !== "open") return [];
+  const done = t.reportedDone ?? 0;
+  const lines: string[] = [];
+  if (t.goal && done >= t.goal.count) {
+    const early = ms(t.goal.by) - now;
+    lines.push(early > 2 * MIN ? `Goal reached ${fmtDuration(early)} early. Excellent!` : "Goal reached. Well done!");
+    t.goal = undefined;
+    t.goalMisses = 0;
+  }
+  const cheer = milestoneCheer(prev, done, t.target);
+  if (cheer) lines.push(cheer);
+  if (!t.goal || ms(t.goal.by) <= now) t.goal = makeGoal(t, now);
+  const g = goalLine(t, now, tz);
+  if (g) lines.push(g);
+  return lines;
+}
+
+/** "I'll send 5 in the next 20 minutes": her own promise becomes her goal. */
+function herPromise(text: string): { more: number; minutes: number } | null {
+  const m = /\b(?:i'?ll|i will|will|can)\s+(?:do|send|finish|complete)?\s*(\d{1,3})\s*(?:more|dms?|messages?)?\s*(?:in|within)\s+(?:the\s+)?(?:next\s+)?(\d{1,3})\s*(?:min|mins|minutes|m)\b/i.exec(text)
+    || /^\s*(\d{1,3})\s*(?:more\s+)?in\s+(\d{1,3})\s*(?:min|mins|minutes|m)\b/i.exec(text);
+  return m ? { more: Number(m[1]), minutes: Number(m[2]) } : null;
 }
 
 /** The reply to her. Every message gets a real answer: facts from the app first, then one clear next step. */
@@ -757,16 +823,29 @@ function buildReply(u: Understood, t: Task | undefined, d: Db, now: number, info
   if (u.question === "extension") return `I am asking your manager for more time. Until they answer, the deadline is still ${due}, so please keep going.`;
 
   if (u.greeting) return `Hi ${name}!${notStarted ? ` Your task: ${t.title}, due ${due}.\n${startAsk}` : `\n${statusLine(t, now, tz)}`}`;
-  if (u.cantFinish) return `Thank you for being honest. I am telling your manager. Do as many as you can by ${due}, and tell me your count as you go.`;
+  if (u.cantFinish) {
+    const g = makeGoal(t, now);
+    if (g) t.goal = g;
+    return `Thank you for being honest, I am telling your manager. Don't think about all of them. Just ${g ? `get to ${g.count} by ${fmtWhen(ms(g.by), now, tz)}` : "do the next few"}, then we see.`;
+  }
   if (u.delay && open && !u.blocked)
-    return `${t.kind === "dms" ? `${Math.max(0, t.target - (t.reportedDone ?? 0))} DMs are still left` : "This task is still open"} and the deadline is ${due}${left > 0 ? ` (${fmtDuration(left)} left)` : ""}. Please ${t.startedAt ? "continue" : "start"} now, even a few. If something is stopping you, tell me what it is.`;
+    return `Starting is the hardest part. Send just 1 DM now and tap +, then decide.\n${t.kind === "dms" ? `${Math.max(0, t.target - (t.reportedDone ?? 0))} are still left` : "This task is still open"} and the deadline is ${due}${left > 0 ? ` (${fmtDuration(left)} left)` : ""}. If something is really stopping you, tell me what it is.`;
+  if (info.promised && t.goal) return `Deal: ${t.goal.count - (t.reportedDone ?? 0)} more by ${fmtWhen(ms(t.goal.by), now, tz)}. I will check then. You can do this!`;
   if (info.resuming && !info.reportedNow && !u.question && !u.blocked) return `Good, keep going.\n${statusLine(t, now, tz)}`;
-  if (u.mood && !u.blocked) return `I understand. Take a short pause if you need it, then keep going. You are doing well.\n${statusLine(t, now, tz)}`;
+  if (u.mood && !u.blocked) {
+    const small = t.kind === "dms" ? Math.min(3, Math.max(1, t.target - (t.reportedDone ?? 0))) : 0;
+    return `I hear you, it is a lot. Let's make it small: ${small ? `just ${small} more DM${small === 1 ? "" : "s"}, then` : "finish one small part, then"} take 5 minutes for yourself. You have already done ${t.reportedDone ?? 0}, that counts.`;
+  }
 
   const parts: string[] = [u.sentence ?? ruleSentence(u, info.reportedNow)];
   if (info.reportedNow && t.kind === "dms") {
     if (info.clampedFrom) parts.push(`You wrote ${info.clampedFrom}, but the task is ${t.target}. I recorded ${t.target}.`);
-    parts.push(statusLine(t, now, tz));
+    if (info.coach?.length) {
+      const praise = info.coach.find((l) => l.startsWith("Goal reached"));
+      if (praise) parts[0] = praise;
+      parts.push(`${t.reportedDone ?? 0} of ${t.target} done, ${Math.max(0, t.target - (t.reportedDone ?? 0))} to go.`);
+      parts.push(...info.coach.filter((l) => l !== praise));
+    } else parts.push(statusLine(t, now, tz));
   }
   if (info.imageRejectedNow) parts.push(info.imageRejectedNow);
   else if (u.blocked) parts.push(nextStep(t));
@@ -848,7 +927,14 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
       } else if (u.resolved) t.blockedReason = undefined;
       if (u.start === "started") t.startedAt ??= iso(now);
 
-      if (t.kind === "dms" && t.status !== "review") {
+      const prevDone = t.reportedDone ?? 0;
+      const promise = t.kind === "dms" && t.status === "open" ? herPromise(text) : null;
+      if (promise) {
+        t.goal = { count: Math.min(t.target, prevDone + promise.more), by: iso(now + promise.minutes * MIN), fromHer: true };
+        t.startedAt ??= iso(now);
+        info.promised = true;
+      }
+      if (t.kind === "dms" && t.status !== "review" && !promise) {
         let total = u.total;
         if (u.all) total = t.target;
         if (total === undefined && u.more !== undefined) total = (t.reportedDone ?? 0) + u.more;
@@ -883,6 +969,7 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
         t.lastProofAt = iso(now);
       }
 
+      if (info.reportedNow) info.coach = progressCoach(t, prevDone, now, d.settings.timezone);
       // Reporting progress means she is working again.
       if (info.reportedNow && !u.blocked && t.blockedReason) t.blockedReason = undefined;
       if (!u.blocked && /\b(?:i'?m back|i am back|back now|continu\w*|resum\w*|sending (?:more|now)|working (?:again|now|on it)|on it|keep going)\b/i.test(text)) info.resuming = true;
@@ -894,6 +981,10 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
       if (u.start === "started" || u.blocked || u.resolved || info.reportedNow) t.nextCheckAt = iso(now + nextDelayMin(t) * MIN);
 
       const quoted = `“${text.slice(0, 300)}”`;
+      if (info.promised && t.goal) {
+        managerLine = `${name} promised: reach ${t.goal.count} by ${fmtWhen(ms(t.goal.by), now, d.settings.timezone)}.`;
+        managerPush = { title: `${name} made a promise`, body: managerLine };
+      }
       const askKind = u.cantFinish ? "cantfinish" : u.question === "break" || u.question === "extension" || u.question === "other" ? u.question : u.question === "howto" && !t.brief ? "howto" : null;
       if (askKind) t.pendingAsk = { kind: askKind, text: text.slice(0, 300), at: iso(now) };
       const phaseNote = u.blocked
@@ -955,18 +1046,25 @@ export async function setProgress(total: number, opts: { defer?: Defer } = {}): 
     t.noUpdateMsgId = undefined;
     t.silentSince = undefined;
     if (next === (t.reportedDone ?? 0)) return;
+    const prev = t.reportedDone ?? 0;
     t.reportedDone = next;
     t.startedAt ??= iso(now);
     t.lastProgressAt = iso(now);
     t.lastReportAt = iso(now);
     t.nextCheckAt = iso(now + nextDelayMin(t) * MIN);
     const line = `${name}: ${next} of ${t.target} sent.`;
-    const last = d.messages.at(-1);
-    if (last && last.owner === "manager" && last.kind === "progress") {
+    const last = [...d.messages].reverse().find((m) => m.owner === "manager");
+    if (last && last.kind === "progress") {
       last.text = line;
       last.at = iso(now);
     } else say(d, "manager", line, "agent", { kind: "progress" });
     pushes.push({ role: "manager", title: `${name}: ${next}/${t.target} sent`, body: t.title, tag: `progress-${t.id}` });
+    // Coach her only at moments that matter: a goal reached, a milestone, or her first goal.
+    if (next > prev) {
+      const hadGoal = !!t.goal;
+      const lines = progressCoach(t, prev, now, d.settings.timezone);
+      if (lines.some((l) => !l.startsWith("Next goal")) || (!hadGoal && lines.length)) say(d, "teammate", lines.join("\n"), "agent", { kind: "update" });
+    }
     afterProgress(d, t, now, pushes, name, "");
   });
   await sendPushes(pushes, opts.defer);
@@ -1095,6 +1193,26 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
       }
       actions.push("retry");
       return { pushes, actions };
+    }
+
+    // 2b. Her small goal ran out: one firm, specific push, then a smaller new goal.
+    if (task.kind === "dms" && task.goal && task.startedAt && nowMs >= ms(task.goal.by)) {
+      const done = task.reportedDone ?? 0;
+      const goal = task.goal;
+      if (done >= goal.count) {
+        task.goal = makeGoal(task, nowMs);
+      } else {
+        const short = goal.count - done;
+        task.goalMisses = (task.goalMisses ?? 0) + 1;
+        task.goal = makeGoal(task, nowMs);
+        const msg = `${name}, time check: the goal was ${goal.count} and you are at ${done}.${goal.fromHer ? " This was your own promise." : ""} Send the ${short} missing now and tap + after each one.${task.goal ? `\nNew goal: ${task.goal.count} by ${fmtWhen(ms(task.goal.by), nowMs, tz)}.` : ""}`;
+        say(d, "teammate", msg, "agent", { kind: "checkin" });
+        task.lastReminderAt = nowIso;
+        task.unanswered = Math.max(1, task.unanswered);
+        pushes.push({ role: "teammate", title: "Goal check", body: msg, persistent: true, tag: `check-${task.id}`, taskId: task.id });
+        actions.push("goal-missed");
+        return { pushes, actions };
+      }
     }
 
     // 3. Behind pace: tell the manager at once, don't wait for the next check-in. One alert per task.

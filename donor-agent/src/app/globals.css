@@ -271,3 +271,9 @@ button,a,input{-webkit-tap-highlight-color:transparent}
 .her .p-composer{padding:4px}
 .her .p-composer input:not([type=file]){padding:9px 10px}
 .her .send-btn,.her .attach-btn{width:42px;height:42px}
+/* New message: glow + floating button; denser runs of messages */
+.bubble.fresh{animation:rise .25s ease-out,glowIn 2.4s ease-out}
+@keyframes glowIn{0%{box-shadow:0 0 0 2px #55d1ac,0 0 22px rgba(85,209,172,.55)}100%{box-shadow:0 0 0 0 transparent}}
+.bubble.cont{margin-top:-4px}
+.p-chat{position:relative}
+.new-pill{position:absolute;left:50%;transform:translateX(-50%);bottom:118px;z-index:3;min-height:36px;padding:6px 16px;border-radius:999px;border:0;background:var(--grad);color:#06120e;font-weight:750;font-size:.88rem;box-shadow:var(--glow);animation:rise .2s ease-out}

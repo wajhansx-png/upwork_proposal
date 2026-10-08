@@ -211,6 +211,8 @@ export function safeSentence(s: unknown, allowManagerMention: boolean): string |
   if (!t || /\d/.test(t) || t.split(" ").length > 45 || /https?:|www\./i.test(t)) return undefined;
   if (/\b(?:verified|proven|proof is|confirmed your|guarantee)\b/i.test(t)) return undefined;
   if (!allowManagerMention && /\bmanager\b/i.test(t)) return undefined;
+  // The agent never sends her away from the work unless something is really wrong.
+  if (!allowManagerMention && /\b(?:rest|stop working|come back later|message me when you can|when you feel better|tomorrow|take the day)\b/i.test(t)) return undefined;
   return t;
 }
 

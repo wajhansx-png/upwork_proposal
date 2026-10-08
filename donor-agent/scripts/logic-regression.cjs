@@ -40,14 +40,24 @@ const toMgr = async (m) => { const n = db.messages.length; await A.handleManager
   await toHer('done 5 more'); assert.equal(task().reportedDone, 55);
   await toHer('I will send 10 more after lunch'); assert.equal(task().reportedDone, 55, 'a plan is not progress');
   // Pushback and honesty.
-  assert.match(await toHer('I will do it later'), /45 DMs are still left.*Please continue now/s);
+  assert.match(await toHer('I will do it later'), /Send just 1 DM now.*45 are still left/s);
   assert.match(db.messages.filter((m) => m.owner === 'manager').at(-1).text, /putting it off/);
-  assert.match(await toHer('kal karungi'), /Please continue now/);
+  assert.match(await toHer('kal karungi'), /Send just 1 DM now/);
   assert.match(await toHer('I cannot do 100 today'), /honest/);
   assert.equal(task().blockedReason, undefined, 'cannot finish is not a broken phone');
-  assert.match(await toHer('I am tired'), /short pause.*keep going/s);
+  assert.match(await toHer('I am tired'), /just \d+ more DMs?, then take 5 minutes/);
+  assert.match(await toHer('my mind is fucking'), /Let's make it small/, 'swearing is stress, answered with a tiny step');
   await toHer('my internet is not working'); assert.ok(task().blockedReason);
   await toHer('60'); assert.equal(task().blockedReason, undefined, 'reporting progress clears the blocker');
+
+  // Goals: every report sets a small next goal; reaching it is praised; missing it gets a specific push.
+  assert.match(await toHer('62'), /Next goal: reach \d+ by/);
+  const g = task().goal.count;
+  assert.match(await toHer(String(g)), /Goal reached/);
+  assert.match(await toHer("I'll send 5 in the next 20 minutes"), /Deal: 5 more by/);
+  assert.equal(task().goal.fromHer, true); assert.equal(task().reportedDone, g, 'a promise is not a count');
+  await A.runAgent(Date.now() + 21 * 60000);
+  assert.match(db.messages.filter((m) => m.owner === 'teammate').at(-1).text, /goal was \d+ and you are at \d+\. This was your own promise/);
 
   // Her questions wait for the manager, and his answer goes back to her.
   await toHer('can I take a break?');

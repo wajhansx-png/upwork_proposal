@@ -64,10 +64,10 @@ const myChat=()=>db.messages.filter(m=>m.owner==='manager');
   assert.equal(myChat().at(-1).img,'pic');
 
   // + and − buttons: quiet, one progress line for the manager that updates, one collapsing alert.
-  const chat0=db.messages.length;
+  const mine0=myChat().length;
   await setProgress(5); await setProgress(6); await setProgress(4);
   assert.equal(db.tasks[0].reportedDone,4);
-  assert.equal(db.messages.length,chat0+1,'button taps add one line, not one per tap');
+  assert.equal(myChat().length,mine0+1,'button taps add one line for the manager, not one per tap');
   assert.match(myChat().at(-1).text,/4 of 10 sent/);
   assert.equal(pushes.filter(p=>p[0]==='manager').at(-1)[3].tag,'progress-test','progress alerts replace each other');
   await setProgress(10);

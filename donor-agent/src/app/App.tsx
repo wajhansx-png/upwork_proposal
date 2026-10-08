@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { AgentState, ChatMessage, Role, Settings, Task } from "@/lib/types";
 
 interface State {
@@ -207,11 +207,11 @@ function Ring({ value, max, tone, size, children }: { value: number; max: number
   );
 }
 
-function Bubble({ m, who }: { m: ChatMessage; who: string }) {
+function Bubble({ m, who, showWho = true, fresh = false }: { m: ChatMessage; who: string; showWho?: boolean; fresh?: boolean }) {
   const mine = m.from === "user";
   return (
-    <div className={`bubble ${mine ? "mine" : m.from === "manager" ? "boss" : "them"}`}>
-      {!mine && <span className="bubble-who">{who}</span>}
+    <div className={`bubble ${mine ? "mine" : m.from === "manager" ? "boss" : "them"}${fresh ? " fresh" : ""}${showWho ? "" : " cont"}`}>
+      {!mine && showWho && <span className="bubble-who">{who}</span>}
       {m.img && (
         <a href={`/api/img/${m.img}`} target="_blank" rel="noreferrer">
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -222,6 +222,91 @@ function Bubble({ m, who }: { m: ChatMessage; who: string }) {
       <span className="bubble-time">{time(m.at)}</span>
     </div>
   );
+}
+
+// ---------- new message signal ----------
+
+let audio: AudioContext | null = null;
+function chime() {
+  try {
+    audio ??= new AudioContext();
+    if (audio.state === "suspended") void audio.resume();
+    const t0 = audio.currentTime;
+    [880, 1320].forEach((f, i) => {
+      const o = audio!.createOscillator();
+      const g = audio!.createGain();
+      o.type = "sine";
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t0 + i * 0.12);
+      g.gain.exponentialRampToValueAtTime(0.18, t0 + i * 0.12 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.12 + 0.25);
+      o.connect(g).connect(audio!.destination);
+      o.start(t0 + i * 0.12);
+      o.stop(t0 + i * 0.12 + 0.3);
+    });
+  } catch {
+    /* sound is optional */
+  }
+}
+
+/** When a new message from the other side arrives: vibrate, chime, glow, and show "New message" if she scrolled up. */
+function useNewMessageSignal(messages: ChatMessage[], list: RefObject<HTMLDivElement | null>) {
+  const seen = useRef<string | null>(null);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [below, setBelow] = useState(false);
+  const lastOther = [...messages].reverse().find((m) => m.from !== "user");
+  useEffect(() => {
+    // The first tap anywhere unlocks sound on phones.
+    const unlock = () => {
+      try {
+        audio ??= new AudioContext();
+        void audio.resume();
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("pointerdown", unlock, { once: true });
+    return () => window.removeEventListener("pointerdown", unlock);
+  }, []);
+  useEffect(() => {
+    if (!lastOther) return;
+    if (seen.current === null) {
+      seen.current = lastOther.id;
+      return;
+    }
+    if (lastOther.id === seen.current) return;
+    seen.current = lastOther.id;
+    navigator.vibrate?.([70, 50, 70]);
+    chime();
+    if (document.hidden) document.title = "(1) New message";
+    const el = list.current;
+    const nearBottom = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 260;
+    const id = lastOther.id;
+    const on = setTimeout(() => {
+      setFresh(id);
+      if (!nearBottom) setBelow(true);
+    }, 0);
+    const off = setTimeout(() => setFresh(null), 2500);
+    return () => {
+      clearTimeout(on);
+      clearTimeout(off);
+    };
+  }, [lastOther, list]);
+  useEffect(() => {
+    const back = () => {
+      if (!document.hidden) document.title = "Donor Desk";
+    };
+    document.addEventListener("visibilitychange", back);
+    return () => document.removeEventListener("visibilitychange", back);
+  }, []);
+  const jump = () => {
+    list.current?.scrollTo({ top: list.current.scrollHeight, behavior: "smooth" });
+    setBelow(false);
+  };
+  return { fresh, below, jump, onScroll: () => {
+    const el = list.current;
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 60) setBelow(false);
+  } };
 }
 
 // ---------- smart suggestions ----------
@@ -262,6 +347,10 @@ function herChips(task: Task | undefined, messages: ChatMessage[], nowMs: number
     }
     if (left <= 0) out.push({ label: "More time?", text: "Can I get more time?" });
     else if (left < 45 * 60_000 && done < task.target) out.push({ label: "More time?", text: "Can I get more time?" });
+    if (!askedCount && left > 0 && !(task.goal?.fromHer && new Date(task.goal.by).getTime() > nowMs)) {
+      const n = Math.max(3, Math.min(task.target - done, task.goal ? task.goal.count - done : 5));
+      if (n > 0) out.unshift({ label: `${n} in 20 min`, text: `I'll send ${n} in the next 20 minutes`, hot: true });
+    }
   } else {
     out.push({ label: "All done", text: "All done", hot: true });
   }
@@ -324,6 +413,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
   const lastAgentId = conversation.filter((m) => m.from === "agent").at(-1)?.id;
   const displayed = optimistic ? [...conversation, optimistic] : conversation;
   const lastId = displayed.at(-1)?.id;
+  const signal = useNewMessageSignal(conversation, thread);
   useEffect(() => {
     const el = thread.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -399,9 +489,9 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
 
       {chatOpen && (
         <section className="p-chat">
-          <div className="p-thread" ref={thread}>
+          <div className="p-thread" ref={thread} onScroll={signal.onScroll}>
             {!conversation.length && <p className="p-empty">Type a task, like “{name} send 100 DMs by 9pm”.</p>}
-            {displayed.map((m) => <Bubble key={m.id} m={m} who={AGENT} />)}
+            {displayed.map((m, i) => <Bubble key={m.id} m={m} who={AGENT} showWho={displayed[i - 1]?.from !== m.from} fresh={signal.fresh === m.id} />)}
             {busy && <p className="typing"><i /><i /><i /></p>}
           </div>
           <ChipRow chips={managerChips(task, name)} busy={busy} onPick={(t) => void post(t)} />
@@ -529,9 +619,14 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
   const lastAgentAtSend = useRef<string | undefined>(undefined);
   const list = useRef<HTMLDivElement>(null);
   const lastShownId = displayed.at(-1)?.id;
+  const signal = useNewMessageSignal(messages, list);
+  const scrolledOnce = useRef(false);
   useEffect(() => {
     const el = list.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    // Open at the newest message. After that, follow new messages unless she scrolled up to read.
+    if (!scrolledOnce.current || el.scrollHeight - el.scrollTop - el.clientHeight < 260) el.scrollTop = el.scrollHeight;
+    if (lastShownId) scrolledOnce.current = true;
   }, [lastShownId, busy]);
   useEffect(() => {
     if (busy && lastAgentId && lastAgentId !== lastAgentAtSend.current) {
@@ -613,11 +708,14 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
       ))}
 
       <section className="p-chat">
-        <div className="p-thread" ref={list} aria-live="polite">
+        <div className="p-thread" ref={list} aria-live="polite" onScroll={signal.onScroll}>
           {!messages.length && <p className="p-empty">Your tasks and messages show here.</p>}
-          {displayed.map((m) => <Bubble key={m.id} m={m} who={m.from === "manager" ? "Manager" : AGENT} />)}
+          {displayed.map((m, i) => (
+            <Bubble key={m.id} m={m} who={m.from === "manager" ? "Manager" : AGENT} showWho={displayed[i - 1]?.from !== m.from} fresh={signal.fresh === m.id} />
+          ))}
           {busy && <p className="typing"><i /><i /><i /></p>}
         </div>
+        {signal.below && <button className="new-pill" onClick={signal.jump}>New message ↓</button>}
         <ChipRow chips={herChips(task, messages, new Date(s.now).getTime())} busy={busy} onPick={(t) => void send(t)} />
         <Composer onSend={send} busy={busy} placeholder={`Message ${AGENT}…`} onFocusChange={setTyping} />
         {err && <p className="err">{err}</p>}

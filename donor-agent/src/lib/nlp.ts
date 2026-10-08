@@ -232,7 +232,8 @@ export const isDelay = (text: string) =>
   !/\b(?:sent|done|finished|started)\b/i.test(text);
 
 /** Low mood that is not a blocker: "I am tired", "bored". */
-export const isMood = (text: string) => /\b(?:tired|exhausted|bored|sleepy|stressed|demotivated|not in the mood|thak gayi|thak gai|neend)\b/i.test(text);
+export const isMood = (text: string) =>
+  /\b(?:tired|exhausted|bored|sleepy|stressed|demotivated|not in the mood|thak gayi|thak gai|neend|fed up|sick of|frustrat\w*|annoyed|irritat\w*|overwhelm\w*|my mind is|mind is not|can'?t focus|cannot focus|pagal|pareshan|tension|f+u+c+k\w*|shit)\b/i.test(text);
 
 export const isGreeting = (text: string) =>
   /^\s*(?:hi+|hello|hey|salam|salaam|assalam\w*|aoa|asalam\w*|good (?:morning|evening|afternoon))\b[\s\w,!.]{0,20}$/i.test(text) ||
