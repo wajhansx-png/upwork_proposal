@@ -57,6 +57,9 @@ const toMgr = async (m) => { const n = db.messages.length; await A.handleManager
   assert.match(r.her, /take a 15-minute break/); assert.ok(task().breakUntil);
   await A.runAgent(Date.now() + 16 * 60000);
   assert.match(db.messages.filter((m) => m.owner === 'teammate').at(-1).text, /break is over/);
+  await toHer('can I take a break?'); await toMgr('yes 15 min');
+  assert.match(await toHer("I'm back, continuing now"), /Good, keep going/);
+  assert.equal(task().breakUntil, undefined, 'saying she is back ends the break');
   await toHer('what should I write in the DM?');
   r = await toMgr('Use the Eid template');
   assert.match(r.her, /Your manager says: Use the Eid template/);

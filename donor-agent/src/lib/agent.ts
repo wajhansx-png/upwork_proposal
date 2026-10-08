@@ -706,6 +706,8 @@ function ruleSentence(u: Understood, hadReport: boolean): string {
 
 interface ReplyInfo {
   reportedNow: boolean;
+  /** She is back from a break or says she keeps working. */
+  resuming?: boolean;
   clampedFrom?: number;
   imageChecking?: boolean;
   imageRejectedNow?: string;
@@ -758,6 +760,7 @@ function buildReply(u: Understood, t: Task | undefined, d: Db, now: number, info
   if (u.cantFinish) return `Thank you for being honest. I am telling your manager. Do as many as you can by ${due}, and tell me your count as you go.`;
   if (u.delay && open && !u.blocked)
     return `${t.kind === "dms" ? `${Math.max(0, t.target - (t.reportedDone ?? 0))} DMs are still left` : "This task is still open"} and the deadline is ${due}${left > 0 ? ` (${fmtDuration(left)} left)` : ""}. Please ${t.startedAt ? "continue" : "start"} now, even a few. If something is stopping you, tell me what it is.`;
+  if (info.resuming && !info.reportedNow && !u.question && !u.blocked) return `Good, keep going.\n${statusLine(t, now, tz)}`;
   if (u.mood && !u.blocked) return `I understand. Take a short pause if you need it, then keep going. You are doing well.\n${statusLine(t, now, tz)}`;
 
   const parts: string[] = [u.sentence ?? ruleSentence(u, info.reportedNow)];
@@ -882,6 +885,11 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
 
       // Reporting progress means she is working again.
       if (info.reportedNow && !u.blocked && t.blockedReason) t.blockedReason = undefined;
+      if (!u.blocked && /\b(?:i'?m back|i am back|back now|continu\w*|resum\w*|sending (?:more|now)|working (?:again|now|on it)|on it|keep going)\b/i.test(text)) info.resuming = true;
+      if (info.resuming || info.reportedNow || u.start === "started") {
+        t.breakUntil = undefined;
+        t.reminderPausedUntil = undefined;
+      }
       // The next report request follows the phase she is in now.
       if (u.start === "started" || u.blocked || u.resolved || info.reportedNow) t.nextCheckAt = iso(now + nextDelayMin(t) * MIN);
 

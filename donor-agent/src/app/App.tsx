@@ -224,6 +224,89 @@ function Bubble({ m, who }: { m: ChatMessage; who: string }) {
   );
 }
 
+// ---------- smart suggestions ----------
+
+interface Chip {
+  label: string;
+  text: string;
+  hot?: boolean;
+  confirm?: string;
+}
+
+/** What Areeba most likely wants to say next, from the task and the last thing Wajdan asked. */
+function herChips(task: Task | undefined, messages: ChatMessage[], nowMs: number): Chip[] {
+  if (!task) return [];
+  if (task.status === "review" || task.status === "done") return [{ label: "Thank you", text: "Thank you" }, { label: "What's next?", text: "What should I do next?" }];
+  if (task.status !== "open" && task.status !== "missed") return [];
+  const last = [...messages].reverse().find((m) => m.from !== "user");
+  const asked = last?.text.toLowerCase() ?? "";
+  const done = task.reportedDone ?? 0;
+  const left = new Date(task.deadlineAt).getTime() - nowMs;
+  const out: Chip[] = [];
+  if (task.breakUntil && new Date(task.breakUntil).getTime() > nowMs) return [{ label: "I'm back", text: "I'm back, continuing now", hot: true }];
+  if (task.blockedReason) return [{ label: "It's fixed now", text: "It's fixed now, back to work", hot: true }, { label: "Still not working", text: "Still not working, I need help" }];
+  if (!task.startedAt) {
+    out.push({ label: "I started", text: "I started", hot: true });
+    out.push(task.brief ? { label: "What's my task?", text: "What is my task?" } : { label: "What should I write?", text: "What should I write in the DM?" });
+    out.push({ label: "I have a problem", text: "I have a problem" });
+    return out;
+  }
+  if (task.kind === "dms") {
+    const askedCount = /how many|your count|your total|update|reply|send your|tap \+/.test(asked);
+    if (askedCount || left <= 0) {
+      for (const step of done === 0 ? [3, 5, 10] : [5, 10]) {
+        const n = Math.min(task.target, done + step);
+        if (n > done) out.push({ label: `Sent ${n}`, text: `I sent ${n} in total`, hot: out.length === 0 });
+      }
+      if (done > 0) out.push({ label: `Still ${done}`, text: `Still ${done}, sending more now` });
+    }
+    if (left <= 0) out.push({ label: "Need more time", text: "Can I get more time?" });
+    else if (left < 45 * 60_000 && done < task.target) out.push({ label: "Need more time", text: "Can I get more time?" });
+  } else {
+    out.push({ label: "All done", text: "All done", hot: true });
+  }
+  if (out.length < 3) out.push({ label: "How many left?", text: "What is my count?" });
+  if (out.length < 4 && left > 45 * 60_000) out.push({ label: "Can I take a break?", text: "Can I take a break?" });
+  if (out.length < 5) out.push({ label: "I have a problem", text: "I have a problem" });
+  return out.slice(0, 5);
+}
+
+/** What the manager most likely wants next: answer her question first, then act on how the task is going. */
+function managerChips(task: Task | undefined, name: string): Chip[] {
+  if (!task || task.status === "cancelled" || task.status === "done") return [
+    { label: "100 DMs by 9pm", text: `${name} send 100 DMs by 9pm` },
+    { label: "50 DMs in 2 hours", text: `${name} send 50 DMs in 2 hours` },
+  ];
+  const ask = task.pendingAsk;
+  if (ask?.kind === "break") return [{ label: "Yes, 15 min", text: "yes 15 min", hot: true }, { label: "Yes, 30 min", text: "yes 30 min" }, { label: "No break", text: "no break" }];
+  if (ask?.kind === "extension") return [{ label: "Yes, 1 hour", text: "yes 1 hour", hot: true }, { label: "Yes, 30 min", text: "yes 30 min" }, { label: "No, keep deadline", text: "no" }];
+  if (ask?.kind === "cantfinish") return [{ label: "Do your best", text: "Tell her to do as many as she can and keep going" }, { label: "Make it 50", text: "make it 50" }, { label: "Give her 1 hour", text: "give her 1 hour" }];
+  if (task.status === "review") return [{ label: "Confirm done", text: "confirm", hot: true }, { label: "Tell her good job", text: "Tell her good job, thank you" }, { label: "How did she do?", text: `How is ${name} doing?` }];
+  if (task.status === "missed") return [{ label: "Give her 1 hour", text: "give her 1 hour", hot: true }, { label: "How is she?", text: `How is ${name} doing?` }, { label: "Cancel task", text: "cancel", confirm: "Cancel this task?" }];
+  const out: Chip[] = [];
+  if (task.blockedReason) out.push({ label: "Ask what she needs", text: "Tell her: tell me exactly what you need to fix it" });
+  if (task.unanswered >= 2 || !task.startedAt) out.push({ label: "Remind her", text: "remind her", hot: true });
+  out.push({ label: "How is she?", text: `How is ${name} doing?` });
+  if (task.startedAt && !task.blockedReason && task.unanswered < 2) out.push({ label: "Tell her good job", text: "Tell her good job, keep going" });
+  if (!out.some((c) => c.text === "remind her")) out.push({ label: "Remind her", text: "remind her" });
+  out.push({ label: "Give her 1 hour", text: "give her 1 hour" });
+  out.push({ label: "Cancel task", text: "cancel", confirm: "Cancel this task?" });
+  return out.slice(0, 5);
+}
+
+function ChipRow({ chips, busy, onPick }: { chips: Chip[]; busy: boolean; onPick: (text: string) => void }) {
+  if (!chips.length) return null;
+  return (
+    <div className="p-chips">
+      {chips.map((c) => (
+        <button key={c.label} className={c.hot ? "hot" : undefined} disabled={busy} onClick={() => (!c.confirm || confirm(c.confirm)) && onPick(c.text)}>
+          {c.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ---------- manager ----------
 
 function Manager({ s, refresh }: { s: State; refresh: () => void }) {
@@ -321,11 +404,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
             {displayed.map((m) => <Bubble key={m.id} m={m} who={AGENT} />)}
             {busy && <p className="typing"><i /><i /><i /></p>}
           </div>
-          <div className="p-chips">
-            <button disabled={busy} onClick={() => void post(`How is ${name} doing?`)}>How is she?</button>
-            {open && <button disabled={busy} onClick={() => void post("remind her")}>Remind her</button>}
-            {open && <button disabled={busy} onClick={() => confirm("Cancel this task?") && void post("cancel")}>Cancel task</button>}
-          </div>
+          <ChipRow chips={managerChips(task, name)} busy={busy} onPick={(t) => void post(t)} />
           <form className="p-composer" onSubmit={(e) => { e.preventDefault(); send(); }}>
             <input aria-label={`Talk to ${AGENT}`} placeholder="Give a task…" value={text} onChange={(e) => setText(e.target.value)} />
             <button className="send-btn" aria-label="Send" disabled={busy || !text.trim()}>➤</button>
@@ -533,13 +612,7 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
           {displayed.map((m) => <Bubble key={m.id} m={m} who={m.from === "manager" ? "Manager" : AGENT} />)}
           {busy && <p className="typing"><i /><i /><i /></p>}
         </div>
-        {task && (task.status === "open" || task.status === "missed") && (
-          <div className="p-chips">
-            {!task.startedAt && <button className="hot" disabled={busy} onClick={() => void send("I started")}>I started</button>}
-            <button disabled={busy} onClick={() => void send("I have a problem")}>I have a problem</button>
-            {task.kind !== "dms" && <button disabled={busy} onClick={() => void send("All done")}>All done</button>}
-          </div>
-        )}
+        <ChipRow chips={herChips(task, messages, new Date(s.now).getTime())} busy={busy} onPick={(t) => void send(t)} />
         <Composer onSend={send} busy={busy} placeholder={`Message ${AGENT}…`} />
         {err && <p className="err">{err}</p>}
       </section>
