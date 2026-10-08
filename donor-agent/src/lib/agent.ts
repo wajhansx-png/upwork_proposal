@@ -9,7 +9,7 @@ import { extractGap, extractInstructions, isAck, parseManager } from "./nlp";
 import { understandManager, understandTeammate, type Intent, type Understood } from "./understand";
 import type { TeammateFacts } from "./prompts";
 import type { ChatMessage, Db, PendingAssignment, Role, Task } from "./types";
-import { evidenceCount, nextDelayMin, taskPhase } from "./task-state";
+import { evidenceCount, nextDelayMin, nextPlannedCheckin, taskPhase } from "./task-state";
 
 /** Runs work after the reply has been sent. In a request this is Next's after(); elsewhere it runs inline. */
 export type Defer = (fn: () => Promise<void>) => void;
@@ -154,14 +154,18 @@ async function sendPushes(pushes: Push[], defer?: Defer) {
 const confirmedCount = (task: Task) => Math.max(task.reportedDone ?? 0, evidenceCount(task));
 
 function milestoneText(task: Task, now: number, tz: string) {
-  const confirmed = confirmedCount(task);
+  const claimed = task.reportedDone ?? 0;
   const verified = evidenceCount(task);
-  const elapsed = Math.max(1, now - ms(task.createdAt));
-  const rate = confirmed / elapsed;
-  const remaining = Math.max(0, task.target - confirmed);
-  const eta = rate > 0 ? new Date(now + remaining / rate) : null;
-  const onTrack = eta ? eta.getTime() <= ms(task.deadlineAt) : false;
-  return `${confirmed}/${task.target} reported, ${verified} proven by screenshot, ${onTrack ? "on track" : "behind"}${eta ? `, finish about ${fmtWhen(eta.getTime(), now, tz)}` : ""}`;
+  // Rate from when she really started, not when the task was created.
+  const startedAt = task.startedAt ? ms(task.startedAt) : ms(task.createdAt);
+  const elapsed = Math.max(1, now - startedAt);
+  const rate = claimed / elapsed;
+  const remaining = Math.max(0, task.target - claimed);
+  const etaMs = rate > 0 ? now + remaining / rate : null;
+  const onTrack = etaMs !== null && etaMs <= ms(task.deadlineAt);
+  // Only show an ETA that is in the future and inside this task's window.
+  const etaText = etaMs !== null && etaMs > now && etaMs <= ms(task.deadlineAt) + 24 * 3600_000 ? `, finish about ${fmtWhen(etaMs, now, tz)}` : "";
+  return `${claimed}/${task.target} claimed, ${verified} proven by screenshot, ${onTrack ? "on track" : "behind"}${etaText}`;
 }
 
 // ---------- manager messages ----------
@@ -811,89 +815,125 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
     const actions: string[] = [];
     if (!task) return { pushes, actions };
     const name = d.settings.teammateName;
-    const now = new Date(nowMs).toISOString();
-    if (!d.subs.some(s => s.role === "teammate") && !task.alertsProblemAt) {
-      task.alertsProblemAt = now;
-      const line = `${name}'s phone has no working alerts. She may be offline or have alerts off.`;
-      say(d, "manager", line, "agent", { kind: "update" });
-      pushes.push({ role: "manager", title: "Areeba alerts are off", body: line });
-    }
-    for (const receipt of task.pushReceipts ?? []) {
-      if (!receipt.receivedAt && !receipt.missingAlertedAt && nowMs >= ms(receipt.issuedAt) + 2 * MIN) {
-        receipt.missingAlertedAt = now;
-        const line = `${name}'s phone did not receive ${receipt.label}. She may be offline or have alerts off.`;
-        say(d, "manager", line, "agent", { kind: "update" });
-        pushes.push({ role: "manager", title: "Alert not received", body: line });
-      }
-    }
-    if (task.gapMinutes && task.timerEnabled !== false && nowMs < ms(task.deadlineAt) && nowMs >= ms(task.lastTimerAt ?? task.startedAt ?? task.createdAt) + task.gapMinutes * MIN) {
-      task.lastTimerAt = now;
-      const next = Math.min(task.target, confirmedCount(task) + 1);
-      const receiptId = newId();
-      task.pushReceipts = [...(task.pushReceipts ?? []), { id: receiptId, label: `DM timer alert`, issuedAt: now }].slice(-80);
-      pushes.push({ role: "teammate", title: "Time to send the next DM", body: `Time to send DM ${next} of ${task.target}.`, persistent: true, tag: `dm-timer-${task.id}`, receiptId, taskId: task.id });
-      actions.push("timer");
-    }
+    const nowIso = new Date(nowMs).toISOString();
+    const tz = d.settings.timezone;
+    const span = Math.max(1, ms(task.deadlineAt) - ms(task.createdAt));
+    const elapsed = Math.max(0, nowMs - ms(task.createdAt));
+    const confirmed = confirmedCount(task);
+    const expected = task.kind === "dms" ? Math.min(task.target, Math.floor((elapsed / span) * task.target)) : 0;
+    const behindBy = Math.max(0, expected - confirmed);
+    const lastHeard = ms(lastTeammateActivity(d) ?? task.createdAt);
+    const silentMin = Math.round((nowMs - Math.max(lastHeard, ms(task.lastReminderAt ?? task.lastCheckAt ?? task.createdAt))) / MIN);
+
     if (task.remindersEnabled === false) return { pushes, actions };
     if (task.reminderPausedUntil && nowMs < ms(task.reminderPausedUntil)) return { pushes, actions };
-    const due = task.nextCheckAt ?? new Date(ms(task.lastReportAt ?? task.startedAt ?? task.createdAt) + 3 * MIN).toISOString();
-    if (nowMs < ms(due)) return { pushes, actions };
+
+    // 1. Deadline passed: 3 final-report requests 10 min apart, then close.
     if (ms(task.deadlineAt) <= nowMs) {
       if ((task.finalRequests ?? 0) >= 3) {
         task.status = "missed";
-        task.closedAt = now;
-        say(d, "teammate", `The task “${task.title}” is closed as missed. You can still send proof here; your manager will see it.`, "agent", { kind: "update" });
-        say(d, "manager", `${name}: “${task.title}” closed as missed. ${evidenceCount(task)} of ${task.target} proven${task.reportedDone ? `, ${task.reportedDone} reported` : ""}. A review follows.`, "agent", { kind: "update" });
+        task.closedAt = nowIso;
+        say(d, "teammate", `The task "${task.title}" is closed as missed. You can still send proof here; your manager will see it.`, "agent", { kind: "update" });
+        say(d, "manager", `${name}: "${task.title}" closed as missed. ${evidenceCount(task)} of ${task.target} proven${task.reportedDone ? `, ${task.reportedDone} reported` : ""}. A review follows.`, "agent", { kind: "update" });
         pushes.push({ role: "manager", title: "Task missed", body: `${task.title}: ${evidenceCount(task)} of ${task.target} proven.` });
         actions.push("missed");
         return { pushes, actions };
       }
+      const due = ms(task.lastReminderAt ?? task.deadlineAt) + 10 * MIN;
+      if (nowMs < due && (task.finalRequests ?? 0) > 0) return { pushes, actions };
       task.finalRequests = (task.finalRequests ?? 0) + 1;
+      task.lastReminderAt = nowIso;
       if (!task.deadlineAlerted) {
         task.deadlineAlerted = true;
-        say(d, "teammate", "The deadline has passed. Send your final total and proof, or explain what is unfinished.", "agent", { kind: "checkin" });
-        say(d, "manager", `${name}: deadline passed; final total and proof requested.`, "agent", { kind: "update" });
-        pushes.push({role:"manager", title:"Deadline passed", body:`${name}: final total and proof requested.`});
+        say(d, "teammate", "The deadline passed. Please send your final total and a screenshot of your last DM.", "agent", { kind: "checkin" });
+        say(d, "manager", `${name}: deadline passed; final total requested.`, "agent", { kind: "update" });
+        pushes.push({ role: "manager", title: "Deadline passed", body: `${name}: final total requested.` });
       }
-      pushes.push({role:"teammate", title:"Urgent: final report", body:"The deadline passed. Send your final total and proof now.", persistent:true, tag:`deadline-${task.id}`, receiptId:newId(), taskId:task.id});
-      task.nextCheckAt = new Date(nowMs + 10 * MIN).toISOString();
+      pushes.push({ role: "teammate", title: "Final report please", body: "The deadline passed. Please send your final total now.", persistent: true, tag: `deadline-${task.id}`, receiptId: newId(), taskId: task.id });
       actions.push("deadline");
       return { pushes, actions };
     }
+
+    // 2. Silent-retry: she hasn't answered the LAST planned check-in. Keep nudging her, firmer each time.
+    //    Only kicks in while she is actively mid-task. For "please start" we don't retry; the planned check-ins repeat anyway.
+    if (task.unanswered >= 1 && task.startedAt && taskPhase(task) !== "blocked") {
+      const lastSent = ms(task.lastReminderAt ?? task.lastCheckAt ?? task.createdAt);
+      const retryGaps = [15, 20, 30]; // minutes between retries
+      const retryIndex = Math.min(task.unanswered - 1, retryGaps.length - 1);
+      if (nowMs < lastSent + retryGaps[retryIndex] * MIN) return { pushes, actions };
+      // Give up after 3 retries. The manager has been told twice; the planned check-ins will keep coming.
+      if (task.unanswered >= 4) return { pushes, actions };
+      const n = task.unanswered + 1;
+      const retryText =
+        n === 2 ? `${name}, please reply with your count, even one line.` :
+        n === 3 ? `${name}, still waiting. If you are stuck, say so now.` :
+        `${name}, I need your update now. Your manager has been told.`;
+      say(d, "teammate", retryText, "agent", { kind: "checkin" });
+      task.unanswered = n;
+      task.lastReminderAt = nowIso;
+      task.reminderCount = (task.reminderCount ?? 0) + 1;
+      const receiptId = newId();
+      task.pushReceipts = [...(task.pushReceipts ?? []), { id: receiptId, label: `silent retry ${n}`, issuedAt: nowIso }].slice(-80);
+      pushes.push({ role: "teammate", title: "Please reply", body: retryText, persistent: true, tag: `silent-${task.id}`, receiptId, taskId: task.id });
+      // One alert to the manager at 2, another at 4. Then stop (silence after that is her decision).
+      if ((n === 2 || n === 4) && (!task.lastSilentAlertAt || nowMs >= ms(task.lastSilentAlertAt) + 20 * MIN)) {
+        task.lastSilentAlertAt = nowIso;
+        const line = `${name} ignored ${n} nudges. ${task.kind === "dms" ? `${evidenceCount(task)}/${task.target} proven, ${task.reportedDone ?? 0} claimed.` : ""} Maybe call her.`;
+        say(d, "manager", line, "agent", { kind: "update" });
+        pushes.push({ role: "manager", title: `${name} is not answering`, body: line });
+      }
+      actions.push("retry");
+      return { pushes, actions };
+    }
+
+    // 3. Behind pace: tell the manager at once, don't wait for the next check-in. One alert per task.
+    // Only alert about pace once she has actually started and had time to make progress.
+    if (task.kind === "dms" && !task.paceWarned && task.startedAt && (nowMs - ms(task.startedAt)) >= 20 * MIN && behindBy >= Math.max(5, Math.round(task.target * 0.2))) {
+      task.paceWarned = true;
+      const line = `${name} is behind pace. Expected about ${expected}/${task.target} by now, has ${confirmed} proven (${task.reportedDone ?? 0} claimed).`;
+      say(d, "manager", line, "agent", { kind: "update" });
+      pushes.push({ role: "manager", title: "Behind pace", body: line });
+      actions.push("pace");
+    }
+
+    // 4. Planned check-in: start, 1/3, 2/3, 30 min before deadline. Only 4 or 5 across the whole task.
+    const nextAt = nextPlannedCheckin(task, task.lastCheckAt, nowMs);
+    if (nextAt === null || nowMs < nextAt) return { pushes, actions };
+    const minutesLeft = Math.round((ms(task.deadlineAt) - nowMs) / MIN);
     const phase = taskPhase(task);
-    const n = task.unanswered + 1;
-    const message = phase === "awaiting-start"
-      ? `Hi ${name}, can you start “${task.title}” now? Reply “I started” when you begin, or tell me what is stopping you.`
+    const beforeStart = !task.startedAt;
+    const almostDone = minutesLeft <= 35;
+    const message = beforeStart
+      ? `Hi ${name}, can you start "${task.title}" now? Reply "I started" when you begin.`
       : phase === "blocked"
-      ? "Your manager has been told about the blocker. Has it been resolved, or do you still need help?"
+      ? "Your manager has been told about the blocker. Has it been resolved?"
       : phase === "awaiting-proof"
-      ? `You reported ${task.reportedDone} DMs. Please send readable proof showing the recipient and sent message. Evidence currently supports ${evidenceCount(task)} distinct recipients.`
+      ? `You reported ${task.reportedDone} DMs. Please send a screenshot of your last sent message.`
+      : almostDone
+      ? `${name}, ${minutesLeft} min left. Please send a screenshot of your last DM and your total count.`
       : task.kind === "dms"
-      ? (() => {
-          const elapsed = Math.max(1, nowMs - ms(task.createdAt));
-          const expected = Math.min(task.target, Math.floor((elapsed / Math.max(1, ms(task.deadlineAt) - ms(task.createdAt))) * task.target));
-          const behind = Math.max(0, expected - confirmedCount(task));
-          return behind > 0
-            ? `You are ${behind} DMs behind pace. Please send ${Math.max(1, Math.ceil(behind + task.target / Math.max(1, (ms(task.deadlineAt) - nowMs) / (10 * MIN))))} DMs in the next 10 minutes, then report your total or a problem.`
-            : `Quick update, ${name}: how many DMs have you sent in total? Add a screenshot of your latest sent message. Let me know if anything is blocking you.`;
-        })()
-      : `How is “${task.title}” going? Tell me what is finished and what remains. Attach proof if available.`;
-    say(d, "teammate", message, "agent", { kind:"checkin" });
-    task.lastCheckAt = new Date(nowMs).toISOString();
-    task.unanswered = n;
-    // Back off after repeated unanswered requests; keep the outstanding request visible.
-    task.lastReminderAt = now;
-    task.nextCheckAt = new Date(nowMs + nextDelayMin(task) * MIN).toISOString();
+      ? (behindBy > 0
+        ? `${name}, you are behind pace. What is your count now? Attach a screenshot if you can.`
+        : `Quick update, ${name}: how many have you sent? Add a screenshot of your last DM.`)
+      : `How is "${task.title}" going? Tell me what is finished and what remains.`;
+    say(d, "teammate", message, "agent", { kind: "checkin" });
+    task.lastCheckAt = nowIso;
+    task.lastReminderAt = nowIso;
+    task.unanswered = 1;  // start the silent-retry clock from this check-in
     task.reminderCount = (task.reminderCount ?? 0) + 1;
     const receiptId = newId();
-    task.pushReceipts = [...(task.pushReceipts ?? []), { id: receiptId, label: `reminder ${task.reminderCount}`, issuedAt: now }].slice(-80);
-    pushes.push({role:"teammate",title:phase === "awaiting-start" ? "Please confirm you started" : phase === "awaiting-proof" ? "Proof still needed" : "Report due",body:message,persistent:true,tag:`report-${task.id}`,receiptId,taskId:task.id});
-    if (n >= 2 && (!task.lastSilentAlertAt || nowMs >= ms(task.lastSilentAlertAt) + 10 * MIN)) {
-      task.lastSilentAlertAt = now;
-      const note = `${name} is not answering, call her.`;
-      say(d,"manager",note,"agent",{kind:"update"});
-      pushes.push({role:"manager",title:"Your attention is needed",body:note});
+    task.pushReceipts = [...(task.pushReceipts ?? []), { id: receiptId, label: `check-in ${task.reminderCount}`, issuedAt: nowIso }].slice(-80);
+    pushes.push({ role: "teammate", title: beforeStart ? "Please confirm you started" : phase === "awaiting-proof" ? "Proof needed" : almostDone ? "Final push" : "Quick update", body: message, persistent: true, tag: `check-${task.id}`, receiptId, taskId: task.id });
+
+    // Alert the manager if she didn't start on time (first planned push already fired, but no startedAt).
+    if (beforeStart && !task.alertsProblemAt && elapsed >= 15 * MIN) {
+      task.alertsProblemAt = nowIso;
+      const line = `${name} has not confirmed she started. ${minutesLeft} min left on the task.`;
+      say(d, "manager", line, "agent", { kind: "update" });
+      pushes.push({ role: "manager", title: "Not started yet", body: line });
     }
+
+    void tz;
     actions.push(phase);
     return { pushes, actions };
   });
