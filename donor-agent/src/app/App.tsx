@@ -32,17 +32,6 @@ async function api<T = unknown>(url: string, method = "GET", body?: unknown): Pr
   return data as T;
 }
 
-/** Makes a phone photo small enough to store: max 1000px, JPEG. */
-async function shrink(file: File): Promise<string> {
-  const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 1000 / Math.max(bmp.width, bmp.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bmp.width * scale);
-  canvas.height = Math.round(bmp.height * scale);
-  canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.7);
-}
-
 const b64ToBytes = (s: string) => {
   const pad = "=".repeat((4 - (s.length % 4)) % 4);
   const raw = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
@@ -207,7 +196,7 @@ function Ring({ value, max, tone, size, children }: { value: number; max: number
   );
 }
 
-function Bubble({ m, who, showWho = true, fresh = false }: { m: ChatMessage; who: string; showWho?: boolean; fresh?: boolean }) {
+function Bubble({ m, who, showWho = true, showTime = true, fresh = false }: { m: ChatMessage; who: string; showWho?: boolean; showTime?: boolean; fresh?: boolean }) {
   const mine = m.from === "user";
   const agent = m.from === "agent";
   const bubble = (
@@ -220,7 +209,7 @@ function Bubble({ m, who, showWho = true, fresh = false }: { m: ChatMessage; who
         </a>
       )}
       <span className="bubble-text">{m.text}</span>
-      <span className="bubble-time">{time(m.at)}</span>
+      {showTime && <span className="bubble-time">{time(m.at)}</span>}
     </div>
   );
   if (!agent) return bubble;
@@ -479,7 +468,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
           <p className="p-eyebrow">{name}</p>
           <h1 className="p-title">{task ? task.title : "No task yet"}</h1>
         </div>
-        <button className="icon-btn" aria-label="Settings" onClick={() => setSettingsOpen(true)}>⚙</button>
+        <button className="text-btn" onClick={() => setSettingsOpen(true)}>Settings</button>
       </header>
 
       <section className={`p-hero ${chatOpen ? "compact" : ""}`} aria-live="polite">
@@ -487,8 +476,10 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
           <strong className="ring-num">{sent}</strong>
           <span className="ring-of">of {target}</span>
         </Ring>
-        <span className={`status-pill ${tone}`}><i />{label}</span>
-        {task && open && <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} />}
+        <p className={`status-line ${tone}`}>
+          <span className="status-main"><i />{label}</span>
+          {task && open && <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} bare />}
+        </p>
       </section>
 
       <button className={`chat-pill ${chatOpen ? "on" : ""}`} aria-expanded={chatOpen} onClick={() => setChatOpen(!chatOpen)}>
@@ -500,7 +491,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
         <section className="p-chat">
           <div className="p-thread" ref={thread} onScroll={signal.onScroll}>
             {!conversation.length && <p className="p-empty">Type a task, like “{name} send 100 DMs by 9pm”.</p>}
-            {displayed.map((m, i) => <Bubble key={m.id} m={m} who={AGENT} showWho={displayed[i - 1]?.from !== m.from} fresh={signal.fresh === m.id} />)}
+            {displayed.map((m, i) => <Bubble key={m.id} m={m} who={AGENT} showWho={displayed[i - 1]?.from !== m.from} showTime={displayed[i + 1]?.from !== m.from} fresh={signal.fresh === m.id} />)}
             {busy && <p className="typing"><i /><i /><i /></p>}
           </div>
           <ChipRow chips={managerChips(task, name)} busy={busy} onPick={(t) => void post(t)} />
@@ -524,7 +515,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
   );
 }
 
-function DueLine({ deadlineAt, tz }: { deadlineAt: string; tz?: string }) {
+function DueLine({ deadlineAt, tz, bare = false }: { deadlineAt: string; tz?: string; bare?: boolean }) {
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
@@ -532,6 +523,7 @@ function DueLine({ deadlineAt, tz }: { deadlineAt: string; tz?: string }) {
   }, []);
   const left = new Date(deadlineAt).getTime() - nowMs;
   const at = new Date(deadlineAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz || undefined });
+  if (bare) return <span className="due-bare">{left > 0 ? <>Due {at} · <b>{countdown(left)}</b></> : <>Was due {at} · <b>late</b></>}</span>;
   return (
     <p className={`due ${left <= 0 ? "over" : ""}`}>
       <i /> {left > 0 ? <>Due {at} · <b>{countdown(left)}</b></> : <>Was due {at} · <b>late</b></>}
@@ -541,69 +533,45 @@ function DueLine({ deadlineAt, tz }: { deadlineAt: string; tz?: string }) {
 
 function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
   const name = s.settings.teammateName;
-  const [teammateName, setTeammateName] = useState(name);
-  const [msg, setMsg] = useState("");
   const [copied, setCopied] = useState(false);
   const [aiTest, setAiTest] = useState("");
   const a = useAlerts(s);
   const link = typeof window !== "undefined" ? `${location.origin}/areeba` : "/areeba";
   const aiError = s.system?.ai === "key" && s.agent?.llmStatus?.startsWith("error");
   return (
-    <>
-      <section className="card">
-        <h2>Alerts</h2>
+    <div className="set-list">
+      <div className="set-row">
+        <span>Alerts on this phone</span>
+        <button className={a.subscribed ? "" : "primary"} onClick={a.enable}>{a.subscribed ? "On ✓" : "Turn on"}</button>
+      </div>
+      <div className="set-row">
+        <span>Test alerts</span>
         <div className="row">
-          <button className="primary" onClick={a.enable}>{a.subscribed ? "Alerts are on" : "Turn on alerts"}</button>
-          <button onClick={() => void a.test()}>Test my phone</button>
-          <button onClick={() => void a.test("teammate")}>Test {name}&apos;s phone</button>
+          <button onClick={() => void a.test()}>Me</button>
+          <button onClick={() => void a.test("teammate")}>{name}</button>
         </div>
-        {a.note && <p className="hint" style={{ marginTop: 8 }}>{a.note}</p>}
-      </section>
-      <section className="card">
-        <h2>{name}&apos;s link</h2>
-        <div className="row">
-          <input className="grow" readOnly value={link} onFocus={(e) => e.currentTarget.select()} aria-label={`${name}'s link`} />
-          <button onClick={async () => { await navigator.clipboard.writeText(link).catch(() => undefined); setCopied(true); }}>{copied ? "Copied" : "Copy"}</button>
-        </div>
-      </section>
-      <section className="card">
-        <label htmlFor="f-name" style={{ marginTop: 0 }}>Teammate name</label>
-        <div className="row">
-          <input id="f-name" className="grow" value={teammateName} onChange={(e) => setTeammateName(e.target.value)} />
-          <button
-            onClick={async () => {
-              try {
-                await api("/api/settings", "PUT", { ...s.settings, teammateName: teammateName.trim() || name });
-                setMsg("Saved.");
-                refresh();
-              } catch (e) {
-                setMsg((e as Error).message);
-              }
-            }}
-          >
-            Save
-          </button>
-        </div>
-        {msg && <p className="hint">{msg}</p>}
-      </section>
-      <section className="card">
-        <h2>AI</h2>
-        <div className="row">
-          <button
-            disabled={aiTest === "…"}
-            onClick={async () => {
-              setAiTest("…");
-              const r = await api<{ ok: boolean; message: string }>("/api/ai-test", "POST").catch((e: Error) => ({ ok: false, message: e.message }));
-              setAiTest(`${r.ok ? "✓" : "✗"} ${r.message}`);
-              refresh();
-            }}
-          >
-            {aiTest === "…" ? "Testing…" : "Test AI"}
-          </button>
-        </div>
-        {aiTest && aiTest !== "…" ? <p className={aiTest.startsWith("✓") ? "hint" : "err"}>{aiTest}</p> : aiError ? <p className="err">Last AI error: {s.agent!.llmStatus}</p> : null}
-      </section>
-    </>
+      </div>
+      {a.note && <p className="hint">{a.note}</p>}
+      <div className="set-row">
+        <span>{name}&apos;s link</span>
+        <button onClick={async () => { await navigator.clipboard.writeText(link).catch(() => undefined); setCopied(true); }}>{copied ? "Copied ✓" : "Copy link"}</button>
+      </div>
+      <div className="set-row">
+        <span>AI</span>
+        <button
+          disabled={aiTest === "…"}
+          onClick={async () => {
+            setAiTest("…");
+            const r = await api<{ ok: boolean; message: string }>("/api/ai-test", "POST").catch((e: Error) => ({ ok: false, message: e.message }));
+            setAiTest(`${r.ok ? "✓" : "✗"} ${r.message}`);
+            refresh();
+          }}
+        >
+          {aiTest === "…" ? "Testing…" : "Test AI"}
+        </button>
+      </div>
+      {aiTest && aiTest !== "…" ? <p className={aiTest.startsWith("✓") ? "hint" : "err"}>{aiTest}</p> : aiError ? <p className="err">Last AI error: {s.agent!.llmStatus}</p> : null}
+    </div>
   );
 }
 
@@ -686,7 +654,7 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
     <main className={`p-shell her ${typing ? "is-typing" : ""}`}>
       <header className="her-top">
         <h1>Hi {name}</h1>
-        {alerts.subscribed === false && <button className="alert-btn" onClick={alerts.enable}>🔔 Turn on alerts</button>}
+        {alerts.subscribed === false && <button className="bell-btn" onClick={alerts.enable} aria-label="Turn on alerts">🔔 Alerts</button>}
       </header>
       {alerts.note && <p className="hint">{alerts.note}</p>}
 
@@ -697,16 +665,14 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
         </section>
       ) : (
         <section className="her-card" aria-label="Your task">
-          <div className="her-card-head">
-            <b className="her-task">{task.title}</b>
-            <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} />
-          </div>
+          <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} />
+          {task.kind !== "dms" && <b className="her-task">{task.title}</b>}
           {task.kind === "dms" ? (
             <div className="counter">
               <button className="minus" aria-label="One less" disabled={!canCount || value <= 0} onClick={() => tap(value - 1)}>−</button>
               <Ring value={value} max={target} tone={tone} size={112}>
                 <strong className="ring-num">{value}</strong>
-                <span className="ring-of">of {target}</span>
+                <span className="ring-of">of {target} DMs</span>
               </Ring>
               <button className="plus" aria-label="One more" disabled={!canCount || value >= target} onClick={() => tap(value + 1)}>+</button>
             </div>
@@ -720,7 +686,7 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
         <div className="p-thread" ref={list} aria-live="polite" onScroll={signal.onScroll}>
           {!messages.length && <p className="p-empty">Your tasks and messages show here.</p>}
           {displayed.map((m, i) => (
-            <Bubble key={m.id} m={m} who={m.from === "manager" ? "Manager" : AGENT} showWho={displayed[i - 1]?.from !== m.from} fresh={signal.fresh === m.id} />
+            <Bubble key={m.id} m={m} who={m.from === "manager" ? "Manager" : AGENT} showWho={displayed[i - 1]?.from !== m.from} showTime={displayed[i + 1]?.from !== m.from} fresh={signal.fresh === m.id} />
           ))}
           {busy && <p className="typing"><i /><i /><i /></p>}
         </div>
@@ -735,7 +701,6 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
 
 function Composer({ onSend, busy, placeholder, onFocusChange }: { onSend: (text: string, image?: string) => Promise<void>; busy: boolean; placeholder: string; onFocusChange?: (on: boolean) => void }) {
   const [text, setText] = useState("");
-  const file = useRef<HTMLInputElement>(null);
   const submit = async () => {
     const t = text;
     setText("");
@@ -743,24 +708,6 @@ function Composer({ onSend, busy, placeholder, onFocusChange }: { onSend: (text:
   };
   return (
     <form className="p-composer" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-      <input
-        ref={file}
-        type="file"
-        accept="image/*"
-        hidden
-        onChange={async (e) => {
-          const f = e.target.files?.[0];
-          e.target.value = "";
-          if (!f) return;
-          try {
-            await onSend(text, await shrink(f));
-            setText("");
-          } catch {
-            /* ignore */
-          }
-        }}
-      />
-      <button type="button" className="attach-btn" aria-label="Send a picture" onClick={() => file.current?.click()} disabled={busy}>📎</button>
       <input value={text} placeholder={placeholder} onChange={(e) => setText(e.target.value)} disabled={busy} aria-label="Message" onFocus={() => onFocusChange?.(true)} onBlur={() => setTimeout(() => onFocusChange?.(false), 150)} />
       <button className="send-btn" type="submit" aria-label="Send" disabled={busy || !text.trim()}>➤</button>
     </form>

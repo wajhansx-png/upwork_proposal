@@ -283,3 +283,33 @@ button,a,input{-webkit-tap-highlight-color:transparent}
 .avatar{width:32px;height:32px;border-radius:50%;flex:none;box-shadow:0 2px 8px rgba(0,0,0,.3),0 0 0 2px rgba(255,143,177,.35)}
 .avatar-space{width:32px;flex:none}
 .her .brow{max-width:90%}
+
+/* ===== Simpler look: one focus, one glow ===== */
+/* only the + glows */
+.her .ring svg,.p-hero .ring svg{filter:none}
+.send-btn{box-shadow:none}
+.p-chips button.hot{background:transparent;color:#55d1ac;border:1.5px solid #55d1ac;box-shadow:none}
+.bell-btn{min-height:34px;padding:5px 12px;border-radius:999px;font-size:.85rem;font-weight:600;background:transparent;border:1px solid var(--edge);color:var(--mute)}
+/* quieter chat bubbles */
+.her .bubble.them,.p-chat .bubble.them{background:rgba(255,255,255,.045);border:0}
+.bubble-time{opacity:.45}
+/* card: due on top, counter below */
+.her-card{align-items:stretch}
+.her-card>.due{align-self:center}
+.her .ring-of{font-size:.75rem}
+/* manager: one status line, text settings button */
+.text-btn{min-height:36px;padding:6px 14px;border-radius:999px;font-size:.88rem;font-weight:600;background:transparent;border:1px solid var(--edge);color:var(--mute)}
+.status-line{display:inline-flex;align-items:center;gap:8px;margin:0;padding:8px 16px;border-radius:999px;background:var(--glass),var(--card);border:1px solid var(--edge);font-weight:650;font-size:.92rem;flex-wrap:wrap;justify-content:center}
+.status-line i{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.status-line.good{color:#55d1ac}.status-line.warn{color:var(--amber)}.status-line.bad{color:var(--danger)}.status-line.idle{color:var(--mute)}
+.status-line .sep{opacity:.5}
+.due-bare{color:var(--danger);font-variant-numeric:tabular-nums}
+/* settings: one simple list */
+.set-list{display:flex;flex-direction:column}
+.set-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 2px;border-bottom:1px solid var(--edge)}
+.set-row:last-of-type{border-bottom:0}
+.set-row>span{font-weight:600}
+.set-row button{min-height:40px;padding:8px 14px}
+.status-line{flex-direction:column;gap:4px;border-radius:18px;padding:10px 20px}
+.status-main{display:inline-flex;align-items:center;gap:8px}
+.status-line .due-bare{font-size:.85rem;font-weight:600}
