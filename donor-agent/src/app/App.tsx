@@ -459,7 +459,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
   const [rapidRefreshUntil, setRapidRefreshUntil] = useState(0);
   const lastAgentAtSend = useRef<string | undefined>(undefined);
   const thread = useRef<HTMLDivElement>(null);
-  const conversation = s.messages.filter(m => ["manager-input","clarification","task","agent"].includes(m.kind ?? "")).slice(-6);
+  const conversation = s.messages.filter(m => ["manager-input","clarification","task","agent","update"].includes(m.kind ?? "")).slice(-20);
   const lastAgentId = conversation.filter(m => m.from === "agent").at(-1)?.id;
   const displayedConversation = optimistic ? [...conversation, optimistic] : conversation;
   const lastId = displayedConversation.at(-1)?.id;
@@ -550,7 +550,7 @@ function TaskReview({ task }: { task: Task }) {
         {task.kind === "dms" ? `${evidenceCount(task)} of ${task.target} proven` : task.status}
         {task.kind === "dms" && (task.reportedDone ?? 0) > evidenceCount(task) ? `, ${task.reportedDone} claimed` : ""}
         {quality.length ? ` · message quality ${(quality.reduce((a, b) => a + b, 0) / quality.length).toFixed(1)}/5` : ""}
-        {" · "}{e.by === "ai" ? "reviewed by GPT" : "scored from the numbers"}
+        {" · "}{e.by === "ai" ? "reviewed by GPT" : "scored from the numbers (GPT did not answer)"}
       </p>
       {e.good.length > 0 && <p style={{ margin: "6px 0 0" }}><b>Good:</b> {e.good.join(" ")}</p>}
       {e.problems.length > 0 && <p style={{ margin: "6px 0 0" }}><b>Problems:</b> {e.problems.join(" ")}</p>}
@@ -813,107 +813,92 @@ function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
 // ---------- Areeba ----------
 
 function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
-  const task = [...s.tasks].reverse().find((x) => x.status === "open" || x.status === "review") ?? (s.tasks.at(-1)?.status === "missed" ? s.tasks.at(-1) : null);
+  const name = s.settings.teammateName;
+  const task = [...s.tasks].reverse().find(t => t.status === "open" || t.status === "review") ?? (s.tasks.at(-1)?.status === "missed" ? s.tasks.at(-1) : undefined);
   const alerts = useAlerts(s);
-  const messages = task ? s.messages.filter((m) => m.at >= task.createdAt).slice(-8) : s.messages.slice(-6);
-  const chips = !task?.startedAt
-    ? ["I started", "I have a problem"]
-    : ["Update progress", "Add proof", "I have a problem"];
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [overlay, setOverlay] = useState<number | null>(null);
+  const done = task ? doneFor(s, task) : 0;
+  const target = task?.target ?? 0;
+  const value = overlay ?? done;
+  const [optimistic, setOptimistic] = useState<ChatMessage | null>(null);
+  const messages = s.messages;
+  const displayed = optimistic ? [...messages, optimistic] : messages;
+  const lastAgentId = messages.filter(m => m.from !== "user").at(-1)?.id;
+  const lastAgentAtSend = useRef<string | undefined>(undefined);
+  useEffect(() => { if (busy && lastAgentId && lastAgentId !== lastAgentAtSend.current) { setBusy(false); setOptimistic(null); } }, [busy, lastAgentId]);
+  const send = async (text: string, image?: string) => {
+    if ((!text.trim() && !image) || busy) return;
+    lastAgentAtSend.current = lastAgentId;
+    if (text.trim()) setOptimistic({ id: `p-${Date.now()}`, owner: "teammate", from: "user", text, at: new Date().toISOString() });
+    setBusy(true); setErr("");
+    try { await api("/api/messages", "POST", { text, image }); await refresh(); } catch (e) { setErr((e as Error).message); setBusy(false); setOptimistic(null); }
+  };
+  const changeTotal = async (next: number) => {
+    if (!task || task.kind !== "dms" || busy) return;
+    const clamped = Math.max(0, Math.min(target, next));
+    if (clamped === done) return;
+    setOverlay(clamped);
+    try { await api("/api/messages", "POST", { text: `I sent ${clamped} DMs in total.` }); await refresh(); setOverlay(null); }
+    catch (e) { setErr((e as Error).message); setOverlay(null); }
+  };
+  const pct = target ? Math.min(100, Math.round((value / target) * 100)) : 0;
   return (
-    <main className="teammate-shell">
-      <div className="top teammate-head">
-        <div><p className="eyebrow">DONOR DESK</p><h1>Hi {s.settings.teammateName}</h1></div>
-        <button className="small" onClick={alerts.enable}>{alerts.env?.subscribed ? "Alerts on" : "Enable alerts"}</button>
-      </div>
-      {alerts.note && <p className="hint compact-alert">{alerts.note}</p>}
-      <div className="teammate-grid">
-        <div className="teammate-work">
-          <TeammateTask s={s} refresh={refresh} openChat={() => undefined} unread={0} />
-        </div>
-        <section className="card teammate-chat-card">
-          <div className="section-kicker">TASK CHAT</div>
-          <h2>Reply to the agent</h2>
-        <ChatView
-          messages={messages}
-          label={(m) => (m.from === "user" ? "You" : m.from === "manager" ? "Manager" : "Agent")}
-          kind={(m) => (m.from === "user" ? "me" : m.from === "manager" ? "boss" : "agent")}
-          placeholder="Write your answer"
-          empty="The agent will message you here about your task."
-          chips={chips}
-          canAttach
-          onSend={async (text, image) => {
-            await api("/api/messages", "POST", { text, image });
-            await refresh();
-          }}
-        />
+    <main className="simple-shell">
+      <header className="simple-top">
+        <h1>Hi {name}</h1>
+        {!alerts.env?.subscribed && <button className="small" onClick={alerts.enable}>Enable alerts</button>}
+      </header>
+      {task && task.kind === "dms" ? (
+        <section className="simple-progress" aria-label="Your progress">
+          <div className="simple-progress-head"><b>{task.title}</b><span className="hint">due {time(task.deadlineAt)}</span></div>
+          <div className="simple-counter">
+            <button className="round" aria-label="One less" disabled={busy || value <= 0} onClick={() => changeTotal(value - 1)}>−</button>
+            <div className="simple-numbers"><strong>{value}</strong><span>of {target} sent</span></div>
+            <button className="round" aria-label="One more" disabled={busy || value >= target} onClick={() => changeTotal(value + 1)}>+</button>
+          </div>
+          <div className="bar"><i style={{ width: `${pct}%` }} /></div>
+          <p className="simple-tip">Set the number to match what you sent. Attach a screenshot in the chat for each DM.</p>
         </section>
-      </div>
+      ) : task ? (
+        <section className="simple-progress"><b>{task.title}</b><p className="hint">Reply here when it is done.</p></section>
+      ) : (
+        <section className="simple-progress"><p style={{margin:0}}>No task right now. Your manager will send one.</p></section>
+      )}
+      <section className="simple-chat">
+        <div className="simple-messages" aria-live="polite">
+          {!messages.length && <p className="hint" style={{textAlign:"center"}}>Say &ldquo;I started&rdquo; when you begin.</p>}
+          {displayed.map(m => (
+            <div key={m.id} className={`simple-msg ${m.from === "user" ? "me" : m.from === "manager" ? "boss" : "agent"}`}>
+              <small>{m.from === "user" ? "You" : m.from === "manager" ? "Manager" : "Agent"} · {time(m.at)}</small>
+              {m.img && <a href={`/api/img/${m.img}`} target="_blank" rel="noreferrer"><img src={`/api/img/${m.img}`} alt="" className="shot" /></a>}
+              {m.text}
+            </div>
+          ))}
+          {busy && <p className="typing-indicator"><i /><i /><i /></p>}
+        </div>
+        <SimpleComposer onSend={send} busy={busy} />
+        {err && <p className="err">{err}</p>}
+      </section>
     </main>
   );
 }
 
-function TeammateTask({ s, refresh, openChat, unread }: { s: State; refresh: () => void; openChat: () => void; unread: number }) {
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState("");
-  const [total, setTotal] = useState<number | null>(null);
-  const [saveError, setSaveError] = useState("");
-  const t = [...s.tasks].reverse().find((x) => x.status === "open" || x.status === "review") ?? (s.tasks.at(-1)?.status === "missed" ? s.tasks.at(-1) : undefined);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { setTotal(null); setSaveError(""); }, [t?.id, t?.reportedDone]);
-  const done = t ? doneFor(s, t) : 0;
-  const run = async (fn: () => Promise<unknown>) => {
-    try {
-      setBusy(true);
-      await fn();
-      await refresh();
-    } catch (e) {
-      setSaveError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
+function SimpleComposer({ onSend, busy }: { onSend: (text: string, image?: string) => Promise<void>; busy: boolean }) {
+  const [text, setText] = useState("");
+  const file = useRef<HTMLInputElement>(null);
+  const submit = async () => { const t = text; setText(""); await onSend(t); };
   return (
-    <>
-      {unread > 0 && (
-        <section className="card" style={{ borderColor: "var(--brand)" }}>
-          <div className="row">
-            <p className="grow" style={{ margin: 0 }}>The agent sent you {unread} new message{unread > 1 ? "s" : ""}.</p>
-            <button className="primary small" onClick={openChat}>Read and reply</button>
-          </div>
-        </section>
-      )}
-
-      <section className="card status teammate-task-summary">
-        {t ? (
-          <>
-            <div className="task-title-row"><div><div className="section-kicker">YOUR TASK</div><b>{t.title}</b></div><span className={`pill ${t.startedAt ? "ok" : "mid"}`}>{t.status === "missed" ? "Final update needed" : t.status === "review" ? "In review" : t.startedAt ? "In progress" : "Start now"}</span></div>
-            <div className="big">{done}<small> of {t.target} reported</small></div>
-            <div className="bar"><i style={{ width: `${Math.min(100, Math.round((done / t.target) * 100))}%` }} /></div>
-            <div className="alert-switches" aria-label="Task alerts">
-              {t.gapMinutes && <label><input type="checkbox" checked={t.timerEnabled !== false} disabled={busy} onChange={e => void run(() => api(`/api/tasks/${t.id}`, "PATCH", { action: "alerts", note: "timer", enabled: e.target.checked }))} /> DM timer</label>}
-              <label><input type="checkbox" checked={t.remindersEnabled !== false} disabled={busy} onChange={e => void run(() => api(`/api/tasks/${t.id}`, "PATCH", { action: "alerts", note: "reminders", enabled: e.target.checked }))} /> Reminders</label>
-            </div>
-            {t.kind === "dms" && <form className="progress-editor" onSubmit={e => { e.preventDefault(); setSaveError(""); void run(async () => { await api("/api/messages", "POST", {text: `I sent ${total ?? done} DMs in total.`}); setTotal(null); }); }}><label htmlFor="dm-total">Your total sent</label><div className="row"><input id="dm-total" type="number" inputMode="numeric" min="0" max={t.target} value={total ?? done} onChange={e => setTotal(Math.max(0, Math.min(t.target, Number(e.target.value))))} /><button className="primary small" disabled={busy || total === null}>Save total</button></div>{saveError && <p role="alert" className="err">{saveError}</p>}</form>}
-            <div className="facts">
-              <div><span>Due</span>{when(t.deadlineAt)} ({until(s.now, t.deadlineAt)})</div>
-              <div><span>Status</span>{t.startedAt ? `Started ${time(t.startedAt)}` : "Tell the agent when you start"}</div>
-              <div><span>Claimed</span>{t.reportedDone ?? 0} DMs</div>
-              <div><span>Evidence supports</span>{evidenceCount(t)} recipient{evidenceCount(t) === 1 ? "" : "s"}</div>
-              {t.goal && <div><span>Next check goal</span>{Math.max(0, t.goal.count - done)} more by {time(t.goal.by)}</div>}
-            </div>
-            <div className="simple-steps"><b>Do this:</b><span>1. Send the DMs in WhatsApp.</span><span>2. Tell the agent your total here.</span><span>3. Attach a screenshot as proof.</span></div>
-            {t.kind === "general" && (
-              <div className="row">
-                <input className="grow" value={note} placeholder="What did you do?" onChange={(e) => setNote(e.target.value)} aria-label="What you did" />
-                <button className="primary" disabled={busy} onClick={() => run(async () => { await api(`/api/tasks/${t.id}`, "PATCH", { action: "complete", note }); setNote(""); })}>I finished</button>
-              </div>
-            )}
-          </>
-        ) : (
-          <p style={{ margin: 0 }}>No task right now. You will get an alert when your manager gives you one.</p>
-        )}
-      </section>
-    </>
+    <form className="simple-composer" onSubmit={e => { e.preventDefault(); void submit(); }}>
+      <input ref={file} type="file" accept="image/*" hidden onChange={async e => {
+        const f = e.target.files?.[0]; e.target.value = "";
+        if (!f) return;
+        try { const img = await shrink(f); await onSend(text, img); setText(""); } catch { /* ignore */ }
+      }} />
+      <button type="button" aria-label="Send screenshot" onClick={() => file.current?.click()} disabled={busy}>📎</button>
+      <input className="grow" value={text} placeholder="Write to the agent…" onChange={e => setText(e.target.value)} disabled={busy} />
+      <button className="primary" type="submit" disabled={busy || !text.trim()}>Send</button>
+    </form>
   );
 }

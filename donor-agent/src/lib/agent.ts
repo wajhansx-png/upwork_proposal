@@ -598,6 +598,21 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
   const now = Date.now();
   const db = await readDb();
   const name = db.settings.teammateName;
+  // She can say "cancel" or "stop" to ask her manager to cancel the task.
+  if (/^(cancel|stop|discard|forget it|never mind)\b/i.test(text.trim()) && !image) {
+    const t = [...db.tasks].reverse().find((x) => x.status === "open" || x.status === "review");
+    const pushes: Push[] = [];
+    await withDb((d) => {
+      say(d, "teammate", text, "user");
+      say(d, "teammate", t ? `I passed your cancel request to your manager. They will reply.` : "There is no task to cancel right now.");
+      if (t) {
+        say(d, "manager", `${name} asked to cancel the task "${t.title}". Reply "cancel" to confirm, or write to her.`, "agent", { kind: "update" });
+        pushes.push({ role: "manager", title: `${name} wants to cancel`, body: t.title });
+      }
+    });
+    await sendPushes(pushes, opts.defer);
+    return;
+  }
   const task =
     [...db.tasks].reverse().find((t) => t.status === "open" || t.status === "review") ?? (db.tasks.at(-1)?.status === "missed" ? db.tasks.at(-1) : undefined);
   const lastAsk = [...db.messages].reverse().find((m) => m.owner === "teammate" && m.from === "agent" && (m.kind === "checkin" || m.kind === "kickoff" || m.kind === "clarification"))?.text;
