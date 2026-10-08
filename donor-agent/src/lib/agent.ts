@@ -147,7 +147,7 @@ async function sendPushes(pushes: Push[]) {
 
 const confirmedCount = (task: Task) => Math.max(task.reportedDone ?? 0, evidenceCount(task));
 
-function milestoneText(task: Task, now: number) {
+function milestoneText(task: Task, now: number, tz: string) {
   const confirmed = confirmedCount(task);
   const verified = evidenceCount(task);
   const elapsed = Math.max(1, now - ms(task.createdAt));
@@ -155,7 +155,7 @@ function milestoneText(task: Task, now: number) {
   const remaining = Math.max(0, task.target - confirmed);
   const eta = rate > 0 ? new Date(now + remaining / rate) : null;
   const onTrack = eta ? eta.getTime() <= ms(task.deadlineAt) : false;
-  return `${confirmed}/${task.target} sent, ${verified} verified, ${onTrack ? "on track" : "behind"}${eta ? `, finish about ${fmtWhen(eta.getTime(), now, "Asia/Karachi")}` : ""}`;
+  return `${confirmed}/${task.target} reported, ${verified} proven by screenshot, ${onTrack ? "on track" : "behind"}${eta ? `, finish about ${fmtWhen(eta.getTime(), now, tz)}` : ""}`;
 }
 
 async function recordLlm(status: string) {
@@ -485,7 +485,7 @@ export async function handleManagerMessage(text: string): Promise<void> {
         pushes.push({ role: "teammate", title: "New task for you", body: `Hi ${name}, ${title}. Due ${when}. Please reply when you can.` });
         reply =
           `Task sent as one clear assignment.\n${name}: ${title}\nDue: ${when}` +
-          ` Report reminders are on every 15 minutes, and I will alert you after each 10 DMs.` +
+          ` I will ask for her start within 3 minutes, then for a report every ${intent.checkEvery ?? 5} minutes, and alert you after each 10 DMs she reports.` +
           ` I will keep your clarifications private and update you when she replies or sends proof.`;
         managerReplyKind = "task";
         break;
@@ -573,7 +573,7 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
   const duplicate = image ? !!db.hashes[image.hash] : false;
   let evidence: NonNullable<Task["evidence"]>[number] | undefined;
   if (image) {
-    const scan = duplicate ? null : await readScreenshot(image.dataUrl);
+    const scan = duplicate ? null : await readScreenshot(image.dataUrl, task ? `${task.title}${task.brief ? `. Instructions: ${task.brief}` : ""}` : undefined);
     if (scan) await recordLlm(scan.status);
     const seen = scan?.seen;
     const supported = !duplicate && seen?.is_chat === true && seen.message_sent === true && !!seen.person_name && !!seen.message_text;
@@ -581,6 +581,8 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
       imageId: image.id, at: new Date(now).toISOString(),
       verdict: supported ? "supported" : duplicate || seen?.is_chat === false || seen?.message_sent === false ? "rejected" : "unclear",
       ...(supported ? {recipient: seen!.person_name!} : {}),
+      ...(supported && typeof seen!.message_quality === "number" ? { quality: Math.min(5, Math.max(1, Math.round(seen!.message_quality))) } : {}),
+      ...(supported && Array.isArray(seen!.quality_issues) && seen!.quality_issues.length ? { issues: seen!.quality_issues.filter((x): x is string => typeof x === "string").slice(0, 3) } : {}),
       reason: duplicate ? "This image was already submitted. Please send new proof."
         : supported ? `A sent message to ${seen!.person_name} is visible. This supports one recipient; it does not verify the entire reported total or prove when it was sent.`
         : seen?.summary ? `Not verified: ${seen.summary}. Show the recipient and an outgoing sent message.`
@@ -644,14 +646,15 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
         const milestone = Math.floor(confirmed / 10) * 10;
         if (milestone >= 10 && milestone > (t.lastMilestone ?? 0)) {
           t.lastMilestone = milestone;
-          const update = milestoneText(t, now);
+          const update = milestoneText(t, now, d.settings.timezone);
           say(d, "manager", update, "agent", { kind: "update" });
-          pushes.push({ role: "manager", title: `${milestone}/${t.target} sent`, body: update });
+          pushes.push({ role: "manager", title: `${milestone}/${t.target} reported, ${evidenceCount(t)} proven`, body: update });
         }
       }
       if (isDone || (t.kind === "dms" && confirmedCount(t) >= t.target)) {
         if (t.kind !== "dms" || evidenceCount(t) >= t.target) {
           t.status = "review";
+          t.reviewAt ??= new Date(now).toISOString();
           t.note = text;
         } else {
           t.note = "Completion claimed; proof is still needed before this task can close.";
@@ -661,7 +664,7 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
       if (started || blocked || resolved || claim !== null || evidence?.verdict === "supported") {
         t.unanswered = 0;
         t.escalationSent = false;
-        t.nextCheckAt = new Date(now + 5 * MIN).toISOString();
+        t.nextCheckAt = new Date(now + (t.checkEvery ?? 5) * MIN).toISOString();
       }
       if (blocked) t.reminderPausedUntil = new Date(now + 10 * MIN).toISOString();
     }
@@ -760,6 +763,16 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
     const due = task.nextCheckAt ?? new Date(ms(task.lastReportAt ?? task.startedAt ?? task.createdAt) + 3 * MIN).toISOString();
     if (nowMs < ms(due)) return { pushes, actions };
     if (ms(task.deadlineAt) <= nowMs) {
+      if ((task.finalRequests ?? 0) >= 3) {
+        task.status = "missed";
+        task.closedAt = now;
+        say(d, "teammate", `The task “${task.title}” is closed as missed. You can still send proof here; your manager will see it.`, "agent", { kind: "update" });
+        say(d, "manager", `${name}: “${task.title}” closed as missed. ${evidenceCount(task)} of ${task.target} proven${task.reportedDone ? `, ${task.reportedDone} reported` : ""}. A review follows.`, "agent", { kind: "update" });
+        pushes.push({ role: "manager", title: "Task missed", body: `${task.title}: ${evidenceCount(task)} of ${task.target} proven.` });
+        actions.push("missed");
+        return { pushes, actions };
+      }
+      task.finalRequests = (task.finalRequests ?? 0) + 1;
       if (!task.deadlineAlerted) {
         task.deadlineAlerted = true;
         say(d, "teammate", "The deadline has passed. Send your final total and proof, or explain what is unfinished.", "agent", { kind: "checkin" });
@@ -767,7 +780,7 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
         pushes.push({role:"manager", title:"Deadline passed", body:`${name}: final total and proof requested.`});
       }
       pushes.push({role:"teammate", title:"Urgent: final report", body:"The deadline passed. Send your final total and proof now.", persistent:true, tag:`deadline-${task.id}`, receiptId:newId(), taskId:task.id});
-      task.nextCheckAt = new Date(nowMs + 3 * MIN).toISOString();
+      task.nextCheckAt = new Date(nowMs + 10 * MIN).toISOString();
       actions.push("deadline");
       return { pushes, actions };
     }
@@ -794,7 +807,7 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
     task.unanswered = n;
     // Back off after repeated unanswered requests; keep the outstanding request visible.
     task.lastReminderAt = now;
-    task.nextCheckAt = new Date(nowMs + 5 * MIN).toISOString();
+    task.nextCheckAt = new Date(nowMs + (task.checkEvery ?? 5) * MIN).toISOString();
     task.reminderCount = (task.reminderCount ?? 0) + 1;
     const receiptId = newId();
     task.pushReceipts = [...(task.pushReceipts ?? []), { id: receiptId, label: `reminder ${task.reminderCount}`, issuedAt: now }].slice(-80);

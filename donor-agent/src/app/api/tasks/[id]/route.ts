@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { getRole } from "@/lib/auth";
 import { newId, withDb } from "@/lib/db";
 import { notify } from "@/lib/push";
+import { evaluatePending } from "@/lib/evaluate";
 import type { Db, Role } from "@/lib/types";
 
 const say = (d: Db, owner: Role, text: string) =>
@@ -24,6 +25,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       const proof = String(note ?? "").trim().slice(0, 500);
       if (proof.length < 3) return "Write a short note about what you did.";
       t.status = "review";
+      t.reviewAt ??= now;
       t.note = proof;
       say(d, "manager", `${name} says this is done: "${t.title}". Her note: "${proof}". Reply "confirm" if it is right.`);
       push = { to: "manager", title: "Task needs your confirmation", body: `${t.title}: ${proof}` };
@@ -60,5 +62,6 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if (result) return NextResponse.json({ error: result }, { status: 400 });
   const p = push as { to: Role; title: string; body: string } | null;
   if (p) await notify(p.to, p.title, p.body);
+  after(() => evaluatePending().catch((e) => console.error("task review failed", e)));
   return NextResponse.json({ ok: true });
 }

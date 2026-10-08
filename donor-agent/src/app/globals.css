@@ -115,3 +115,5 @@ a{color:inherit;text-decoration:none}
 .progress-editor{margin-top:12px}.progress-editor label{display:block;font-size:.8rem;margin-bottom:5px}.progress-editor input{width:90px;padding:8px}.progress-editor .row{gap:8px}
 .alert-switches{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;font-size:.8rem;color:var(--mute)}.alert-switches label{display:flex;align-items:center;gap:6px;cursor:pointer}.alert-switches input{accent-color:var(--brand)}
 @media(max-width:760px){.progress-editor{margin-top:6px}.progress-editor label{font-size:.7rem}.progress-editor input{padding:5px}.progress-editor button{padding:6px 10px}.teammate-task-summary .simple-steps{display:none}}
+
+.card.review{flex:none;margin:0}.card.review p{font-size:.92rem}

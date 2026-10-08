@@ -1,13 +1,19 @@
 import { sleep } from "workflow";
 import { readDb, withDb } from "../lib/db";
 import { runAgent } from "../lib/agent";
+import { evaluatePending } from "../lib/evaluate";
 
 async function check(taskId: string) {
   "use step";
   const before = await readDb();
   const task = before.tasks.find(t => t.id === taskId);
-  if (!task || !["open", "review"].includes(task.status)) return false;
+  if (!task || !["open", "review"].includes(task.status)) {
+    // The task just closed (for example, missed at the deadline): make sure it gets its review.
+    await evaluatePending();
+    return false;
+  }
   await runAgent(Date.now(), taskId);
+  await evaluatePending();
   await withDb(d => {
     const current = d.tasks.find(t => t.id === taskId);
     if (current) current.lastWorkerAt = new Date().toISOString();

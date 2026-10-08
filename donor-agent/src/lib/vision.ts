@@ -12,6 +12,9 @@ interface Seen {
   message_sent?: boolean;
   message_text?: string | null;
   summary?: string;
+  /** 1 to 5, only when a sent message is readable. */
+  message_quality?: number | null;
+  quality_issues?: string[];
 }
 
 const PROMPT =
@@ -19,7 +22,10 @@ const PROMPT =
   "A draft in a text box, a contact list, a home screen, or an incoming message alone is not proof that a DM was sent. " +
   "Return ONLY JSON with keys: is_chat (true if it is a chat or email screen), person_name (the contact name or phone number shown at the top, or null), " +
   "message_sent (true if you can see an outgoing message sent by the user), message_text (the outgoing message text, shortened, or null), " +
-  "summary (one short plain sentence about exactly what is visible). Use null if text cannot be read. Never treat an unclear image as verified.";
+  "summary (one short plain sentence about exactly what is visible), " +
+  "message_quality (1 to 5, only if her sent message is readable, else null: 5 = warm, polite, complete, uses the donor's name, follows the task instructions; 3 = acceptable but weak or generic; 1 = careless, rude, wrong name, or just a greeting), " +
+  "quality_issues (array of short plain sentences about real problems in the sent message, empty if none). " +
+  "Use null if text cannot be read. Never treat an unclear image as verified.";
 
 const digits = (s: string) => s.replace(/\D/g, "");
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9À-￿ ]/g, " ");
@@ -33,8 +39,9 @@ export function nameMatches(seen: string, d: Donor): boolean {
   return dc.length >= 6 && ds.length >= 6 && ds.endsWith(dc.slice(-6));
 }
 
-export async function readScreenshot(image: string): Promise<{ seen: Seen | null; status: string }> {
-  const r = await llm(PROMPT, "Read this screenshot.", { json: true, image });
+/** context: the task and the manager's instructions, so the message quality can be judged against them. */
+export async function readScreenshot(image: string, context?: string): Promise<{ seen: Seen | null; status: string }> {
+  const r = await llm(PROMPT, context ? `Task: ${context.slice(0, 600)}\nRead this screenshot.` : "Read this screenshot.", { json: true, image });
   return { seen: parseJson<Seen>(r.text), status: r.status };
 }
 

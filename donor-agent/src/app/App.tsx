@@ -246,6 +246,7 @@ function useAlerts(s: State) {
     const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const installed = window.matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
     const granted = "Notification" in window && Notification.permission === "granted";
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setEnv({ ios, installed, granted, subscribed: false });
     if (granted && "serviceWorker" in navigator) {
       void navigator.serviceWorker.getRegistration("/").then(async (reg) => {
@@ -500,10 +501,14 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
       <header className="desk-header"><h1>{name} Desk</h1><button className="small" onClick={() => setSettingsOpen(true)}>Settings</button></header>
       <section className="live-summary" aria-label="Live update" aria-live="polite">
         <span className="live-label"><i /> LIVE</span>
-        <strong className="live-total">{task?.reportedDone ?? 0}/{task?.target ?? 0}</strong>
-        <span className="live-unit">DMs</span>
-        <progress aria-label="DM progress" max={task?.target || 1} value={task?.reportedDone ?? 0} />
+        <strong className="live-total">{task ? evidenceCount(task) : 0}/{task?.target ?? 0}</strong>
+        <span className="live-unit">
+          DMs proven by screenshot
+          {task && (task.reportedDone ?? 0) > evidenceCount(task) ? ` · ${task.reportedDone} claimed` : ""}
+        </span>
+        <progress aria-label="Proven DM progress" max={task?.target || 1} value={task ? evidenceCount(task) : 0} />
       </section>
+      {task?.evaluation && <TaskReview task={task} />}
       <section className="desk-conversation">
         <div className="conversation-heading"><h2>Your agent</h2></div>
         <div className="desk-messages" ref={thread}>
@@ -520,7 +525,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
       {settingsOpen && <div className="modal-backdrop" onMouseDown={() => setSettingsOpen(false)}>
         <section className="settings-modal" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={e => e.stopPropagation()}>
           <div className="modal-title"><h2>Settings</h2><button autoFocus className="modal-close" aria-label="Close settings" onClick={() => setSettingsOpen(false)}>×</button></div>
-          <a className="view-link" href={`/?k=${s.teammateKey ?? ""}`} target="_blank" rel="noreferrer">View {name}'s screen ↗</a>
+          <a className="view-link" href={`/?k=${s.teammateKey ?? ""}`} target="_blank" rel="noreferrer">View {name}&apos;s screen ↗</a>
           <button className="small" onClick={() => void api("/api/agent/run","POST").then(refresh).catch(e => setError(e.message))}>Check background follow-up</button>
           <ManagerSettings s={s} refresh={refresh}/>
         </section>
@@ -529,6 +534,30 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
   );
 }
 
+
+/** The quality review of the latest task: score, what was good, problems, and advice. */
+function TaskReview({ task }: { task: Task }) {
+  const e = task.evaluation!;
+  const tone = e.score >= 7 ? "ok" : e.score >= 5 ? "mid" : "bad";
+  const quality = (task.evidence ?? []).map((x) => x.quality).filter((q): q is number => typeof q === "number");
+  return (
+    <section className="card review" aria-label="Task review">
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <b>Review: {task.title}</b>
+        <span className={`pill ${tone}`}>{e.score}/10 · {e.verdict}</span>
+      </div>
+      <p className="hint" style={{ margin: "4px 0 0" }}>
+        {task.kind === "dms" ? `${evidenceCount(task)} of ${task.target} proven` : task.status}
+        {task.kind === "dms" && (task.reportedDone ?? 0) > evidenceCount(task) ? `, ${task.reportedDone} claimed` : ""}
+        {quality.length ? ` · message quality ${(quality.reduce((a, b) => a + b, 0) / quality.length).toFixed(1)}/5` : ""}
+        {" · "}{e.by === "ai" ? "reviewed by GPT" : "scored from the numbers"}
+      </p>
+      {e.good.length > 0 && <p style={{ margin: "6px 0 0" }}><b>Good:</b> {e.good.join(" ")}</p>}
+      {e.problems.length > 0 && <p style={{ margin: "6px 0 0" }}><b>Problems:</b> {e.problems.join(" ")}</p>}
+      <p style={{ margin: "6px 0 0" }}><b>Next:</b> {e.advice}</p>
+    </section>
+  );
+}
 
 function ManagerHome({ s, refresh }: { s: State; refresh: () => void }) {
   const name = s.settings.teammateName;
@@ -829,6 +858,7 @@ function TeammateTask({ s, refresh, openChat, unread }: { s: State; refresh: () 
   const [total, setTotal] = useState<number | null>(null);
   const [saveError, setSaveError] = useState("");
   const t = [...s.tasks].reverse().find((x) => x.status === "open" || x.status === "review") ?? (s.tasks.at(-1)?.status === "missed" ? s.tasks.at(-1) : undefined);
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setTotal(null); setSaveError(""); }, [t?.id, t?.reportedDone]);
   const done = t ? doneFor(s, t) : 0;
   const run = async (fn: () => Promise<unknown>) => {

@@ -106,12 +106,40 @@ export interface Task {
   lastProofAt?: string;
   lastProgressAt?: string;
   blockedReason?: string;
-  evidence?: { imageId: string; at: string; verdict: "supported" | "rejected" | "unclear"; recipient?: string; reason: string }[];
+  evidence?: {
+    imageId: string;
+    at: string;
+    verdict: "supported" | "rejected" | "unclear";
+    recipient?: string;
+    reason: string;
+    /** 1 to 5: how good the sent message is (polite, complete, follows the instructions). Set when an AI key reads it. */
+    quality?: number;
+    issues?: string[];
+  }[];
+  /** When she reported the work complete (task moved to review). */
+  reviewAt?: string;
+  /** Final-report requests sent after the deadline. After 3, the task closes as missed. */
+  finalRequests?: number;
+  /** The review written when the task is ready for the manager or missed. */
+  evaluation?: TaskEvaluation;
+  evaluatingAt?: string;
   nextCheckAt?: string;
   workflowRunId?: string;
   workflowError?: string;
   lastWorkerAt?: string;
   escalationSent?: boolean;
+}
+
+export interface TaskEvaluation {
+  /** 0 to 10. */
+  score: number;
+  verdict: string;
+  good: string[];
+  problems: string[];
+  advice: string;
+  /** "ai" when GPT wrote it (kept within 1.5 points of the numbers), "rules" otherwise. */
+  by: "ai" | "rules";
+  at: string;
 }
 
 export interface Settings {

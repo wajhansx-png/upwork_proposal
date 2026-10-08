@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRole } from "@/lib/auth";
 import { runAgent } from "@/lib/agent";
 import { ensureFollowup } from "@/lib/start-followup";
+import { evaluatePending } from "@/lib/evaluate";
 
 /** Called every minute by a scheduler (Authorization: Bearer CRON_SECRET, or ?key=CRON_SECRET), or by the manager. */
 async function handle(req: NextRequest) {
@@ -12,7 +13,9 @@ async function handle(req: NextRequest) {
     !!role;
   if (!ok) return NextResponse.json({ error: "Not allowed" }, { status: 403 });
   await ensureFollowup();
-  return NextResponse.json(await runAgent());
+  const result = await runAgent();
+  await evaluatePending();
+  return NextResponse.json(result);
 }
 
 export const POST = handle;
