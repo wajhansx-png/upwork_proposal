@@ -4,7 +4,7 @@ import { notify } from "./push";
 import { checkProof } from "./vision";
 import { fmtDuration, fmtMinutes, fmtWhen, parseDeadline, parseTarget, zparts } from "./time";
 import { extractCheckEvery } from "./time";
-import { extractGap, extractInstructions, isAck, managerCommand, parseManager, type ManagerCommand } from "./nlp";
+import { extractGap, extractInstructions, managerCommand, parseManager, type ManagerCommand } from "./nlp";
 import { understandManager, understandTeammate, type Intent, type Understood } from "./understand";
 import type { TeammateFacts } from "./prompts";
 import type { ChatMessage, Db, PendingAssignment, Role, Task } from "./types";
