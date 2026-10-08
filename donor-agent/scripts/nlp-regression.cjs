@@ -59,7 +59,7 @@ check('resolved: fixed', nlp.blockSignal('fixed, I can continue').resolved, true
 // ---- questions
 const qs = [
   ['when is the deadline?', 'deadline'], ['what time is it due', 'deadline'], ['how much time is left?', 'deadline'],
-  ['what should I do next?', 'next'], ['what now', 'next'], ['which donor first?', 'next'], ['how do I add proof?', 'next'],
+  ['what should I do next?', 'next'], ['what now', 'next'], ['which donor first?', 'howto'], ['how do I add proof?', 'next'], ['who are you?', 'identity'], ['what is my count?', 'progress'], ['kitne hogaye?', 'progress'], ['how many do I have to send?', 'task'], ['what should I write in the DM?', 'howto'],
   ['how many have I done?', 'progress'], ['am I behind?', 'progress'],
   ['can I take a break?', 'break'], ['I need to go for prayer', 'break'], ['can I have lunch now', 'break'],
   ['can I get more time?', 'extension'], ['I need an extension', 'extension'], ['can I finish tomorrow?', 'extension'],

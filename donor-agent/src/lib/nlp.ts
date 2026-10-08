@@ -62,9 +62,9 @@ const clauses = (text: string) =>
     .filter(Boolean);
 
 const QUESTION_START = /^(?:what|when|where|why|who|which|how|should|shall|can|could|may|do|does|did|is|are|was|were|will|would|have|has)\b/i;
-const FUTURE = /\b(?:will|shall|going to|gonna|plan to|planning to|about to|want to|need to|have to|has to|must|let me|i'?ll|ill|soon|later|tomorrow|tonight|next|after|in \d+ ?(?:min|minutes|hours?)|should|could|would|can|might|may)\b/i;
+const FUTURE = /\b(?:will|shall|going to|gonna|plan to|planning to|about to|want to|need to|have to|has to|must|let me|i'?ll|ill|soon|later|tomorrow|tonight|next|after|in \d+ ?(?:min|minutes|hours?)|should|could|would|can|might|may|karungi|karunga|karoongi|karoonga|bhejungi|bhejunga|bhejoongi|baad mein|baad me|kal)\b/i;
 const NEGATED = /\b(?:not|never|no|haven'?t|hasn'?t|hadn'?t|didn'?t|don'?t|doesn'?t|wasn'?t|won'?t|cannot|can'?t|couldn'?t|unable|yet to|nothing|none|zero)\b/i;
-const SENT_VERB = /\b(?:sent|messaged|contacted|reached|dm'?e?d|dmed|texted|finished|completed|done|did|delivered)\b/i;
+const SENT_VERB = /\b(?:sent|messaged|contacted|reached|dm'?e?d|dmed|texted|finished|completed|done|did|delivered|bhej\w*|kar diye|kar liye|ho ?gaye|hogaye|hogye|ho gye)\b/i;
 
 export const isQuestion = (text: string) => /\?\s*$/.test(text.trim()) || QUESTION_START.test(text.trim());
 
@@ -100,6 +100,13 @@ export function parseReport(text: string): Report {
       report.total = a;
       return report;
     }
+  }
+
+  // A bare number ("40", "40 dms", "40 now") is her total.
+  const bare = /^\s*(\d{1,4})\s*(?:dms?|messages?|now|total|so far|done|sent|ho ?gaye|hogaye)?\s*[.!]*\s*$/i.exec(text);
+  if (bare) {
+    report.total = Number(bare[1]);
+    return report;
   }
 
   for (const raw of clauses(text)) {
@@ -143,7 +150,7 @@ export function parseReport(text: string): Report {
       const before = clause.slice(Math.max(0, n.start - 30), n.start);
       const after = clause.slice(n.end, n.end + 30);
       if (/\b(?:sent|messaged|contacted|reached|dm'?e?d|dmed|texted|finished|completed|done|did|total|so far|now)\b[^0-9]{0,18}$/i.test(before)) return true;
-      if (/^\s*(?:dms?|messages?|donors?|people|contacts?|whatsapps?|emails?)?\s*(?:are |were |is |have been |has been )?(?:sent|done|finished|completed|delivered|total|so far|till now|until now|in total|altogether)\b/i.test(after)) return true;
+      if (/^\s*(?:dms?|messages?|donors?|people|contacts?|whatsapps?|emails?)?\s*(?:are |were |is |have been |has been )?(?:sent|done|finished|completed|delivered|total|so far|till now|until now|in total|altogether|bhej\w*|kar diye|kar liye|ho ?gaye|hogaye|hogye|ho gye)\b/i.test(after)) return true;
       if (hasTotalWord && /^\s*(?:dms?|messages?)?\s*(?:now|so far|total|altogether)?\s*$/i.test(after)) return true;
       return false;
     });
@@ -199,22 +206,95 @@ export function blockSignal(text: string): BlockSignal {
 
 // ---------- what Areeba asks ----------
 
-export type Question = "deadline" | "next" | "progress" | "break" | "extension" | "other" | null;
+export type Question = "deadline" | "next" | "progress" | "task" | "identity" | "howto" | "break" | "extension" | "other" | null;
+
+const ASKING = (t: string) => isQuestion(t) || /\b(?:kitne|kitna|kitni|kya|kab|kaise|kaun)\b/i.test(t);
 
 export function questionKind(text: string): Question {
   const t = text.trim();
+  if (isGreeting(t)) return null;
+  if (/\b(?:who are you|what are you|are you (?:a |an )?(?:bot|robot|ai|human|real|person|machine)|your name|ap kaun|aap kaun|tum kaun)\b/i.test(t)) return "identity";
+  if (ASKING(t) && /\b(?:how many (?:do|should|must|have to|need to) i|how many (?:dms?|messages?) (?:do|should|must)|what(?:'s| is) (?:my|the) (?:task|target|goal)|what (?:is|was) i (?:supposed|meant) to|my target|kitne bhejne|kitne karne)\b/i.test(t)) return "task";
+  if (ASKING(t) && /\b(?:what (?:should|do|shall|can) i (?:write|say|send them|message)|which (?:donors?|people|contacts?|list|numbers?|template)|what (?:message|text|template)|who (?:should|do|shall) i (?:message|send|dm|contact)|where (?:is|are) the (?:list|numbers?|contacts?)|kis ko|kisko|kya likh)\b/i.test(t)) return "howto";
+  if (ASKING(t) && /\b(?:my count|my total|my progress|my score|how many (?:have|did|done)|how many so far|how much (?:have|did)|how am i doing|am i on track|am i behind|kitne (?:ho|hue|hu|hogaye|ho gaye|bheje)|kitna hua|count\??$|progress\??$|status\??$)\b/i.test(t) || /^\s*(?:kitne|count|progress|status)\s*\??\s*$/i.test(t)) return "progress";
   if (/\b(?:extension|more time|extra time|need (?:more|extra) time|can i finish (?:later|tomorrow)|move the deadline|longer)\b/i.test(t)) return "extension";
   if (/\b(?:break|lunch|prayer|namaz|rest|pause|go home|leave early|step out|bathroom|call me back|tired)\b/i.test(t) && (isQuestion(t) || /\b(?:need|want|have to|going to|will take|taking)\b/i.test(t))) return "break";
   if (!isQuestion(t)) return null;
   if (/\b(?:deadline|due|when|what time|how long|time left|until when|how much time)\b/i.test(t)) return "deadline";
-  if (/\b(?:what (?:should|do|shall) i|what now|what next|what to do|what else|next step|where (?:do|should) i|which (?:one|donor|list)|how (?:do|should|can) i|who (?:should|do) i|what'?s next)\b/i.test(t)) return "next";
-  if (/\b(?:how am i doing|my progress|how many (?:have|did) i|how much (?:have|did) i|am i on track|am i behind)\b/i.test(t)) return "progress";
+  if (/\b(?:what (?:should|do|shall) i do|what now|what next|what to do|what else|next step|what'?s next|how (?:do|should|can) i)\b/i.test(t)) return "next";
   return "other";
 }
 
-export const isAck = (text: string) => /^\s*(?:ok(?:ay)?|k|thanks?|thank you|thx|noted|got it|sure|alright|fine|yes|yep|yeah|no|nope|cool|great|good|will do|understood|ok thanks?)\W*$/i.test(text);
+/** Putting the work off: "later", "not now", "kal karungi". */
+export const isDelay = (text: string) =>
+  !isQuestion(text) &&
+  /\b(?:later|not now|not today|tomorrow|kal|baad (?:mein|me)|abhi nahi|in a while|after some time|some other time|next time|i will do it|i'?ll do it|i'?ll start|will start|busy right now|i am busy|i'?m busy|thori der|thodi der)\b/i.test(text) &&
+  !/\b(?:sent|done|finished|started)\b/i.test(text);
+
+/** Low mood that is not a blocker: "I am tired", "bored". */
+export const isMood = (text: string) => /\b(?:tired|exhausted|bored|sleepy|stressed|demotivated|not in the mood|thak gayi|thak gai|neend)\b/i.test(text);
+
+export const isGreeting = (text: string) =>
+  /^\s*(?:hi+|hello|hey|salam|salaam|assalam\w*|aoa|asalam\w*|good (?:morning|evening|afternoon))\b[\s\w,!.]{0,20}$/i.test(text) ||
+  /^\s*(?:how are you|how r u|how are you doing|kaise ho|kaisi ho|kya haal)\b[\s\w,!.?]{0,15}$/i.test(text);
+
+/** "I can't do all 100 today": a capacity problem, not a broken phone. */
+export const isCantFinish = (text: string) =>
+  /\b(?:can'?t|cannot|can not|won'?t be able to|not able to|unable to|not possible|impossible|too many|too much)\b[^.]{0,30}\b(?:do|finish|complete|send|make it|all|today|\d+)\b/i.test(text) &&
+  !/\b(?:internet|wifi|wi-fi|network|phone|laptop|whatsapp|battery|power|electricity|account|login|app|banned|blocked|sick|hospital)\b/i.test(text);
+
+export const isAck = (text: string) => /^\s*(?:ok+(?:ay)?|k|thanks?|thank you|thx|noted|got it|sure|alright|fine|yes|yep|yeah|no|nope|cool|great|good|will do|understood|ok thanks?|ji|jee|g|theek hai|thik hai|acha|achha|sorry|sry)(?:\s+(?:sir|maam|ma'am|madam|ji|bhai))?\W*$/i.test(text);
 
 // ---------- what the manager says ----------
+
+export type ManagerCommand =
+  | { kind: "deadline"; rest: string }
+  | { kind: "extend"; minutes: number }
+  | { kind: "target"; target: number }
+  | { kind: "nudge" }
+  | { kind: "identity" }
+  | { kind: "herwords" }
+  | { kind: "status" }
+  | { kind: "yes"; rest: string; minutes: number | null }
+  | { kind: "no"; rest: string };
+
+/** "1 hour", "an hour", "half an hour", "30 min", "2 hrs" in minutes. */
+export function durationIn(text: string): number | null {
+  if (/\bhalf an? hour\b|\badha ghanta\b/i.test(text)) return 30;
+  const m = /\b(\d{1,3}|an?|one|two|three|four|five|ten|fifteen|twenty|thirty)\s*(?:more\s+|extra\s+)?(hours?|hrs?|h|minutes?|mins?|m|ghante?)\b/i.exec(text);
+  if (!m) return null;
+  const w: Record<string, number> = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, ten: 10, fifteen: 15, twenty: 20, thirty: 30 };
+  const n = /^\d+$/.test(m[1]) ? Number(m[1]) : w[m[1].toLowerCase()];
+  return /^(?:h|hr|hrs|hour|hours|ghant)/i.test(m[2]) ? n * 60 : n;
+}
+
+/** Commands about the task that is already running. They win over new-task drafts. */
+export function managerCommand(text: string, teammate: string, hasPendingAsk: boolean): ManagerCommand | null {
+  const t = text.trim();
+  const who = `(?:her|${teammate.toLowerCase().replace(/[^a-z]/g, "") || "her"})`;
+  if (/\b(?:who are you|what are you|your name|are you (?:a )?(?:bot|ai|human))\b/i.test(t)) return { kind: "identity" };
+  if (new RegExp(`^(?:please\\s+)?(?:remind|ping|nudge|push|chase|poke|follow up with|hurry)\\s+${who}(?:\\s+(?:up|now|again|please|for (?:an? )?update))*\\W*$|^ask ${who} for (?:an? |her )?(?:update|count|status)\\W*$|^(?:get|ask for) (?:an? )?update(?: from ${who})?\\W*$`, "i").test(t)) return { kind: "nudge" };
+  if (/\b(?:what did (?:she|areeba) (?:say|write|send)|(?:her|areeba'?s) (?:last )?(?:message|reply|replies|messages)|what is she saying|show (?:me )?her messages)\b/i.test(t)) return { kind: "herwords" };
+  if (hasPendingAsk) {
+    if (/^(?:yes|yeah|yep|ok(?:ay)?|sure|haan|han|ji|allowed|allow it|fine|go ahead|approved?|she can|let her|of course|theek hai)\b/i.test(t)) return { kind: "yes", rest: t, minutes: durationIn(t) };
+    if (/^(?:no|nope|nahi|nahin|not now|no break|don'?t|do not|she can'?t|not allowed|deny|denied|refuse)\b/i.test(t)) return { kind: "no", rest: t };
+  }
+  const extend = new RegExp(`\\b(?:give ${who}|extend(?: (?:it|the deadline|her deadline))?(?: by)?|add)\\s+(.{0,25}?)\\b(?:more|extra)?\\s*(?:time)?`, "i").exec(t);
+  if (extend && /\b(?:give|extend|add)\b/i.test(t) && (/\b(?:more|extra|extend|add)\b/i.test(t) || new RegExp(`^(?:ok,?\\s*|yes,?\\s*)?give ${who}\\s+(?:\\d|an?\\b|half|one|two)`, "i").test(t))) {
+    const minutes = durationIn(t);
+    if (minutes) return { kind: "extend", minutes };
+  }
+  const dl = /\b(?:change|move|set|shift|push|update|make)\s+(?:the\s+|her\s+)?(?:deadline|due time|due|finish time|time)\s*(?:to|till|until|at|for)?\s*(.+)$/i.exec(t) || /\b(?:new deadline|deadline is now|deadline now)\s*(?:is|:)?\s*(.+)$/i.exec(t);
+  if (dl) return { kind: "deadline", rest: dl[1] };
+  const tg = /\b(?:make it|change (?:it|the target|target|the count|count|the number) to|set (?:the )?target(?: to)?|target (?:is )?now|reduce (?:it )?to|increase (?:it )?to|lower (?:it )?to)\s*(\d{1,4})\b/i.exec(t);
+  if (tg) return { kind: "target", target: Number(tg[1]) };
+  if (
+    /\b(?:how many|kitne|kitna|progress|any update|update\?|status|is she (?:working|on it|done|online)|did she start|has she started|when did she|why is she|so slow|too slow|how is she|how'?s she|where is she|on track|behind|deadline|due|time left|kab tak)\b/i.test(t) &&
+    (isQuestion(t) || t.split(/\s+/).length <= 5)
+  )
+    return { kind: "status" };
+  return null;
+}
 
 const NAME_FILLER = /\b(?:please|pls|kindly|could you|can you|would you|i need|i want|i would like|you should|she should|she must|must|should|have to|has to|make sure|ensure|let|get)\b/gi;
 

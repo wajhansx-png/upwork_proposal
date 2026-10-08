@@ -4,7 +4,7 @@ import { notify } from "./push";
 import { checkProof } from "./vision";
 import { fmtDuration, fmtMinutes, fmtWhen, parseDeadline, parseTarget, zparts } from "./time";
 import { extractCheckEvery } from "./time";
-import { extractGap, extractInstructions, isAck, parseManager } from "./nlp";
+import { extractGap, extractInstructions, isAck, managerCommand, parseManager, type ManagerCommand } from "./nlp";
 import { understandManager, understandTeammate, type Intent, type Understood } from "./understand";
 import type { TeammateFacts } from "./prompts";
 import type { ChatMessage, Db, PendingAssignment, Role, Task } from "./types";
@@ -70,29 +70,53 @@ function lastTeammateActivity(db: Db): string | undefined {
     .at(-1);
 }
 
-/** The manager's status answer. Every line is a fact from the app. */
+/** The manager's status answer: short, every line a fact, and what (if anything) waits for him. */
 export function summarize(db: Db, now = Date.now()): string {
   const name = db.settings.teammateName;
   const tz = db.settings.timezone;
   const task = [...db.tasks].reverse().find((t) => t.status === "open" || t.status === "review") ?? db.tasks.at(-1);
-  if (!task) return `No task yet. Tell me what ${name} should do and by when.`;
+  if (!task) return `No task yet. Tell me what ${name} should do and by when, like “${name} send 100 DMs by 9pm”.`;
   const lines: string[] = [];
-  const state = task.status === "open" ? "in progress" : task.status === "review" ? "reported done, waiting for you" : task.status;
-  lines.push(`${task.title}: ${state}.`);
-  if (task.kind === "dms") {
-    lines.push(`${name} has sent ${task.reportedDone ?? 0} of ${task.target}.`);
-  } else if (task.note) lines.push(`Her note: “${task.note}”`);
+  const done = task.reportedDone ?? 0;
   const left = ms(task.deadlineAt) - now;
-  lines.push(left > 0 ? `Due ${fmtWhen(ms(task.deadlineAt), now, tz)}, ${fmtDuration(left)} left.` : `The deadline passed ${fmtDuration(-left)} ago.`);
+  const state =
+    task.status === "review" ? "Finished, waiting for your OK" :
+    task.status === "done" ? "Done" :
+    task.status === "missed" ? "Missed the deadline" :
+    task.status === "cancelled" ? "Cancelled" :
+    task.blockedReason ? `Blocked: “${task.blockedReason}”` :
+    !task.startedAt ? "Not started yet" :
+    task.unanswered >= 2 ? "Not replying" : "Working";
+  lines.push(task.kind === "dms" ? `${name}: ${done} of ${task.target} sent (${Math.max(0, task.target - done)} to go). ${state}.` : `${name}: ${task.title}. ${state}.`);
   if (task.status === "open") {
-    lines.push(task.startedAt ? `Started ${fmtWhen(ms(task.startedAt), now, tz)}.` : `She has not confirmed that she started.`);
-    if (task.blockedReason) lines.push(`She is blocked: “${task.blockedReason}”`);
-    const heard = lastTeammateActivity(db);
-    lines.push(heard ? `Last message from her: ${fmtDuration(now - ms(heard))} ago.` : "She has not written yet.");
-    if (task.nextCheckAt) lines.push(`Next check-in: ${fmtWhen(ms(task.nextCheckAt), now, tz)}.`);
+    lines.push(left > 0 ? `Due ${fmtWhen(ms(task.deadlineAt), now, tz)}, ${fmtDuration(left)} left.` : `The deadline passed ${fmtDuration(-left)} ago.`);
+    if (task.kind === "dms" && left > 0 && done < task.target) {
+      const perHour = Math.ceil((task.target - done) / Math.max(left / 3_600_000, 1 / 60));
+      const startedMs = task.startedAt ? ms(task.startedAt) : null;
+      const rate = startedMs && now - startedMs > 10 * MIN ? done / ((now - startedMs) / 3_600_000) : null;
+      lines.push(`She needs about ${perHour} per hour${rate !== null ? `; her speed so far is about ${Math.round(rate)} per hour${rate >= perHour ? " (on track)" : " (too slow)"}` : ""}.`);
+    }
   }
+  const heard = lastTeammateActivity(db);
+  const lastWords = [...db.messages].reverse().find((m) => m.owner === "teammate" && m.from === "user" && m.text && m.at >= task.createdAt);
+  lines.push(heard ? `Last heard ${now - ms(heard) < MIN ? "just now" : `${fmtDuration(now - ms(heard))} ago`}${lastWords ? `: “${lastWords.text.slice(0, 120)}”` : ""}.` : "She has not replied yet. I push her every 4 minutes until she does.");
+  if (task.status === "open" && task.unanswered >= 2) lines.push(`I have asked ${task.unanswered} times. I keep pushing her every 4 minutes.`);
+  if (task.pendingAsk) lines.push(`She is waiting for your answer: “${task.pendingAsk.text.slice(0, 120)}”. Reply “yes”, “no”, or your answer.`);
   if (task.evaluation) lines.push(`Review: ${task.evaluation.score}/10 (${task.evaluation.verdict}). ${task.evaluation.advice}`);
   return lines.join("\n");
+}
+
+/** "tell her to send her update" -> "send your update". */
+function toHer(text: string, name: string) {
+  return text
+    .replace(/\bshe is\b/gi, "you are")
+    .replace(/\bshe has\b/gi, "you have")
+    .replace(/\bshe was\b/gi, "you were")
+    .replace(/\bherself\b/gi, "yourself")
+    .replace(/\bher\b/gi, "your")
+    .replace(/\bshe\b/gi, "you")
+    .replace(new RegExp(`\\b${name}\\b,?\\s*`, "gi"), "")
+    .replace(/^\s*\w/, (c) => c.toUpperCase());
 }
 
 // ---------- messaging ----------
@@ -220,7 +244,7 @@ function mergeDraft(draft: PendingAssignment, text: string, now: number, db: Db)
   const target = conversationTarget(every.rest) ?? draft.target;
   const deadline = conversationDeadline(every.rest, now, db) ?? (draft.deadlineAt ? ms(draft.deadlineAt) : null);
   const gapMinutes = extractGap(text) ?? draft.gapMinutes;
-  const noExtra = /\b(no (?:special )?(?:instructions|precautions)|nothing else|no precautions)\b/i.test(text);
+  const noExtra = /\b(no (?:special )?(?:instructions|precautions)|nothing else|no precautions)\b/i.test(text) || /^\s*(?:yes,?\s*)?(?:replace|switch)\b/i.test(text);
   const instructions = noExtra ? undefined : extractInstructions(text, db.settings.teammateName) ?? draft.instructions;
   return {
     ...draft,
@@ -239,6 +263,137 @@ const HELP =
   "- \"Message 30 previous donors only before 6pm\"\n" +
   "Or ask: \"How is she doing?\" / Tell me to pass on a message / say \"cancel\".";
 
+/** Commands about the running task: change time or target, push her now, answer her question, status. */
+async function runManagerCommand(cmd: ManagerCommand, text: string, now: number, defer?: Defer): Promise<void> {
+  const pushes: Push[] = [];
+  await withDb((d) => {
+    const name = d.settings.teammateName;
+    const tz = d.settings.timezone;
+    say(d, "manager", text, "user", { kind: "manager-input" });
+    const t = [...d.tasks].reverse().find((x) => x.status === "open" || x.status === "missed" || x.status === "review");
+    const tell = (msg: string, title: string) => {
+      say(d, "teammate", msg, "agent", { kind: "update" });
+      pushes.push({ role: "teammate", title, body: msg, persistent: true, tag: `mgr-${t?.id ?? "x"}`, taskId: t?.id });
+    };
+    const reopen = (task: Task) => {
+      if (task.status === "missed") {
+        task.status = "open";
+        task.closedAt = undefined;
+        task.evaluation = undefined;
+      }
+      task.finalRequests = 0;
+      task.deadlineAlerted = false;
+      task.lastCheckAt = iso(now);
+    };
+    let reply: string;
+    switch (cmd.kind) {
+      case "identity":
+        reply = `I am ${AGENT_NAME}, your assistant. I give ${name} her tasks, push her until she replies, answer her questions, and tell you the moment she replies.`;
+        break;
+      case "status":
+        reply = summarize(d, now);
+        break;
+      case "herwords": {
+        const hers = d.messages.filter((m) => m.owner === "teammate" && m.from === "user" && m.text).slice(-4);
+        reply = hers.length ? `${name}'s last messages:\n${hers.map((m) => `${fmtWhen(ms(m.at), now, tz)}: “${m.text.slice(0, 160)}”`).join("\n")}` : `${name} has not written anything yet.`;
+        break;
+      }
+      case "nudge": {
+        if (!t || t.status === "review") {
+          reply = t ? `${name} already finished. Nothing to push.` : `There is no task to push. Give ${name} a task first.`;
+          break;
+        }
+        tell(`${name}, your manager wants your update now. ${statusLine(t, now, tz)}\nReply here or tap +.`, "Your manager wants an update");
+        t.unanswered = Math.max(1, t.unanswered);
+        t.lastReminderAt = iso(now);
+        t.reminderPausedUntil = undefined;
+        reply = `Done. I pushed ${name} now. I keep pushing every 4 minutes until she replies, and I will tell you when she does.`;
+        break;
+      }
+      case "deadline":
+      case "extend": {
+        if (!t) {
+          reply = "There is no task to change.";
+          break;
+        }
+        const next = cmd.kind === "extend"
+          ? Math.max(now, ms(t.deadlineAt)) + cmd.minutes * MIN
+          : parseDeadline(/^\s*(?:by|before|at|until|till|in|within)\b/i.test(cmd.rest) ? cmd.rest : `by ${cmd.rest}`, now, tz, d.settings.workEndHour);
+        if (!next || next <= now + 5 * MIN) {
+          reply = "Tell me the new time, like “change deadline to 10pm” or “give her 1 more hour”.";
+          break;
+        }
+        t.deadlineAt = iso(next);
+        reopen(t);
+        if (t.pendingAsk?.kind === "extension") t.pendingAsk = undefined;
+        tell(`Update from your manager: your new deadline is ${fmtWhen(next, now, tz)} (${fmtDuration(next - now)} left).${t.kind === "dms" ? `\n${statusLine(t, now, tz, false)}` : ""}`, "New deadline");
+        reply = `Done. New deadline: ${fmtWhen(next, now, tz)}. I told ${name}.`;
+        break;
+      }
+      case "target": {
+        if (!t || t.kind !== "dms") {
+          reply = "There is no DM task to change.";
+          break;
+        }
+        t.target = cmd.target;
+        t.title = `Send ${cmd.target} donor DMs`;
+        if (t.status === "review" && (t.reportedDone ?? 0) < cmd.target) {
+          t.status = "open";
+          t.reviewAt = undefined;
+          t.evaluation = undefined;
+        }
+        tell(`Update from your manager: your target is now ${cmd.target} DMs.\n${statusLine(t, now, tz)}`, "New target");
+        afterProgress(d, t, now, pushes, name, "");
+        reply = `Done. Target is now ${cmd.target}. I told ${name}.`;
+        break;
+      }
+      case "yes":
+      case "no": {
+        const ask = t?.pendingAsk;
+        if (!t || !ask) {
+          reply = summarize(d, now);
+          break;
+        }
+        t.pendingAsk = undefined;
+        if (cmd.kind === "no") {
+          tell(
+            ask.kind === "break" ? "Your manager says no break right now. Please keep going."
+              : ask.kind === "extension" ? `Your manager says the deadline stays ${fmtWhen(ms(t.deadlineAt), now, tz)}. Please keep going.`
+              : `Your manager says: ${toHer(cmd.rest, name)}`,
+            "Your manager answered",
+          );
+          reply = `Told ${name}: no.`;
+          break;
+        }
+        if (ask.kind === "break") {
+          const mins = cmd.minutes ?? 15;
+          t.reminderPausedUntil = iso(now + mins * MIN);
+          t.breakUntil = iso(now + mins * MIN);
+          tell(`Your manager says yes: take a ${mins}-minute break. I will remind you when it ends.`, "Break approved");
+          reply = `Told ${name} she can take ${mins} minutes. I pause the reminders until then.`;
+        } else if (ask.kind === "extension") {
+          if (!cmd.minutes) {
+            t.pendingAsk = ask;
+            reply = "How much more time? Say, for example, “yes 1 hour” or “give her 30 min”.";
+            break;
+          }
+          const next = Math.max(now, ms(t.deadlineAt)) + cmd.minutes * MIN;
+          t.deadlineAt = iso(next);
+          reopen(t);
+          tell(`Your manager says yes: your new deadline is ${fmtWhen(next, now, tz)}.`, "More time approved");
+          reply = `Done. New deadline: ${fmtWhen(next, now, tz)}. I told ${name}.`;
+        } else {
+          tell(`Your manager says: ${toHer(cmd.rest, name)}`, "Your manager answered");
+          reply = `Sent to ${name} as your answer.`;
+        }
+        break;
+      }
+    }
+    say(d, "manager", reply, "agent", { kind: "agent" });
+  });
+  await sendPushes(pushes, defer);
+}
+
 export async function handleManagerMessage(text: string, opts: { defer?: Defer } = {}): Promise<void> {
   const now = Date.now();
   const db = await readDb();
@@ -248,10 +403,20 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
   let intent: Intent;
   let aiStatus = "off";
   const draftNow = db.agent.pendingAssignment;
-  // An unfinished assignment takes the manager's next answer ("100, 6pm"), but not thanks, questions, or other commands.
-  const answersDraft = !!draftNow && !parsed.isCancel && !parsed.isStatus && !parsed.isConfirm && !parsed.relay && !isAck(text) && !/^(?:hi|hello|hey|thanks|thank you)\b/i.test(text);
+  const running = [...db.tasks].reverse().find((t) => t.status === "open" || t.status === "missed" || t.status === "review");
+  const cmd = managerCommand(text, db.settings.teammateName, !!running?.pendingAsk);
+  if (cmd && (cmd.kind === "identity" || cmd.kind === "status" || running)) {
+    await runManagerCommand(cmd, text, now, opts.defer);
+    return;
+  }
+  // An unfinished assignment takes the manager's next answer ("100, 6pm"), but only when that answer adds something to it.
+  const merged = draftNow ? mergeDraft(draftNow, text, now, db) : null;
+  const addsToDraft = !!draftNow && !!merged && (
+    merged.target !== draftNow.target || merged.deadlineAt !== draftNow.deadlineAt || merged.instructions !== draftNow.instructions ||
+    merged.checkEvery !== draftNow.checkEvery || merged.gapMinutes !== draftNow.gapMinutes || /\b(replace|switch tasks?|replace current|cancel old|stop old)\b/i.test(text));
+  const answersDraft = addsToDraft && !parsed.isCancel && !parsed.isStatus && !parsed.isConfirm && !parsed.relay;
   if (draftNow && answersDraft) {
-    const draft = mergeDraft(draftNow, text, now, db);
+    const draft = merged!;
     const missing = missingDraft(draft);
     if (missing.length) {
       await withDb((d) => {
@@ -401,11 +566,15 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
       case "status":
         reply = summarize(d, now);
         break;
-      case "relay":
-        say(d, "teammate", `Message from your manager: ${intent.text}`);
-        pushes.push({ role: "teammate", title: "Message from your manager", body: intent.text });
-        reply = `Sent to ${name}: "${intent.text}"`;
+      case "relay": {
+        const words = toHer(intent.text, name);
+        say(d, "teammate", `Message from your manager: ${words}`);
+        pushes.push({ role: "teammate", title: "Message from your manager", body: words });
+        const open = [...d.tasks].reverse().find((x) => x.status === "open" || x.status === "missed");
+        if (open) open.pendingAsk = undefined;
+        reply = `Sent to ${name}: “${words}”`;
         break;
+      }
       case "cancel": {
         if (d.agent.pendingAssignment) {
           d.agent.pendingAssignment = undefined;
@@ -437,7 +606,16 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
         reply = `Confirmed: ${t.title}.`;
         break;
       }
-      case "chat":
+      case "chat": {
+        const asking = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.pendingAsk);
+        if (asking && !/^\s*(?:thanks?|thank you|thx|hi|hello|hey)\b/i.test(text)) {
+          const words = toHer(text, name);
+          say(d, "teammate", `Your manager says: ${words}`);
+          pushes.push({ role: "teammate", title: "Your manager answered", body: words });
+          asking.pendingAsk = undefined;
+          reply = `Sent to ${name} as your answer: “${words}”`;
+          break;
+        }
         reply =
           intent.reply ||
           (/^\s*(?:thanks?|thank you|thx|ok(?:ay)?|great|good|nice|perfect)\b/i.test(text)
@@ -445,6 +623,8 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
             : /^\s*(?:hi|hello|hey|good (?:morning|evening|afternoon))\b/i.test(text)
               ? `Hello. Tell me what ${name} should do, or ask me how she is doing.`
               : HELP);
+        break;
+      }
     }
     say(d, "manager", reply, "agent", { kind: managerReplyKind ?? "agent" });
   });
@@ -514,14 +694,14 @@ function ruleSentence(u: Understood, hadReport: boolean): string {
   if (u.resolved) return "Good, I am glad it is fixed.";
   if (u.question === "break") return "I will ask your manager and tell you.";
   if (u.question === "extension") return "I will ask your manager for more time and tell you what they say.";
-  if (u.question === "other") return "I cannot answer that myself, so I am asking your manager.";
+  if (u.question === "other") return "I cannot answer that myself, so I am asking your manager now.";
   if (u.start === "started") return "Thanks, I noted that you started.";
   if (u.start === "will-start") return "Okay. Please tell me when you start.";
   if (u.start === "not-started") return "Please start as soon as you can. Tell me if something is stopping you.";
   if (u.all) return "Thanks, I noted that you finished.";
-  if (hadReport) return "Thanks for the update.";
+  if (hadReport) return "Great, thank you.";
   if (u.ack) return "Okay.";
-  return "Thanks, I saved your message.";
+  return "Got it, I passed this to your manager.";
 }
 
 interface ReplyInfo {
@@ -531,35 +711,73 @@ interface ReplyInfo {
   imageRejectedNow?: string;
 }
 
-/** The reply to her: a human sentence (AI or rules), then facts the app wrote itself, then one clear next step. */
+const AGENT_NAME = "Wajdan";
+
+/** Where she stands, in one or two short lines: count, what is left, time left, and the pace she needs. */
+function statusLine(t: Task, now: number, tz: string, withTime = true): string {
+  const left = ms(t.deadlineAt) - now;
+  const due = fmtWhen(ms(t.deadlineAt), now, tz);
+  if (t.kind !== "dms") return left > 0 ? `Due ${due} (${fmtDuration(left)} left).` : `The deadline passed ${fmtDuration(-left)} ago.`;
+  const done = t.reportedDone ?? 0;
+  const remaining = Math.max(0, t.target - done);
+  if (!remaining) return `All ${t.target} done.`;
+  if (left <= 0) return `${done} of ${t.target} done, ${remaining} to go. The deadline passed, so please finish as many as you can now.`;
+  const hours = left / 3_600_000;
+  const perHour = Math.ceil(remaining / Math.max(hours, 1 / 60));
+  const pace = hours >= 1 ? ` You need about ${perHour} per hour.` : ` That is about ${Math.ceil(remaining / Math.max(1, Math.round(left / MIN)))} per minute.`;
+  return `${done} of ${t.target} done, ${remaining} to go.${withTime ? ` ${fmtDuration(left)} left.` : ""}${pace}`;
+}
+
+/** The reply to her. Every message gets a real answer: facts from the app first, then one clear next step. */
 function buildReply(u: Understood, t: Task | undefined, d: Db, now: number, info: ReplyInfo): string {
   const tz = d.settings.timezone;
-  if (!t) return u.sentence && !u.question ? `${u.sentence}\nThere is no active task right now. Your manager will send the next one here.` : "There is no active task right now. Your manager will send the next one here.";
+  const name = d.settings.teammateName;
+  if (u.question === "identity")
+    return `I am ${AGENT_NAME}, the assistant your manager set up. I keep track of your task, answer your questions, and pass your messages to your manager.${t ? `\n${statusLine(t, now, tz)}` : ""}`;
+  if (!t) {
+    if (u.greeting) return `Hi ${name}! There is no task right now. Your manager will send the next one here.`;
+    return u.question === "other" || u.blocked ? "There is no active task right now. I passed your message to your manager." : "There is no active task right now. Your manager will send the next one here.";
+  }
   const left = ms(t.deadlineAt) - now;
-  const reported = t.reportedDone ?? 0;
+  const due = fmtWhen(ms(t.deadlineAt), now, tz);
+  const open = t.status === "open" || t.status === "missed";
+  const notStarted = open && !t.startedAt && !info.reportedNow;
+  const startAsk = "Please start now and tap “I started”.";
 
   // Questions the app can answer exactly are answered from facts, never by the AI.
-  if (u.question === "deadline")
-    return left > 0 ? `Your deadline is ${fmtWhen(ms(t.deadlineAt), now, tz)}. You have ${fmtDuration(left)} left.` : `The deadline passed ${fmtDuration(-left)} ago. ${nextStep({ ...t, status: "missed" })}`;
+  if (u.question === "deadline") return left > 0 ? `Your deadline is ${due}. You have ${fmtDuration(left)} left.${t.kind === "dms" ? `\n${statusLine(t, now, tz, false)}` : ""}` : `The deadline passed ${fmtDuration(-left)} ago. ${nextStep({ ...t, status: "missed" })}`;
+  if (u.question === "task") return `Your task: ${t.title}. Due ${due}${left > 0 ? ` (${fmtDuration(left)} left)` : ""}.${t.brief ? `\nInstructions: ${t.brief}.` : ""}\n${statusLine(t, now, tz, false)}`;
+  if (u.question === "progress") return `${statusLine(t, now, tz)}${notStarted ? `\n${startAsk}` : ""}`;
+  if (u.question === "howto")
+    return t.brief ? `Your manager's instructions: ${t.brief}.` : "I do not have that detail. I am asking your manager now and will tell you here. Meanwhile, keep going with the donors you already have.";
   if (u.question === "next") return [nextStep(t), t.brief ? `Your manager's instructions: ${t.brief}.` : ""].filter(Boolean).join("\n");
-  if (u.question === "progress")
-    return t.kind === "dms"
-      ? `You have sent ${reported} of ${t.target}.`
-      : `Your task is ${t.status === "review" ? "waiting for your manager" : "still open"}. ${nextStep(t)}`;
+  if (u.question === "break") return "I am asking your manager now and will tell you here. Until they answer, please keep going.";
+  if (u.question === "extension") return `I am asking your manager for more time. Until they answer, the deadline is still ${due}, so please keep going.`;
+
+  if (u.greeting) return `Hi ${name}!${notStarted ? ` Your task: ${t.title}, due ${due}.\n${startAsk}` : `\n${statusLine(t, now, tz)}`}`;
+  if (u.cantFinish) return `Thank you for being honest. I am telling your manager. Do as many as you can by ${due}, and tell me your count as you go.`;
+  if (u.delay && open && !u.blocked)
+    return `${t.kind === "dms" ? `${Math.max(0, t.target - (t.reportedDone ?? 0))} DMs are still left` : "This task is still open"} and the deadline is ${due}${left > 0 ? ` (${fmtDuration(left)} left)` : ""}. Please ${t.startedAt ? "continue" : "start"} now, even a few. If something is stopping you, tell me what it is.`;
+  if (u.mood && !u.blocked) return `I understand. Take a short pause if you need it, then keep going. You are doing well.\n${statusLine(t, now, tz)}`;
 
   const parts: string[] = [u.sentence ?? ruleSentence(u, info.reportedNow)];
   if (info.reportedNow && t.kind === "dms") {
-    parts.push(
-      info.clampedFrom ? `You wrote ${info.clampedFrom}, but the task is ${t.target}. I recorded ${t.target}.` : `${reported} of ${t.target} done.`,
-    );
+    if (info.clampedFrom) parts.push(`You wrote ${info.clampedFrom}, but the task is ${t.target}. I recorded ${t.target}.`);
+    parts.push(statusLine(t, now, tz));
   }
   if (info.imageRejectedNow) parts.push(info.imageRejectedNow);
-  else if (info.imageChecking) parts.push("I am checking your screenshot now.");
-  else if (u.start === "started") parts.push(`I will check in again in ${fmtMinutes(nextDelayMin(t))}.`);
-  else if (!u.blocked && !u.question && !u.ack && !info.reportedNow) {
+  else if (u.blocked) parts.push(nextStep(t));
+  else if (u.start === "started") parts.push(`${statusLine(t, now, tz)} Tap + for each DM.`);
+  else if (info.reportedNow) {
+    /* the status line already says it */
+  } else if (notStarted) parts.push(startAsk);
+  else if (u.question === "other") {
+    /* passed to the manager */
+  } else if (open && t.kind === "dms" && !t.blockedReason) parts.push(statusLine(t, now, tz));
+  else {
     const step = nextStep(t);
     if (step && !parts[0].includes(step)) parts.push(step);
-  } else if (u.blocked) parts.push(nextStep(t));
+  }
   return parts.filter(Boolean).join("\n");
 }
 
@@ -627,7 +845,7 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
       } else if (u.resolved) t.blockedReason = undefined;
       if (u.start === "started") t.startedAt ??= iso(now);
 
-      if (t.kind === "dms") {
+      if (t.kind === "dms" && t.status !== "review") {
         let total = u.total;
         if (u.all) total = t.target;
         if (total === undefined && u.more !== undefined) total = (t.reportedDone ?? 0) + u.more;
@@ -662,11 +880,22 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
         t.lastProofAt = iso(now);
       }
 
+      // Reporting progress means she is working again.
+      if (info.reportedNow && !u.blocked && t.blockedReason) t.blockedReason = undefined;
       // The next report request follows the phase she is in now.
       if (u.start === "started" || u.blocked || u.resolved || info.reportedNow) t.nextCheckAt = iso(now + nextDelayMin(t) * MIN);
 
+      const quoted = `“${text.slice(0, 300)}”`;
+      const askKind = u.cantFinish ? "cantfinish" : u.question === "break" || u.question === "extension" || u.question === "other" ? u.question : u.question === "howto" && !t.brief ? "howto" : null;
+      if (askKind) t.pendingAsk = { kind: askKind, text: text.slice(0, 300), at: iso(now) };
       const phaseNote = u.blocked
         ? { line: `${name} needs help: “${t.blockedReason}”`, push: { title: `${name} needs help`, body: t.blockedReason ?? text } }
+        : u.cantFinish
+        ? { line: `${name} says she cannot finish: ${quoted}`, push: { title: `${name} can't finish`, body: text.slice(0, 140) } }
+        : u.delay && t.status === "open"
+        ? { line: `${name} is putting it off: ${quoted}. I told her to start now.`, push: { title: `${name} is delaying`, body: text.slice(0, 140) } }
+        : u.question === "howto" && !t.brief
+        ? { line: `${name} asks: ${quoted}. Reply here and I will pass it on.`, push: { title: `${name} has a question`, body: text.slice(0, 140) } }
         : u.question === "break" || u.question === "extension" || u.question === "other"
           ? { line: `${name} asks${u.question === "break" ? " for a break" : u.question === "extension" ? " for more time" : ""}: “${text.slice(0, 300)}”`, push: { title: `${name} has a question`, body: text.slice(0, 140) } }
           : !hadStarted && t.startedAt && u.start === "started"
@@ -683,7 +912,13 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
       if (!managerPush) managerPush = { title: `${name} replied`, body: info.reportedNow && t.kind === "dms" ? `${t.reportedDone} of ${t.target} sent. “${text.slice(0, 100)}”` : text.slice(0, 140) || "Sent a picture." };
       t.noUpdateMsgId = undefined;
       t.silentSince = undefined;
+      const wasOpen = t.status === "open";
       afterProgress(d, t, now, pushes, name, u.all ? text : "");
+      // afterProgress already told the manager she finished.
+      if (wasOpen && t.status === "review") {
+        managerLine = "";
+        managerPush = null;
+      }
     } else {
       managerLine = `${name} wrote: “${text.slice(0, 300)}”`;
       managerPush = { title: `${name} wrote`, body: text.slice(0, 140) };
@@ -783,6 +1018,17 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
     const behindBy = Math.max(0, expected - confirmed);
 
     if (task.remindersEnabled === false) return { pushes, actions };
+    if (task.breakUntil && nowMs >= ms(task.breakUntil)) {
+      task.breakUntil = undefined;
+      task.reminderPausedUntil = undefined;
+      const msg = `${name}, your break is over. Please continue now. ${statusLine(task, nowMs, tz)}`;
+      say(d, "teammate", msg, "agent", { kind: "checkin" });
+      task.lastReminderAt = nowIso;
+      task.unanswered = Math.max(1, task.unanswered);
+      pushes.push({ role: "teammate", title: "Break is over", body: msg, persistent: true, tag: `check-${task.id}`, taskId: task.id });
+      actions.push("break-over");
+      return { pushes, actions };
+    }
     if (task.reminderPausedUntil && nowMs < ms(task.reminderPausedUntil)) return { pushes, actions };
 
     // 1. Deadline passed: 3 final-report requests 10 min apart, then close.

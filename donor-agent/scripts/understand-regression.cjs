@@ -108,8 +108,13 @@ const tbase = { started: null, reported_total: null, total_kind: null, all_done:
   assert.equal(u.sentence, undefined, 'a sentence with numbers is rejected, the app writes the facts');
   u = await tm('feeling good today', { ...tbase, sentence: 'I will tell your manager you are happy.' });
   assert.equal(u.sentence, undefined, 'the AI may not mention the manager when nothing needs the manager');
+  const g = calls.length;
   u = await tm('hello', { ...tbase, sentence: 'Hello! How is it going?' });
-  assert.equal(u.sentence, 'Hello! How is it going?');
+  assert.equal(u.greeting, true); assert.equal(calls.length, g, 'a greeting is answered by the app, no AI call');
+  u = await tm('how are you doing today', { ...tbase });
+  assert.equal(u.greeting, true); assert.equal(u.question, null, 'small talk is not a question for the manager');
+  u = await tm('I am feeling good about this', { ...tbase, sentence: 'That is great to hear!' });
+  assert.equal(u.sentence, 'That is great to hear!');
   assert.equal(safeSentence('Your work is verified and perfect', false), undefined);
   assert.equal(safeSentence('x '.repeat(60), false), undefined, 'long replies are rejected');
 

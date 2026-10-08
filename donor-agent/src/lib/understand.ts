@@ -1,6 +1,6 @@
 import { llm, parseJson } from "./llm";
 import {
-  blockSignal, cleanTitle, extractGap, extractInstructions, isAck, numbersIn, overlap, parseManager, parseReport, questionKind, startSignal,
+  blockSignal, cleanTitle, extractGap, extractInstructions, isAck, isCantFinish, isDelay, isGreeting, isMood, numbersIn, overlap, parseManager, parseReport, questionKind, startSignal,
   type Question, type StartSignal,
 } from "./nlp";
 import { factsBlock, managerPrompt, teammatePrompt, type TeammateFacts } from "./prompts";
@@ -176,6 +176,13 @@ export interface Understood {
   blocker?: string;
   question: Question;
   ack: boolean;
+  /** Putting the work off ("later", "kal"). */
+  delay: boolean;
+  /** Tired or low, but not blocked. */
+  mood: boolean;
+  greeting: boolean;
+  /** "I can't do all of them": a capacity problem, not a broken phone. */
+  cantFinish: boolean;
   /** A short friendly sentence from the AI. Checked: no digits, short, no false promises. */
   sentence?: string;
   source: "ai" | "rules";
@@ -191,6 +198,7 @@ interface TeammateJson {
   blocker?: string | null;
   resolved?: boolean;
   question?: string | null;
+  delay?: boolean;
   sentence?: string | null;
 }
 
@@ -208,9 +216,11 @@ export function safeSentence(s: unknown, allowManagerMention: boolean): string |
 
 export async function understandTeammate(text: string, facts: TeammateFacts, name: string): Promise<Understood> {
   const report = parseReport(text);
-  const block = blockSignal(text);
+  const cantFinish = isCantFinish(text);
+  const block = cantFinish ? { blocked: false, resolved: false, reason: undefined } : blockSignal(text);
+  const start = startSignal(text);
   const base: Understood = {
-    start: startSignal(text),
+    start,
     total: report.total,
     more: report.more,
     all: !!report.all,
@@ -219,11 +229,15 @@ export async function understandTeammate(text: string, facts: TeammateFacts, nam
     blocker: block.reason,
     question: questionKind(text),
     ack: isAck(text),
+    delay: isDelay(text) && start !== "started" && report.total === undefined,
+    mood: isMood(text),
+    greeting: isGreeting(text),
+    cantFinish,
     source: "rules",
     status: "off",
   };
   // Nothing to read, or a plain "ok/thanks": no AI call needed.
-  if (!text.trim() || base.ack) return base;
+  if (!text.trim() || base.ack || base.greeting || (report.total !== undefined && /^\s*\d/.test(text))) return base;
 
   const res = await llm(teammatePrompt(name), `${factsBlock(facts)}\n\n${name}'s message: ${text}`, { json: true });
   const j = parseJson<TeammateJson>(res.text);
@@ -246,7 +260,7 @@ export async function understandTeammate(text: string, facts: TeammateFacts, nam
   }
 
   // Blocked: either the rules or the AI can raise it (a missed blocker is worse than a false alarm), unless she clearly said "no problem".
-  if (!out.blocked && j.blocked === true && !/\b(?:no|not a|without any|zero|none)\s+(?:problems?|issues?|trouble)\b|\bnot blocked\b/i.test(text)) {
+  if (!out.blocked && !out.cantFinish && j.blocked === true && !/\b(?:no|not a|without any|zero|none)\s+(?:problems?|issues?|trouble)\b|\bnot blocked\b/i.test(text)) {
     out.blocked = true;
     out.blocker = (typeof j.blocker === "string" && j.blocker.trim() ? j.blocker.trim() : text.trim()).slice(0, 300);
   }
@@ -254,9 +268,10 @@ export async function understandTeammate(text: string, facts: TeammateFacts, nam
   if (out.resolved && !/\bstill\b/i.test(text)) out.blocked = false;
 
   // Question: rules first; the AI can name break/extension/other.
-  if (!out.question && typeof j.question === "string" && ["deadline", "next", "progress", "break", "extension", "other"].includes(j.question)) out.question = j.question as Question;
+  if (!out.question && typeof j.question === "string" && ["deadline", "next", "progress", "task", "identity", "howto", "break", "extension", "other"].includes(j.question)) out.question = j.question as Question;
+  if (j.delay === true && !out.start && out.total === undefined && out.more === undefined && !out.all) out.delay = true;
 
-  const needsManager = out.blocked || out.question === "break" || out.question === "extension" || out.question === "other";
+  const needsManager = out.blocked || out.cantFinish || out.delay || out.question === "break" || out.question === "extension" || out.question === "other" || (out.question === "howto" && !facts.instructions);
   let sentence = safeSentence(j.sentence, needsManager);
   // When the app passes something to the manager, her reply MUST say so. If the AI's sentence does not, use the app's own.
   if (needsManager && sentence && !/\bmanager\b/i.test(sentence)) sentence = undefined;

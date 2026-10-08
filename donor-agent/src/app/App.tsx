@@ -323,7 +323,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
           </div>
           <div className="p-chips">
             <button disabled={busy} onClick={() => void post(`How is ${name} doing?`)}>How is she?</button>
-            {open && <button disabled={busy} onClick={() => void post("Tell her to send your update now")}>Remind her</button>}
+            {open && <button disabled={busy} onClick={() => void post("remind her")}>Remind her</button>}
             {open && <button disabled={busy} onClick={() => confirm("Cancel this task?") && void post("cancel")}>Cancel task</button>}
           </div>
           <form className="p-composer" onSubmit={(e) => { e.preventDefault(); send(); }}>

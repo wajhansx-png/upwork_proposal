@@ -85,6 +85,10 @@ export interface Task {
   lastMilestone?: number;
   lastSilentAlertAt?: string;
   noUpdateMsgId?: string;
+  /** Her question that waits for the manager's answer. */
+  pendingAsk?: { kind: string; text: string; at: string };
+  /** An approved break ends here; she then gets a "break is over" push. */
+  breakUntil?: string;
   silentSince?: string;
   deadlineAlerted?: boolean;
   alertsProblemAt?: string;
