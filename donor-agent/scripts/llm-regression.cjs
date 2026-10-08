@@ -1,0 +1,43 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const Module = require('node:module');
+const ts = require('typescript');
+require.extensions['.ts'] = (m, f) => m._compile(ts.transpileModule(fs.readFileSync(f, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, f);
+const load = Module._load;
+Module._load = function (r, p, ...x) {
+  if ((p?.filename ?? '').endsWith(path.join('lib', 'llm.ts')) && r === './db') return { withDb: async (fn) => fn({ agent: {} }) };
+  return load.call(this, r, p, ...x);
+};
+process.env.OPENAI_API_KEY = 'test';
+process.env.FREE_SHARED_AI = 'off';
+const { llm } = require('../src/lib/llm.ts');
+let script = [];
+const sent = [];
+global.fetch = async (url, init) => {
+  const body = JSON.parse(init.body);
+  sent.push(body);
+  const next = script.shift() ?? { ok: true, text: 'fine' };
+  if (next.ok) return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: next.text } }] }) };
+  return { ok: false, status: next.status, text: async () => next.err };
+};
+const run = async (model, steps) => { process.env.OPENAI_MODEL = model; script = steps; sent.length = 0; return llm('sys', 'hi', { json: true }); };
+(async () => {
+  let r = await run('gpt-5-mini', [{ status: 400, err: "Unsupported value: 'reasoning_effort' does not support 'low' with this model." }]);
+  assert.equal(r.status, 'ok'); assert.equal(sent.length, 2); assert.ok(!('reasoning_effort' in sent[1]), 'retried without reasoning_effort');
+  r = await run('gpt-4.1', [{ status: 400, err: "Unsupported parameter: 'temperature'" }]);
+  assert.equal(r.status, 'ok');
+  r = await run('gpt-4o-mini', [{ status: 400, err: "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead." }]);
+  assert.equal(r.status, 'ok'); assert.ok('max_completion_tokens' in sent[1]);
+  r = await run('gpt-9-typo', [{ status: 404, err: 'The model `gpt-9-typo` does not exist or you do not have access to it.' }]);
+  assert.equal(r.status, 'ok'); assert.equal(r.model, 'gpt-4o-mini', 'a wrong model name falls back');
+  r = await run('gpt-4o-mini', [{ status: 503, err: 'overloaded' }]);
+  assert.equal(r.status, 'ok', 'a busy server is retried');
+  r = await run('gpt-4o-mini', [{ status: 429, err: 'You exceeded your current quota (insufficient_quota)' }]);
+  assert.match(r.status, /error 429/, 'no credit is reported, not retried forever'); assert.equal(sent.length, 1);
+  r = await run('gpt-5-mini', [{ ok: true, text: '' }, { ok: true, text: '{"ok":true}' }]);
+  assert.equal(r.status, 'ok', 'an empty thinking reply is retried with more room');
+  r = await run('gpt-4o-mini', [{ status: 401, err: 'Incorrect API key provided' }]);
+  assert.match(r.status, /error 401/, 'a bad key is reported clearly');
+  console.log('PASS: AI call heals unsupported settings, wrong model, busy server, empty replies; reports bad key / no credit clearly.');
+})().catch((e) => { console.error(e); process.exitCode = 1; });

@@ -366,6 +366,7 @@ function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
   const [teammateName, setTeammateName] = useState(name);
   const [msg, setMsg] = useState("");
   const [copied, setCopied] = useState(false);
+  const [aiTest, setAiTest] = useState("");
   const a = useAlerts(s);
   const link = typeof window !== "undefined" ? `${location.origin}/areeba` : "/areeba";
   const aiError = s.system?.ai === "key" && s.agent?.llmStatus?.startsWith("error");
@@ -407,7 +408,23 @@ function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
         </div>
         {msg && <p className="hint">{msg}</p>}
       </section>
-      {aiError && <p className="err">AI problem: {s.agent!.llmStatus}</p>}
+      <section className="card">
+        <h2>AI</h2>
+        <div className="row">
+          <button
+            disabled={aiTest === "…"}
+            onClick={async () => {
+              setAiTest("…");
+              const r = await api<{ ok: boolean; message: string }>("/api/ai-test", "POST").catch((e: Error) => ({ ok: false, message: e.message }));
+              setAiTest(`${r.ok ? "✓" : "✗"} ${r.message}`);
+              refresh();
+            }}
+          >
+            {aiTest === "…" ? "Testing…" : "Test AI"}
+          </button>
+        </div>
+        {aiTest && aiTest !== "…" ? <p className={aiTest.startsWith("✓") ? "hint" : "err"}>{aiTest}</p> : aiError ? <p className="err">Last AI error: {s.agent!.llmStatus}</p> : null}
+      </section>
     </>
   );
 }

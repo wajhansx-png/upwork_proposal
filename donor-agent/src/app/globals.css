@@ -235,3 +235,8 @@ body{background:radial-gradient(900px 520px at 50% -12%,rgba(63,174,143,.20),tra
 .attach-btn{background:transparent;border:0;font-size:1.2rem}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 @media (prefers-color-scheme:light){:root{--edge:rgba(0,0,0,.08)}.ring-track{stroke:rgba(0,0,0,.08)}.bubble.them,.p-chips button{background:rgba(0,0,0,.035)}}
+/* No blue flash or box when tapping buttons on phones */
+html{-webkit-tap-highlight-color:transparent}
+button,a,input{-webkit-tap-highlight-color:transparent}
+.counter button:focus,.counter button:focus-visible,.p-chips button:focus,.send-btn:focus,.attach-btn:focus,.chat-pill:focus,.icon-btn:focus{outline:none}
+.counter button{-webkit-user-select:none;-webkit-touch-callout:none}
