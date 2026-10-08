@@ -91,13 +91,13 @@ export async function llm(system: string, user: string, opts: { json?: boolean; 
           { type: "image_url", image_url: c.provider === "openai" ? { url: opts.image, detail: "low" } : { url: opts.image } },
         ]
       : user;
+    const modernGpt = /^gpt-5/.test(c.model);
     const res = await fetch(`${c.base.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: { ...(c.key ? { Authorization: `Bearer ${c.key}` } : {}), "content-type": "application/json" },
       body: JSON.stringify({
         model: c.model,
-        temperature: 0.2,
-        max_tokens: opts.image ? 250 : 200,
+        ...(modernGpt ? { max_completion_tokens: opts.image ? 500 : 350 } : { temperature: 0.2, max_tokens: opts.image ? 250 : 200 }),
         ...(opts.json && c.kind === "key" ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: system },

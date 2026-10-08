@@ -37,7 +37,21 @@ export interface ChatMessage {
   /** Screenshot attached to this message (image id). */
   img?: string;
   /** Set on check-in messages, so the agent knows a reply is an answer to it. */
-  kind?: "checkin" | "kickoff";
+  kind?: "checkin" | "kickoff" | "clarification" | "task" | "update" | "manager-input" | "agent";
+}
+
+export interface PendingAssignment {
+  kind: "dms" | "general";
+  /** Everything the manager has said about this assignment so far. */
+  request: string;
+  title?: string;
+  target?: number;
+  deadlineAt?: string;
+  checkEvery?: number;
+  /** Minimum minutes between DMs requested by the manager. */
+  gapMinutes?: number;
+  instructions?: string;
+  createdAt: string;
 }
 
 export type TaskStatus = "open" | "review" | "done" | "missed" | "cancelled";
@@ -45,6 +59,8 @@ export type TaskStatus = "open" | "review" | "done" | "missed" | "cancelled";
 export interface Task {
   id: string;
   title: string;
+  /** Clean manager-approved context shown with the structured task. */
+  brief?: string;
   /** "dms" is measured from donors marked sent. "general" is finished by the teammate and confirmed by the manager. */
   kind: "dms" | "general";
   target: number;
@@ -57,6 +73,21 @@ export interface Task {
   unanswered: number;
   /** Minutes between check-ins for this task, if the manager gave one ("check every 20 min"). */
   checkEvery?: number;
+  /** Minimum minutes between DMs, if the manager set one. */
+  gapMinutes?: number;
+  /** Areeba can mute these, but the task remains active and the manager is told. */
+  remindersEnabled?: boolean;
+  timerEnabled?: boolean;
+  lastReportAt?: string;
+  lastReminderAt?: string;
+  lastTimerAt?: string;
+  reminderPausedUntil?: string;
+  lastMilestone?: number;
+  lastSilentAlertAt?: string;
+  deadlineAlerted?: boolean;
+  alertsProblemAt?: string;
+  reminderCount?: number;
+  pushReceipts?: { id: string; label: string; issuedAt: string; receivedAt?: string; openedAt?: string; missingAlertedAt?: string }[];
   /** A small goal for the next check-in: reach `count` DMs by `by`. Set by the agent or by her own promise. */
   goal?: { count: number; by: string; fromHer?: boolean };
   /** Small goals missed in a row. */
@@ -66,6 +97,21 @@ export interface Task {
   midpointSent?: boolean;
   preDeadlineSent?: boolean;
   note?: string;
+  /** Progress reported by the teammate for work completed outside this app (for example, WhatsApp DMs). */
+  reportedDone?: number;
+  /** The first time the teammate said she started. */
+  startedAt?: string;
+  /** Screenshots attached to this task's chat. */
+  proofCount?: number;
+  lastProofAt?: string;
+  lastProgressAt?: string;
+  blockedReason?: string;
+  evidence?: { imageId: string; at: string; verdict: "supported" | "rejected" | "unclear"; recipient?: string; reason: string }[];
+  nextCheckAt?: string;
+  workflowRunId?: string;
+  workflowError?: string;
+  lastWorkerAt?: string;
+  escalationSent?: boolean;
 }
 
 export interface Settings {
@@ -102,6 +148,8 @@ export interface AgentState {
   loginLockUntil?: string;
   /** "ok", "off" (no key), or the last error. Shown to the manager. */
   llmStatus?: string;
+  /** A manager-only draft. Nothing is sent to the teammate until required details are complete. */
+  pendingAssignment?: PendingAssignment;
 }
 
 export interface Db {

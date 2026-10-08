@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getRole } from "@/lib/auth";
 import { handleManagerMessage, handleManagerToTeammate, handleTeammateMessage, type ChatImage } from "@/lib/agent";
 import { saveImage } from "@/lib/images";
+import { ensureFollowup } from "@/lib/start-followup";
 
 export async function POST(req: NextRequest) {
   const role = await getRole(req);
@@ -21,5 +22,6 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
+  await ensureFollowup().catch(() => undefined);
   return NextResponse.json({ ok: true });
 }

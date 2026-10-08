@@ -16,15 +16,21 @@ function setup() {
 export const pushEnabled = () => setup();
 
 /** Sends a browser push to every device a role has subscribed. Never throws. */
-export async function notify(role: Role, title: string, body: string) {
-  if (!setup()) return;
+export async function notify(role: Role, title: string, body: string, options: { persistent?: boolean; tag?: string; url?: string; receiptId?: string; taskId?: string } = {}) {
+  if (!setup()) return { accepted: 0, failed: 0, total: 0 };
   const subs = await withDb((db) => db.subs.filter((s) => s.role === role));
   const dead: string[] = [];
+  let accepted = 0;
   await Promise.all(
     subs.map(async (s) => {
       try {
         // High urgency wakes a sleeping phone. TTL keeps the alert for a day if the phone is off.
-        await webpush.sendNotification(s.sub, JSON.stringify({ title, body }), { TTL: 86_400, urgency: "high" });
+        await webpush.sendNotification(
+          s.sub,
+          JSON.stringify({ title, body, requireInteraction: !!options.persistent, tag: options.tag, url: options.url, receiptId: options.receiptId, taskId: options.taskId }),
+          { TTL: 86_400, urgency: "high" },
+        );
+        accepted++;
       } catch (e) {
         const code = (e as { statusCode?: number }).statusCode;
         if (code === 404 || code === 410) dead.push(s.sub.endpoint);
@@ -36,4 +42,5 @@ export async function notify(role: Role, title: string, body: string) {
       db.subs = db.subs.filter((s) => !dead.includes(s.sub.endpoint));
     });
   }
+  return { accepted, failed: subs.length - accepted, total: subs.length };
 }

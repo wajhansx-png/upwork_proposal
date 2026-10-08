@@ -12,7 +12,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const role = (await getRole(req));
   if (!role) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
   const { id } = await ctx.params;
-  const { action, note } = (await req.json().catch(() => ({}))) as { action?: string; note?: string };
+  const { action, note, enabled } = (await req.json().catch(() => ({}))) as { action?: string; note?: string; enabled?: boolean };
   let push: { to: Role; title: string; body: string } | null = null;
 
   const result = await withDb((d) => {
@@ -41,6 +41,18 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
       t.closedAt = now;
       say(d, "teammate", `Your manager cancelled the task: ${t.title}.`);
       push = { to: "teammate", title: "Task cancelled", body: t.title };
+      return null;
+    }
+    if (action === "alerts" && role === "teammate" && t.status === "open") {
+      if (typeof enabled !== "boolean") return "Choose on or off.";
+      if (note === "timer") t.timerEnabled = enabled;
+      else if (note === "reminders") t.remindersEnabled = enabled;
+      else return "Unknown alert setting.";
+      if (!enabled) {
+        const line = `${name} turned off ${note === "timer" ? "DM timer" : "report reminder"} alerts.`;
+        say(d, "manager", line);
+        push = { to: "manager", title: "Areeba changed alerts", body: line };
+      }
       return null;
     }
     return "That action is not allowed now.";

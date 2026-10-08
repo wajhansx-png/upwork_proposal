@@ -10,10 +10,12 @@
     "vapid": "web-push generate-vapid-keys"
   },
   "dependencies": {
+    "@vercel/blob": "2.8.0",
     "next": "16.3.5",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "workflow": "^5.0.1"
   },
   "devDependencies": {
     "@types/node": "^20",

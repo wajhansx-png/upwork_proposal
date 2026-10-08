@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticate, teammateKey } from "@/lib/auth";
 import { computeStats } from "@/lib/agent";
-import { readDb, usingRedis, withDb } from "@/lib/db";
+import { readDb, usingPersistentStore, withDb } from "@/lib/db";
 import { aiKind, visionEnabled } from "@/lib/llm";
 import { pushEnabled } from "@/lib/push";
 
@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
     teammateMessages: manager ? db.messages.filter((m) => m.owner === "teammate").slice(-150) : undefined,
     stats: computeStats(db),
     agent: manager ? db.agent : undefined,
-    system: manager ? { ai: aiKind(), vision: visionEnabled(), push: pushEnabled(), persistent: usingRedis() } : undefined,
+    system: manager ? { ai: aiKind(), vision: visionEnabled(), push: pushEnabled(), persistent: usingPersistentStore() } : undefined,
     teammateKey: manager ? teammateKey(db.settings.teammateKeyVersion) : undefined,
     now: new Date().toISOString(),
     vapidPublicKey: pushEnabled() ? process.env.VAPID_PUBLIC_KEY : null,
