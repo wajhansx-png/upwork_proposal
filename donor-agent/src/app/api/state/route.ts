@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRole } from "@/lib/auth";
-import { computeStats } from "@/lib/agent";
 import { readDb, usingPersistentStore, withDb } from "@/lib/db";
 import { aiKind, visionEnabled } from "@/lib/llm";
 import { pushEnabled } from "@/lib/push";
@@ -25,12 +24,10 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     role,
     settings: db.settings,
-    donors: manager ? db.donors : db.donors.filter((d) => d.status === "todo" || d.sentAt),
     tasks: db.tasks.slice(-30),
     // The manager has two threads: with the agent, and the teammate's own chat.
     messages: db.messages.filter((m) => m.owner === role).slice(-150),
     teammateMessages: manager ? db.messages.filter((m) => m.owner === "teammate").slice(-150) : undefined,
-    stats: computeStats(db),
     agent: manager ? db.agent : undefined,
     system: manager ? { ai: aiKind(), vision: visionEnabled(), push: pushEnabled(), persistent: usingPersistentStore() } : undefined,
     now: new Date().toISOString(),

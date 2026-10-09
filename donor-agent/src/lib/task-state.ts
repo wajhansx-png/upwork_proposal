@@ -11,11 +11,6 @@ export function taskPhase(task: Task) {
   return "working";
 }
 
-export function checkDelay(task: Task) {
-  if (!task.startedAt) return 2;
-  if (task.blockedReason) return 10;
-  return Math.max(2, Math.min(task.checkEvery ?? 5, 10));
-}
 
 /** Minutes until the next report request. The manager's "check every N min" applies while she is working. */
 export function nextDelayMin(task: Task): number {
@@ -57,23 +52,4 @@ export function nextPlannedCheckin(task: Task, lastFiredAt: string | undefined, 
   return upcoming ?? null;
 }
 
-export function nextCheck(task: Task, now: number) {
-  return new Date(now + checkDelay(task) * 60_000).toISOString();
-}
 
-export function liveUpdate(task: Task | null | undefined) {
-  if (!task) return { title: "Ready for your next task", detail: "Tell the agent what you need. It will collect the details and contact Areeba.", phase: "idle" };
-  const phase = taskPhase(task);
-  const reported = task.reportedDone ?? 0;
-  const title = phase === "awaiting-start" ? "Waiting for Areeba to confirm she started"
-    : phase === "blocked" ? "Areeba needs help"
-    : phase === "review" ? "Work reported complete — ready for your review"
-    : phase === "done" ? "Task completed"
-    : phase === "missed" ? "Deadline passed — final update requested"
-    : phase === "cancelled" ? "Task cancelled"
-    : "Areeba has started — following her progress";
-  const detail = task.blockedReason || (task.kind === "dms"
-    ? `${reported} of ${task.target} DMs sent.`
-    : task.note || task.brief || task.title);
-  return { title, detail, phase };
-}

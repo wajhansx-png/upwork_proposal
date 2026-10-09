@@ -1,9 +1,6 @@
 import { newId, readDb, withDb } from "./db";
-import { kvGetImage } from "./db";
 import { notify } from "./push";
-import { checkProof } from "./vision";
-import { fmtDuration, fmtMinutes, fmtWhen, parseDeadline, parseTarget, zparts } from "./time";
-import { extractCheckEvery } from "./time";
+import { extractCheckEvery, fmtDuration, fmtMinutes, fmtWhen, parseDeadline, parseTarget, zparts } from "./time";
 import { extractGap, extractInstructions, managerCommand, parseManager, type ManagerCommand } from "./nlp";
 import { simplifyTask, understandManager, understandTeammate, type Intent, type Understood } from "./understand";
 import type { TeammateFacts } from "./prompts";
@@ -18,56 +15,9 @@ const ms = (iso: string) => new Date(iso).getTime();
 
 // ---------- facts ----------
 
-export interface Stats {
-  total: number;
-  todo: number;
-  sent: number;
-  replied: number;
-  skipped: number;
-  flagged: number;
-  sentToday: number;
-  lastActivityAt?: string;
-}
-
-export function computeStats(db: Db, now = Date.now()): Stats {
-  const tz = db.settings.timezone;
-  const today = zparts(now, tz).day;
-  const sentDonors = db.donors.filter((d) => d.sentAt);
-  const work = db.donors
-    .map((d) => d.touchedAt)
-    .filter((t): t is string => !!t)
-    .sort()
-    .at(-1);
-  return {
-    total: db.donors.length,
-    todo: db.donors.filter((d) => d.status === "todo").length,
-    sent: sentDonors.length,
-    replied: db.donors.filter((d) => d.status === "replied").length,
-    skipped: db.donors.filter((d) => d.status === "skipped").length,
-    flagged: sentDonors.filter((d) => d.flags.length).length,
-    sentToday: sentDonors.filter((d) => zparts(ms(d.sentAt!), tz).day === today).length,
-    lastActivityAt: work,
-  };
-}
-
-export function taskProgress(db: Db, t: Task) {
-  if (t.kind === "general") {
-    const done = t.status === "review" || t.status === "done" ? 1 : 0;
-    return { done, target: 1, flagged: 0 };
-  }
-  const mine = db.donors.filter((d) => d.sentAt && d.sentAt >= t.createdAt);
-  const done = Math.max(t.reportedDone ?? 0, mine.length);
-  return { done: Math.min(t.target, done), target: t.target, flagged: mine.filter((d) => d.flags.length).length };
-}
-
-/** The last time the teammate did anything: a mark in the app or a chat message. */
+/** The last time she wrote anything. */
 function lastTeammateActivity(db: Db): string | undefined {
-  return db.donors
-    .map((d) => d.touchedAt)
-    .concat(db.messages.filter((m) => m.owner === "teammate" && m.from === "user").map((m) => m.at))
-    .filter((t): t is string => !!t)
-    .sort()
-    .at(-1);
+  return db.messages.filter((m) => m.owner === "teammate" && m.from === "user").at(-1)?.at;
 }
 
 /** The manager's status answer: short, every line a fact, and what (if anything) waits for him. */
@@ -121,25 +71,6 @@ function toHer(text: string, name: string) {
 
 // ---------- messaging ----------
 
-const nextNames = (db: Db, n: number) => db.donors.filter((d) => d.status === "todo").slice(0, n).map((d) => d.name);
-
-/** After she marks a DM as sent: quick praise and the next step. Called inside the same db write. */
-export function cheerAfterMark(d: Db) {
-  const t = d.tasks.find((x) => x.status === "open" && x.kind === "dms");
-  if (!t) return;
-  const done = taskProgress(d, t).done;
-  const next = nextNames(d, 1)[0];
-  const tz = d.settings.timezone;
-  let line: string;
-  if (done >= t.target) line = `That is the last one. ${done} of ${t.target} done. Amazing work, ${d.settings.teammateName}!`;
-  else {
-    line = `Nice work! ${done} of ${t.target} done.`;
-    if (t.goal && done < t.goal.count) line += ` ${t.goal.count - done} more to reach your goal by ${fmtWhen(ms(t.goal.by), Date.now(), tz)}.`;
-    else if (t.goal && done >= t.goal.count) line += " You reached your goal. Keep going!";
-    if (next) line += ` Next: ${next}.`;
-  }
-  say(d, "teammate", line);
-}
 
 
 function say(db: Db, owner: Role, text: string, from: "agent" | "user" | "manager" = "agent", extra: Partial<ChatMessage> = {}) {
@@ -1073,36 +1004,6 @@ export async function setProgress(total: number, opts: { defer?: Defer } = {}): 
   await sendPushes(pushes, opts.defer);
 }
 
-/** Runs after "Mark sent". Reads the screenshot and records whether it shows that donor. */
-export async function verifyProof(donorId: string, imageId: string): Promise<void> {
-  const url = await kvGetImage(imageId);
-  const db = await readDb();
-  const donor = db.donors.find((d) => d.id === donorId);
-  if (!url || !donor || donor.proofImg !== imageId) return;
-  const check = await checkProof(url, donor);
-  const pushes: Push[] = [];
-  await withDb((d) => {
-    pushes.length = 0;
-    const x = d.donors.find((y) => y.id === donorId);
-    if (!x || x.proofImg !== imageId) return;
-    x.proofCheck = check;
-    const name = d.settings.teammateName;
-    if (check.verdict === "mismatch" || check.verdict === "unclear") {
-      const flag = check.verdict === "mismatch" ? `screenshot does not match: ${check.reason}` : `screenshot unclear: ${check.reason}`;
-      if (!x.flags.includes(flag)) x.flags.push(flag);
-    }
-    if (check.verdict === "mismatch") {
-      say(d, "teammate", `The screenshot for ${x.name} does not match. ${check.reason}\nPlease send the right screenshot, or tell me what happened.`);
-      say(d, "manager", `Screenshot problem: ${name} marked ${x.name} as sent, but ${check.reason}`);
-      pushes.push({ role: "teammate", title: "Screenshot does not match", body: `${x.name}: ${check.reason}` });
-      pushes.push({ role: "manager", title: "Screenshot does not match", body: `${x.name}: ${check.reason}` });
-    } else if (check.verdict === "unclear") {
-      say(d, "teammate", `I could not confirm the screenshot for ${x.name}. ${check.reason}\nPlease send a clearer one. Show the contact name and your sent message.`);
-      pushes.push({ role: "teammate", title: "Please send a clearer screenshot", body: x.name });
-    }
-  });
-  await sendPushes(pushes);
-}
 
 // ---------- the clock: runs every minute ----------
 
