@@ -4,8 +4,9 @@ import { extractCheckEvery, fmtDuration, fmtMinutes, fmtWhen, parseDeadline, par
 import { extractGap, extractInstructions, managerCommand, parseManager, type ManagerCommand } from "./nlp";
 import { simplifyTask, understandManager, understandTeammate, type Intent, type Understood } from "./understand";
 import type { TeammateFacts } from "./prompts";
-import type { ChatMessage, Db, PendingAssignment, Role, Task } from "./types";
+import type { ChatMessage, Db, Donor, PendingAssignment, Role, Task } from "./types";
 import { evidenceCount, nextDelayMin, nextPlannedCheckin, taskPhase } from "./task-state";
+import { applyDonorAction, cleanPhone, donorLabel, groupOf, todayPicks, type DonorAction } from "./donors";
 
 /** Runs work after the reply has been sent. In a request this is Next's after(); elsewhere it runs inline. */
 export type Defer = (fn: () => Promise<void>) => void;
@@ -753,6 +754,15 @@ function herPromise(text: string): { more: number; minutes: number } | null {
   return m ? { more: Number(m[1]), minutes: Number(m[2]) } : null;
 }
 
+/** "Who do I message?" answered from the donor list: the first 3 picks and where the messages are. */
+function donorHelp(t: Task, d: Db, now: number): string {
+  if (t.kind !== "dms") return "";
+  const picks = todayPicks(d.donors ?? [], now, 3);
+  if (!picks.length) return "";
+  const names = picks.map((p) => donorLabel(d.donors.find((x) => x.id === p.id)!)).join(", ");
+  return `Open “Donors” at the top. Start with: ${names}.\nEach one has the message ready. Tap “Sent” after each one.`;
+}
+
 /** The reply to her. Every message gets a real answer: facts from the app first, then one clear next step. */
 function buildReply(u: Understood, t: Task | undefined, d: Db, now: number, info: ReplyInfo): string {
   const tz = d.settings.timezone;
@@ -773,8 +783,11 @@ function buildReply(u: Understood, t: Task | undefined, d: Db, now: number, info
   if (u.question === "deadline") return left > 0 ? `Your deadline is ${due}. You have ${fmtDuration(left)} left.${t.kind === "dms" ? `\n${statusLine(t, now, tz, false)}` : ""}` : `The deadline passed ${fmtDuration(-left)} ago. ${nextStep({ ...t, status: "missed" })}`;
   if (u.question === "task") return `Your task: ${t.title}. Due ${due}${left > 0 ? ` (${fmtDuration(left)} left)` : ""}.${t.brief ? `\nInstructions: ${t.brief}.` : ""}\n${statusLine(t, now, tz, false)}`;
   if (u.question === "progress") return `${statusLine(t, now, tz)}${notStarted ? `\n${startAsk}` : ""}`;
-  if (u.question === "howto")
+  if (u.question === "howto") {
+    const list = donorHelp(t, d, now);
+    if (list) return [t.brief ? `Your manager's instructions: ${t.brief}.` : "", list].filter(Boolean).join("\n");
     return t.brief ? `Your manager's instructions: ${t.brief}.` : "I do not have that detail. I am asking your manager now and will tell you here. Meanwhile, keep going with the donors you already have.";
+  }
   if (u.question === "next") return [nextStep(t), t.brief ? `Your manager's instructions: ${t.brief}.` : ""].filter(Boolean).join("\n");
   if (u.question === "break") return "I am asking your manager now and will tell you here. Until they answer, please keep going.";
   if (u.question === "extension") return `I am asking your manager for more time. Until they answer, the deadline is still ${due}, so please keep going.`;
@@ -942,7 +955,7 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
         managerLine = `${name} promised: reach ${t.goal.count} by ${fmtWhen(ms(t.goal.by), now, d.settings.timezone)}.`;
         managerPush = { title: `${name} made a promise`, body: managerLine };
       }
-      const askKind = u.cantFinish ? "cantfinish" : u.question === "break" || u.question === "extension" || u.question === "other" ? u.question : u.question === "howto" && !t.brief ? "howto" : null;
+      const askKind = u.cantFinish ? "cantfinish" : u.question === "break" || u.question === "extension" || u.question === "other" ? u.question : u.question === "howto" && !t.brief && !donorHelp(t, d, now) ? "howto" : null;
       if (askKind) t.pendingAsk = { kind: askKind, text: text.slice(0, 300), at: iso(now) };
       const phaseNote = u.blocked
         ? { line: `${name} needs help: “${t.blockedReason}”`, push: { title: `${name} needs help`, body: t.blockedReason ?? text } }
@@ -950,7 +963,7 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
         ? { line: `${name} says she cannot finish: ${quoted}`, push: { title: `${name} can't finish`, body: text.slice(0, 140) } }
         : u.delay && t.status === "open"
         ? { line: `${name} is putting it off: ${quoted}. I told her to start now.`, push: { title: `${name} is delaying`, body: text.slice(0, 140) } }
-        : u.question === "howto" && !t.brief
+        : u.question === "howto" && !t.brief && !donorHelp(t, d, now)
         ? { line: `${name} asks: ${quoted}. Reply here and I will pass it on.`, push: { title: `${name} has a question`, body: text.slice(0, 140) } }
         : u.question === "break" || u.question === "extension" || u.question === "other"
           ? { line: `${name} asks${u.question === "break" ? " for a break" : u.question === "extension" ? " for more time" : ""}: “${text.slice(0, 300)}”`, push: { title: `${name} has a question`, body: text.slice(0, 140) } }
@@ -990,14 +1003,15 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
 }
 
 /** The + and − buttons. Sets her total without chat noise. The manager gets one alert that updates in place. */
-export async function setProgress(total: number, opts: { defer?: Defer } = {}): Promise<void> {
+export async function setProgress(total: number | ((current: number) => number), opts: { defer?: Defer } = {}): Promise<void> {
   const now = Date.now();
   const pushes: Push[] = [];
   await withDb((d) => {
     const name = d.settings.teammateName;
     const t = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.kind === "dms");
     if (!t) throw new Error("There is no DM task.");
-    const next = Math.max(0, Math.min(t.target, Math.round(total)));
+    const want = typeof total === "function" ? total(t.reportedDone ?? 0) : total;
+    const next = Math.max(0, Math.min(t.target, Math.round(want)));
     d.agent.teammateLastSeenAt = iso(now);
     t.unanswered = 0;
     t.noUpdateMsgId = undefined;
@@ -1191,4 +1205,51 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
   });
   await sendPushes(result.pushes);
   return { actions: result.actions };
+}
+
+// ---------- donors page ----------
+
+/** She (or the manager) marks one donor. Her "Sent" adds 1 to her open DM task; undo takes it back. A gift alerts the manager. */
+export async function markDonor(role: Role, id: string, action: DonorAction, opts: { amount?: number; defer?: Defer } = {}): Promise<Donor> {
+  const now = Date.now();
+  const pushes: Push[] = [];
+  const { donor, delta } = await withDb((d) => {
+    const donor = d.donors.find((x) => x.id === id);
+    if (!donor) throw new Error("That donor is not in the list.");
+    const task = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.kind === "dms");
+    const delta = applyDonorAction(donor, action, iso(now), { amount: opts.amount, counts: role === "teammate" && !!task });
+    if (action === "donated") {
+      const name = d.settings.teammateName;
+      const line = `🎉 ${donorLabel(donor)} gave${opts.amount && opts.amount > 0 ? ` Rs ${Math.round(opts.amount).toLocaleString("en-US")}` : ""}${role === "teammate" ? ` (marked by ${name})` : ""}.`;
+      say(d, "manager", line, "agent");
+      if (role === "teammate") pushes.push({ role: "manager", title: "New gift", body: line, tag: `gift-${donor.id}` });
+    }
+    return { donor: structuredClone(donor), delta };
+  });
+  if (delta) await setProgress((c) => c + delta, opts).catch(() => undefined);
+  await sendPushes(pushes, opts.defer);
+  return donor;
+}
+
+/** The manager adds a donor or fixes a phone number. */
+export async function saveDonor(input: { id?: string; name?: string; phone?: string }): Promise<Donor> {
+  return withDb((d) => {
+    const name = String(input.name ?? "").trim().slice(0, 80);
+    const phone = cleanPhone(input.phone);
+    if (input.phone && !phone) throw new Error("That phone number does not look right. Use the country code, like +923001234567.");
+    const old = input.id ? d.donors.find((x) => x.id === input.id) : undefined;
+    if (input.id && !old) throw new Error("That donor is not in the list.");
+    if (old) {
+      if (name) old.name = name;
+      if (input.phone !== undefined) old.phone = phone;
+      old.group = groupOf(old.name, old.phone);
+      old.updatedAt = new Date().toISOString();
+      return structuredClone(old);
+    }
+    if (!name && !phone) throw new Error("Write a name or a phone number.");
+    if (phone && d.donors.some((x) => x.phone === phone)) throw new Error("A donor with this number is already in the list.");
+    const donor: Donor = { id: newId(), name, phone, group: groupOf(name, phone), status: "new", sends: 0, updatedAt: new Date().toISOString() };
+    d.donors.push(donor);
+    return structuredClone(donor);
+  });
 }

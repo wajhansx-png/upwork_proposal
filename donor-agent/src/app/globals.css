@@ -223,3 +223,50 @@ button,a,input{-webkit-tap-highlight-color:transparent}
 .her .p-chips button{min-height:34px;font-size:.8rem}
 .p-chips{overflow:hidden}
 .p-chips button{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ===== Donors page ===== */
+.top-btns{display:flex;gap:6px;align-items:center;flex:none}
+a.text-btn,a.bell-btn{display:inline-flex;align-items:center;text-decoration:none}
+.donors{gap:10px}
+.d-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;flex:none}
+.d-stats div{display:flex;flex-direction:column;align-items:center;padding:8px 4px;border-radius:14px;background:var(--glass),var(--card);border:1px solid var(--edge);min-width:0}
+.d-stats b{font-size:1.05rem;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.d-stats span{font-size:.72rem;color:var(--mute)}
+.d-tabs{display:flex;gap:6px;flex:none}
+.d-tabs button{flex:1 1 0;min-height:38px;padding:6px 10px;border-radius:999px;font-size:.88rem;font-weight:650;background:transparent;border:1px solid var(--edge);color:var(--mute)}
+.d-tabs button.on{color:#55d1ac;border-color:#55d1ac}
+.d-scroll{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding-bottom:70px;-webkit-overflow-scrolling:touch}
+.d-ideas{padding:12px 14px;border-radius:16px;background:var(--glass),var(--card);border:1px solid var(--edge)}
+.d-ideas-top{display:flex;justify-content:space-between;align-items:center}
+.d-ideas ul{margin:8px 0 4px;padding-left:18px;font-size:.88rem;display:grid;gap:4px}
+.d-task{text-align:center}
+.d-card{padding:12px 14px;border-radius:16px;background:var(--glass),var(--card);border:1px solid var(--edge);display:grid;gap:6px}
+.d-card.followup{border-color:rgba(85,209,172,.55)}.d-card.again{border-color:rgba(224,189,85,.5)}
+.d-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.d-head b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.d-group{font-size:.72rem;color:var(--mute);white-space:nowrap}
+.d-why{margin:0;font-size:.8rem;font-weight:650;color:#55d1ac}
+.d-card.again .d-why{color:var(--amber)}
+.d-msg{margin:0;font-size:.85rem;color:var(--mute);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.d-actions{display:flex;gap:8px}
+.d-btn{flex:1 1 0;min-height:42px;padding:8px 10px;border-radius:12px;font-weight:650;font-size:.9rem;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;border:1px solid var(--edge);background:rgba(255,255,255,.05);color:var(--ink)}
+.d-btn.wa{background:#25d366;color:#06120e;border:0}
+.d-btn.hot{background:var(--grad);color:#06120e;border:0}
+.d-more{display:flex;gap:6px;flex-wrap:wrap}
+.d-more button{min-height:32px;padding:4px 10px;border-radius:999px;font-size:.78rem;background:transparent;border:1px solid var(--edge);color:var(--mute)}
+.d-search{flex:none}
+.d-filters{display:flex;gap:6px;overflow-x:auto;flex:none;padding-bottom:2px}
+.d-filters button{flex:none;min-height:32px;padding:4px 12px;border-radius:999px;font-size:.78rem;background:transparent;border:1px solid var(--edge);color:var(--mute);white-space:nowrap}
+.d-filters button.on{color:#55d1ac;border-color:#55d1ac}
+.d-row{border-radius:14px;background:var(--glass),var(--card);border:1px solid var(--edge)}
+.d-row-top{display:flex;width:100%;justify-content:space-between;align-items:center;gap:8px;background:transparent;border:0;padding:10px 12px;min-height:48px;text-align:left}
+.d-name{display:flex;flex-direction:column;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.d-name small{font-size:.72rem;color:var(--mute);font-weight:400}
+.d-pill{flex:none;font-size:.72rem;font-weight:650;padding:3px 9px;border-radius:999px;border:1px solid var(--edge);color:var(--mute)}
+.d-pill.sent{color:var(--amber)}.d-pill.replied{color:#55d1ac}.d-pill.donated{color:#06120e;background:#55d1ac;border:0}.d-pill.no{opacity:.6}
+.d-row-body{padding:0 12px 12px;display:grid;gap:8px}
+.d-phone,.d-add{display:flex;gap:6px;flex-wrap:wrap}
+.d-phone input{flex:1 1 180px;padding:8px 10px}
+.d-phone button{min-height:38px;padding:6px 12px}
+.d-add{flex-direction:column;padding:12px 14px;border-radius:16px;border:1px dashed var(--edge)}
+.d-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));width:min(528px,calc(100% - 32px));display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:var(--card);border:1px solid var(--edge);box-shadow:0 10px 30px rgba(0,0,0,.35);font-size:.88rem;z-index:20}
+.d-toast button{min-height:34px;padding:4px 12px;border-radius:999px;color:#55d1ac;border-color:#55d1ac;background:transparent;font-weight:650}

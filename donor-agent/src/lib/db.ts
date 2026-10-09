@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { get, put } from "@vercel/blob";
+import { normalizeDonor, seedDonors } from "./donors";
 import type { Db } from "./types";
 
 // Vercel functions cannot write inside /var/task. Use their writable /tmp
@@ -33,7 +34,7 @@ function fresh(): Db {
       template: DEFAULT_TEMPLATE,
     },
     hashes: {},
-    donors: [],
+    donors: seedDonors(),
     tasks: [],
     messages: [],
     subs: [],
@@ -49,7 +50,8 @@ function normalize(raw: Partial<Db> | null): Db {
     ...raw,
     settings: { ...base.settings, ...raw.settings },
     agent: { ...base.agent, ...raw.agent },
-    donors: (raw.donors ?? []).map((d) => ({ ...d, flags: d.flags ?? [] })),
+    // The first time, load the manager's donor list. Seeded ids are fixed, so every read gives the same donors.
+    donors: Array.isArray(raw.donors) && raw.donors.length ? raw.donors.map(normalizeDonor) : seedDonors(),
   };
 }
 

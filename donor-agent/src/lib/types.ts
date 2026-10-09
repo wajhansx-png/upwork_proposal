@@ -1,28 +1,26 @@
 export type Role = "manager" | "teammate";
 export type Channel = "whatsapp" | "email" | "instagram" | "linkedin" | "other";
-export type DonorStatus = "todo" | "sent" | "replied" | "skipped";
+export type DonorStatus = "new" | "sent" | "replied" | "donated" | "no";
 
 export interface Donor {
   id: string;
   name: string;
-  channel: Channel;
-  contact: string;
-  note: string;
+  /** WhatsApp number with country code, digits and a leading "+". Missing for most donors. */
+  phone?: string;
+  /** "UET Lahore", "Upwork", "D list", "WhatsApp", "Others": guessed from the name. */
+  group: string;
   status: DonorStatus;
+  /** How many times she messaged this donor. */
+  sends: number;
   sentAt?: string;
   repliedAt?: string;
-  /** Pasted reply from the donor. Required when the teammate marks "replied". */
-  replyText?: string;
-  /** When the teammate copied or opened the message for this donor. */
-  preparedAt?: string;
-  /** Reasons the "sent" mark looks unreliable. Empty means no concern. */
-  flags: string[];
-  /** Screenshot of the sent DM (image id) and what the check found. */
-  proofImg?: string;
-  proofCheck?: { verdict: "match" | "mismatch" | "unclear" | "unchecked"; reason: string };
+  donatedAt?: string;
+  /** Total given, in rupees, when known. */
+  amount?: number;
+  note?: string;
   updatedAt: string;
-  /** Set only when the teammate changes the status. Used to measure activity. */
-  touchedAt?: string;
+  /** The donor before the last change, so one tap can undo it. */
+  undo?: { status: DonorStatus; sends: number; sentAt?: string; repliedAt?: string; donatedAt?: string; amount?: number; counted?: boolean };
 }
 
 /** Each person has one private thread with the agent. */

@@ -21,7 +21,7 @@ const AGENT = "Wajdan";
 /** Which page this is. Sent with every call, so both pages can be open in one browser. */
 const pageRole = (): Role => (location.pathname.startsWith("/manager") ? "manager" : "teammate");
 
-async function api<T = unknown>(url: string, method = "GET", body?: unknown): Promise<T> {
+export async function api<T = unknown>(url: string, method = "GET", body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method,
     headers: { "x-as": pageRole(), ...(body ? { "content-type": "application/json" } : {}) },
@@ -480,7 +480,10 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
           <p className="p-eyebrow">{name}</p>
           <h1 className="p-title">{task ? task.title : "No task yet"}</h1>
         </div>
-        <button className="text-btn" onClick={() => setSettingsOpen(true)}>Settings</button>
+        <div className="top-btns">
+          <a className="text-btn" href="/manager/donors">Donors</a>
+          <button className="text-btn" onClick={() => setSettingsOpen(true)}>Settings</button>
+        </div>
       </header>
 
       <section className={`p-hero ${chatOpen ? "compact" : ""}`} aria-live="polite">
@@ -666,7 +669,10 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
     <main className={`p-shell her ${typing ? "is-typing" : ""}`}>
       <header className="her-top">
         <h1>Hi {name}</h1>
-        {alerts.subscribed === false && <button className="bell-btn" onClick={alerts.enable} aria-label="Turn on alerts">🔔 Alerts</button>}
+        <div className="top-btns">
+          {alerts.subscribed === false && <button className="bell-btn" onClick={alerts.enable} aria-label="Turn on alerts">🔔 Alerts</button>}
+          <a className="bell-btn" href="/areeba/donors">Donors</a>
+        </div>
       </header>
       {alerts.note && <p className="hint">{alerts.note}</p>}
 

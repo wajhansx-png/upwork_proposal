@@ -16,11 +16,12 @@
 - `src/lib/nlp.ts` — rules that read messages (counts, questions, delay, mood, managerCommand). `understand.ts` merges rules + GPT. `prompts.ts` — GPT prompts. `llm.ts` — GPT call with self-healing retries.
 - `src/lib/task-state.ts` phases/check-in times · `evaluate.ts` task score · `auth.ts` manager link code, `x-as` roles · `push.ts` web push · `http.ts` safe request body · `types.ts` data shapes.
 - `src/app/App.tsx` — both screens (Manager, Teammate, chips, Bubble, settings). `globals.css` — styles (newest blocks at the end override older ones).
+- `src/lib/donors.ts` — donor list logic (who to message now, messages, marks/undo, stats, ideas); `donor-list.ts` the 138 seeded donors. `src/app/Donors.tsx` — Donors page (/manager/donors, /areeba/donors).
 - `src/app/api/*` — thin routes; logic lives in `src/lib`.
 
 # Tests (scripts/, plain node)
 
-- `scenario-regression.cjs` real-life simulation with a fake clock + 600 random inputs, rules checked after every step (`SEED=n` for other runs) · `logic-regression.cjs` her/manager conversation logic · `regression.cjs` clock, nudges, +/− · `nlp-regression.cjs` rule parsing · `understand-regression.cjs` GPT checks · `evaluate-regression.cjs` scoring · `llm-regression.cjs` GPT retries · `storage-regression.cjs` storage.
+- `scenario-regression.cjs` real-life simulation with a fake clock + 600 random inputs, rules checked after every step (`SEED=n` for other runs) · `logic-regression.cjs` her/manager conversation logic · `regression.cjs` clock, nudges, +/− · `nlp-regression.cjs` rule parsing · `understand-regression.cjs` GPT checks · `evaluate-regression.cjs` scoring · `llm-regression.cjs` GPT retries · `storage-regression.cjs` storage · `donors-regression.cjs` donor list, picks, marks, task count.
 - `api-check.cjs` (needs a running server): logins, roles, broken input. Not part of `npm test`.
 
 # Deploy
