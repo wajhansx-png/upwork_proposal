@@ -221,6 +221,20 @@ async function runManagerCommand(cmd: ManagerCommand, text: string, now: number,
     };
     let reply: string;
     switch (cmd.kind) {
+      case "sendHeld": {
+        const held = d.agent.heldAnswer;
+        d.agent.heldAnswer = undefined;
+        if (!held) {
+          reply = "There is nothing waiting to be sent.";
+          break;
+        }
+        const words = toHer(held, name);
+        say(d, "teammate", `Your manager says: ${words}`, "agent", { kind: "update" });
+        pushes.push({ role: "teammate", title: "Your manager answered", body: words, persistent: true, tag: `mgr-${t?.id ?? "x"}`, taskId: t?.id });
+        if (t) t.pendingAsk = undefined;
+        reply = `Sent to ${name}: “${words}”`;
+        break;
+      }
       case "identity":
         reply = `I am ${AGENT_NAME}, your assistant. I give ${name} her tasks, push her until she replies, answer her questions, and tell you the moment she replies.`;
         break;
@@ -343,6 +357,8 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
   const draftNow = db.agent.pendingAssignment;
   const running = [...db.tasks].reverse().find((t) => t.status === "open" || t.status === "missed" || t.status === "review");
   const cmd = managerCommand(text, db.settings.teammateName, !!running?.pendingAsk);
+  // A held answer is only sent by "send to her"; any other message drops it.
+  if (db.agent.heldAnswer && cmd?.kind !== "sendHeld") await withDb((d) => { d.agent.heldAnswer = undefined; });
   if (cmd) {
     await runManagerCommand(cmd, text, now, opts.defer);
     return;
@@ -552,11 +568,9 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
       case "chat": {
         const asking = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.pendingAsk);
         if (asking && !/^\s*(?:thanks?|thank you|thx|hi|hello|hey)\b/i.test(text)) {
-          const words = toHer(text, name);
-          say(d, "teammate", `Your manager says: ${words}`);
-          pushes.push({ role: "teammate", title: "Your manager answered", body: words });
-          asking.pendingAsk = undefined;
-          reply = `Sent to ${name} as your answer: “${words}”`;
+          // Never send unclear text to her by itself: hold it until the manager confirms.
+          d.agent.heldAnswer = text.slice(0, 1000);
+          reply = `${name} asked: “${asking.pendingAsk!.text.slice(0, 160)}”\nShould I send her your message as the answer? Tap “Send to ${name}”, or just type something else.`;
           break;
         }
         reply =

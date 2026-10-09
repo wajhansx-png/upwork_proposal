@@ -370,7 +370,8 @@ function herChips(task: Task | undefined, messages: ChatMessage[], nowMs: number
 }
 
 /** What the manager most likely wants next: answer her question first, then act on how the task is going. */
-function managerChips(task: Task | undefined, name: string): Chip[] {
+function managerChips(task: Task | undefined, name: string, held = false): Chip[] {
+  if (held) return [{ label: `Send to ${name}`, text: `send to ${name}`, hot: true }, { label: "Don't send", text: "no thanks" }];
   if (!task || task.status === "cancelled" || task.status === "done") return [
     { label: "100 DMs by 9pm", text: `${name} send 100 DMs by 9pm` },
     { label: "50 DMs in 2 hours", text: `${name} send 50 DMs in 2 hours` },
@@ -505,7 +506,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
             {displayed.map((m, i) => <Bubble key={m.id} m={m} who={AGENT} showWho={displayed[i - 1]?.from !== m.from} showTime={displayed[i + 1]?.from !== m.from} fresh={signal.fresh === m.id} />)}
             {busy && <p className="typing"><i /><i /><i /></p>}
           </div>
-          <ChipRow chips={managerChips(task, name)} busy={busy} onPick={(t) => void post(t)} />
+          <ChipRow chips={managerChips(task, name, !!s.agent?.heldAnswer)} busy={busy} onPick={(t) => void post(t)} />
           <form className="p-composer" onSubmit={(e) => { e.preventDefault(); send(); }}>
             <input aria-label={`Talk to ${AGENT}`} placeholder="Give a task…" value={text} onChange={(e) => setText(e.target.value)} />
             <button className="send-btn" aria-label="Send" disabled={busy || !text.trim()}>➤</button>

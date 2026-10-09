@@ -184,6 +184,8 @@ export interface AgentState {
   llmStatus?: string;
   /** A manager-only draft. Nothing is sent to the teammate until required details are complete. */
   pendingAssignment?: PendingAssignment;
+  /** Manager text that may be an answer to her question; sent only after he confirms. */
+  heldAnswer?: string;
 }
 
 export interface Db {

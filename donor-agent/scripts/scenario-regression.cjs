@@ -188,7 +188,15 @@ const mineCount = (from) => pushes.slice(from).filter((p) => p.to === 'manager')
   await her('which donors should I message?');
   assert.equal(task().pendingAsk?.kind, 'howto');
   await me('Only the ones from last Ramadan');
+  assert.doesNotMatch(lastHer(), /last Ramadan/, 'held until the manager confirms');
+  await me('send to Areeba');
   assert.match(lastHer(), /Your manager says: Only the ones from last Ramadan/);
+  await her('can I take a break?');
+  await me('Feelimg depressrd');
+  await me('how is she?');
+  await me('send to Areeba');
+  assert.doesNotMatch(lastHer(), /depressrd/, 'a held message is dropped when the manager moves on');
+  await me('no');
   await her('I cannot do 40 today');
   await me('make it 25');
   assert.equal(task().target, 25);

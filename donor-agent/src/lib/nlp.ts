@@ -257,7 +257,8 @@ export type ManagerCommand =
   | { kind: "herwords" }
   | { kind: "status" }
   | { kind: "yes"; rest: string; minutes: number | null }
-  | { kind: "no"; rest: string };
+  | { kind: "no"; rest: string }
+  | { kind: "sendHeld" };
 
 /** "1 hour", "an hour", "half an hour", "30 min", "2 hrs" in minutes. */
 export function durationIn(text: string): number | null {
@@ -273,6 +274,7 @@ export function durationIn(text: string): number | null {
 export function managerCommand(text: string, teammate: string, hasPendingAsk: boolean): ManagerCommand | null {
   const t = text.trim();
   const who = `(?:her|${teammate.toLowerCase().replace(/[^a-z]/g, "") || "her"})`;
+  if (/^\s*send (?:it |this )?to (?:her|areeba)\W*$/i.test(t)) return { kind: "sendHeld" };
   if (/\b(?:who are you|what are you|your name|are you (?:a )?(?:bot|ai|human))\b/i.test(t)) return { kind: "identity" };
   if (new RegExp(`^(?:please\\s+)?(?:remind|ping|nudge|push|chase|poke|follow up with|hurry)\\s+${who}(?:\\s+(?:up|now|again|please|for (?:an? )?update))*\\W*$|^ask ${who} for (?:an? |her )?(?:update|count|status)\\W*$|^(?:get|ask for) (?:an? )?update(?: from ${who})?\\W*$`, "i").test(t)) return { kind: "nudge" };
   if (/\b(?:what did (?:she|areeba) (?:say|write|send)|(?:her|areeba'?s) (?:last )?(?:message|reply|replies|messages)|what is she saying|show (?:me )?her messages)\b/i.test(t)) return { kind: "herwords" };

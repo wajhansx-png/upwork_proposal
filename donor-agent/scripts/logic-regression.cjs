@@ -72,6 +72,9 @@ const toMgr = async (m) => { const n = db.messages.length; await A.handleManager
   assert.equal(task().breakUntil, undefined, 'saying she is back ends the break');
   await toHer('what should I write in the DM?');
   r = await toMgr('Use the Eid template');
+  assert.equal(r.her, '', 'unclear text is held, not sent to her by itself');
+  assert.match(r.me, /Should I send her your message/);
+  r = await toMgr('send to Areeba');
   assert.match(r.her, /Your manager says: Use the Eid template/);
   await toHer('can I get more time?');
   r = await toMgr('yes 1 hour'); assert.match(r.her, /new deadline/);
