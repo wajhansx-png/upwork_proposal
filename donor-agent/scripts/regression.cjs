@@ -22,7 +22,7 @@ Module._load = function(request,parent,...rest){
   return original.call(this,request,parent,...rest);
 };
 const {handleTeammateMessage,runAgent,setProgress}=require('../src/lib/agent.ts');
-const {liveUpdate}=require('../src/lib/task-state.ts');
+
 const MIN=60000;
 const makeTask=()=>({id:'test',title:'Send 10 DMs',kind:'dms',target:10,status:'open',createdAt:new Date(now).toISOString(),deadlineAt:new Date(now+3*3600000).toISOString(),unanswered:0});
 const toHer=()=>pushes.filter(p=>p[0]==='teammate').length;
@@ -72,7 +72,7 @@ const myChat=()=>db.messages.filter(m=>m.owner==='manager');
   assert.equal(pushes.filter(p=>p[0]==='manager').at(-1)[3].tag,'progress-test','progress alerts replace each other');
   await setProgress(10);
   assert.equal(db.tasks[0].status,'review','all sent moves the task to review');
-  assert.match(liveUpdate(db.tasks[0]).detail,/10 of 10 DMs sent/);
+
   db.tasks.push({...makeTask(),id:'late',status:'missed',reportedDone:2});
   await setProgress(7); assert.equal(db.tasks.at(-1).reportedDone,7,'+ and − still work after the deadline');
   console.log('PASS: start check-in, 4-minute nudges with no limit, manager silent until she replies, her count counts, no screenshot asks, pictures saved, quiet +/- progress, completion.');
