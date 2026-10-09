@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import "@fontsource-variable/fraunces";
+import "@fontsource-variable/plus-jakarta-sans";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -8,7 +10,7 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "Donor Desk", statusBarStyle: "default" },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#1f6f5c" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#14120f" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -313,3 +313,97 @@ button,a,input{-webkit-tap-highlight-color:transparent}
 .status-line{flex-direction:column;gap:4px;border-radius:18px;padding:10px 20px}
 .status-main{display:inline-flex;align-items:center;gap:8px}
 .status-line .due-bare{font-size:.85rem;font-weight:600}
+
+/* =====================================================================
+   Identity: "ink & paper". Warm charcoal, cream ink, sage + marigold.
+   No glass, no glow. Serif numbers, hairline rules, tighter corners.
+   ===================================================================== */
+:root{
+  --bg:#14120f;--card:#1b1814;--card2:#221e19;--ink:#efe7da;--mute:#9e9586;--line:#2d2822;
+  --sage:#9cc3a6;--sage-ink:#10170f;--sage-soft:#1f2a22;--gold:#e9a93b;--gold-soft:#2c2416;--rose:#e58373;--rose-soft:#2e1d19;
+  --brand:#9cc3a6;--brand-ink:#10170f;--brand-soft:#1f2a22;--ok:#9cc3a6;--amber:#e9a93b;--amber-soft:#2c2416;--danger:#e58373;--danger-soft:#2e1d19;
+  --edge:var(--line);--glass:none;--grad:var(--sage);--glow:none;
+  --serif:"Fraunces Variable",Georgia,"Times New Roman",serif;--sans:"Plus Jakarta Sans Variable",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:12px;
+}
+@media (prefers-color-scheme:light){:root{
+  --bg:#f4eee3;--card:#fbf7f0;--card2:#f0e8da;--ink:#221d17;--mute:#6f665a;--line:#e2d8c6;
+  --sage:#3f7a5a;--sage-ink:#fbf7f0;--sage-soft:#e3ece3;--gold:#b7761a;--gold-soft:#f5e7cc;--rose:#bf4a3a;--rose-soft:#f6e1dc;
+  --brand:#3f7a5a;--brand-ink:#fbf7f0;--brand-soft:#e3ece3;--ok:#3f7a5a;--amber:#b7761a;--amber-soft:#f5e7cc;--danger:#bf4a3a;--danger-soft:#f6e1dc;
+}}
+body{background:var(--bg);font-family:var(--sans);font-size:16px;letter-spacing:-.005em;color:var(--ink)}
+button{font-family:var(--sans);border-radius:var(--r)}
+input,textarea{font-family:var(--sans);border-radius:var(--r)}
+
+/* shell + header */
+.p-shell{gap:14px;padding:calc(18px + env(safe-area-inset-top)) 18px calc(14px + env(safe-area-inset-bottom))}
+.p-eyebrow{font-family:var(--sans);font-size:.68rem;letter-spacing:.22em;color:var(--mute);font-weight:700}
+.p-title{font-family:var(--serif);font-weight:560;font-size:1.45rem;letter-spacing:-.01em;font-variation-settings:"opsz" 36}
+.her-top h1{font-family:var(--serif);font-weight:560;font-size:1.35rem;letter-spacing:-.01em}
+.text-btn,.bell-btn{border-radius:999px;border:1px solid var(--line);color:var(--mute);background:transparent;font-weight:600}
+
+/* the meter: serif number + ruler */
+.meter{width:100%;display:flex;flex-direction:column;gap:12px}
+.meter-num{display:flex;align-items:baseline;gap:6px;font-family:var(--serif);font-variant-numeric:lining-nums tabular-nums}
+.meter-num strong{font-weight:500;line-height:.9;letter-spacing:-.04em;font-variation-settings:"opsz" 144}
+.meter-num span{color:var(--mute);font-weight:400}
+.meter.lg .meter-num strong{font-size:clamp(96px,32vw,148px)}
+.meter.lg .meter-num span{font-size:1.6rem}
+.meter.md .meter-num strong{font-size:64px}
+.meter.md .meter-num span{font-size:1.15rem}
+.ruler{position:relative;height:6px;border-radius:3px;background:var(--line);overflow:visible}
+.ruler i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--sage);transition:width .5s cubic-bezier(.2,.8,.2,1)}
+.ruler b{position:absolute;top:-4px;width:1px;height:14px;background:var(--mute);opacity:.45}
+.meter.warn .ruler i{background:var(--gold)}.meter.bad .ruler i{background:var(--rose)}.meter.idle .ruler i{background:var(--mute)}
+
+/* manager hero */
+.p-hero{align-items:stretch;justify-content:center;gap:22px;padding:0 4px}
+.p-hero.compact{gap:12px}
+.status-line{flex-direction:row;flex-wrap:wrap;justify-content:flex-start;gap:6px 14px;padding:0;border:0;background:none;border-radius:0;font-size:.95rem}
+.status-line .due-bare{font-size:.95rem;color:var(--rose)}
+.chat-pill{border-radius:var(--r);background:var(--card);border:1px solid var(--line);box-shadow:none;min-width:0;width:100%;justify-content:space-between;padding:14px 18px;font-weight:650}
+.chat-pill.on{background:var(--card2)}
+
+/* Areeba's card */
+.her-card{gap:16px;padding:18px;border-radius:16px;background:var(--card);border:1px solid var(--line);box-shadow:none}
+.her-card>.due{align-self:flex-start}
+.due{border-radius:8px;font-weight:650;font-size:.82rem;letter-spacing:.01em}
+.counter{display:grid;grid-template-columns:64px 1fr;gap:10px;padding:0}
+.counter button{border-radius:var(--r);height:56px;width:auto;font-size:1.05rem}
+.her .minus,.minus{width:auto;height:56px;font-size:1.6rem;background:transparent;border:1px solid var(--line);color:var(--mute)}
+.her .plus,.plus{width:auto;height:56px;font-size:1.05rem;font-weight:700;letter-spacing:.01em;background:var(--sage);color:var(--sage-ink);border:0;box-shadow:none}
+.counter button:active:not(:disabled){transform:translateY(1px)}
+.her-slim{border-radius:var(--r);background:var(--card);border:1px solid var(--line)}
+.her-slim>b{font-family:var(--serif);font-weight:560;font-size:1.25rem}
+
+/* chat: notebook style */
+.p-chat,.her .p-chat{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:none;padding:12px 12px 10px}
+.p-thread{gap:12px}
+.bubble{border-radius:14px;animation:none}
+.bubble.them,.her .bubble.them,.p-chat .bubble.them{background:none;border:0;border-left:2px solid var(--line);border-radius:0;padding:2px 0 2px 12px}
+.bubble.boss{background:var(--gold-soft);border-left:2px solid var(--gold);border-radius:0 12px 12px 0}
+.bubble.mine{background:var(--sage-soft);color:var(--ink);border:1px solid color-mix(in srgb,var(--sage) 35%,transparent);border-radius:14px 14px 4px 14px}
+.bubble-who{color:var(--mute);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;font-weight:700}
+.bubble-text{font-size:.98rem;line-height:1.5}
+.bubble-time{font-size:.66rem;opacity:.5;text-align:left}
+.bubble.mine .bubble-time{text-align:right}
+.bubble.fresh{animation:none;box-shadow:none}
+.bubble.them.fresh{border-left-color:var(--sage)}
+.avatar{width:30px;height:30px;box-shadow:none;border:1px solid var(--line)}
+.avatar-space{width:30px}
+.brow{gap:10px;align-items:flex-start}
+
+/* chips + composer */
+.p-chips button,.her .p-chips button{border-radius:10px;background:transparent;border:1px solid var(--line);color:var(--ink);font-weight:600;min-height:40px}
+.p-chips button.hot{background:transparent;color:var(--sage);border-color:var(--sage)}
+.p-composer{border-radius:var(--r);background:var(--bg);border:1px solid var(--line);padding:4px}
+.p-composer:focus-within{border-color:var(--sage)}
+.send-btn,.her .send-btn{border-radius:10px;background:var(--sage);color:var(--sage-ink);box-shadow:none}
+.new-pill{border-radius:10px;background:var(--sage);color:var(--sage-ink);box-shadow:none}
+
+/* settings */
+.settings-modal{background:var(--card);border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.45)}
+.modal-title h2{font-family:var(--serif);font-weight:560;font-size:1.35rem}
+.set-row button.primary{background:var(--sage);color:var(--sage-ink);border:0}
+@media (prefers-reduced-motion:reduce){.ruler i{transition:none}}
+.status-line.good{color:var(--sage)}.status-line.warn{color:var(--gold)}.status-line.bad{color:var(--rose)}

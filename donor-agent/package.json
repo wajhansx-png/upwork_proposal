@@ -11,6 +11,8 @@
     "test": "node scripts/nlp-regression.cjs && node scripts/understand-regression.cjs && node scripts/regression.cjs && node scripts/storage-regression.cjs && node scripts/evaluate-regression.cjs && node scripts/logic-regression.cjs && node scripts/llm-regression.cjs"
   },
   "dependencies": {
+    "@fontsource-variable/fraunces": "5.3.0",
+    "@fontsource-variable/plus-jakarta-sans": "5.3.0",
     "@vercel/blob": "2.8.0",
     "next": "16.3.5",
     "react": "19.2.8",
