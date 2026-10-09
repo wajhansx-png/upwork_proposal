@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { AgentState, ChatMessage, Role, Settings, Task } from "@/lib/types";
 
 interface State {
@@ -168,21 +168,30 @@ function useAlerts(s: State) {
 
 type Tone = "good" | "warn" | "bad" | "idle";
 
-/** The count as a ledger line: a big serif number and a ruler with quarter ticks. */
-function Meter({ value, max, tone, size = "lg" }: { value: number; max: number; tone: Tone; size?: "lg" | "md" }) {
-  const pct = max ? Math.min(100, (value / max) * 100) : 0;
+/** A progress ring. The number sits inside it. */
+function Ring({ value, max, tone, size, children }: { value: number; max: number; tone: Tone; size: number; children: ReactNode }) {
+  const stroke = Math.max(8, Math.round(size / 18));
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const pct = max ? Math.min(1, value / max) : 0;
   return (
-    <div className={`meter ${size} ${tone}`}>
-      <div className="meter-num">
-        <strong>{value}</strong>
-        <span>/{max}</span>
-      </div>
-      <div className="ruler" role="progressbar" aria-valuenow={value} aria-valuemax={max}>
-        <i style={{ width: `${pct}%` }} />
-        <b style={{ left: "25%" }} />
-        <b style={{ left: "50%" }} />
-        <b style={{ left: "75%" }} />
-      </div>
+    <div className={`ring ${tone}`} style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden>
+        <circle className="ring-track" cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} fill="none" />
+        <circle
+          className="ring-fill"
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          strokeWidth={stroke}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - pct)}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </svg>
+      <div className="ring-center">{children}</div>
     </div>
   );
 }
@@ -463,7 +472,10 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
       </header>
 
       <section className={`p-hero ${chatOpen ? "compact" : ""}`} aria-live="polite">
-        <Meter value={sent} max={target} tone={tone} size={chatOpen ? "md" : "lg"} />
+        <Ring value={sent} max={target} tone={tone} size={chatOpen ? 150 : 250}>
+          <strong className="ring-num">{sent}</strong>
+          <span className="ring-of">of {target}</span>
+        </Ring>
         <p className={`status-line ${tone}`}>
           <span className="status-main"><i />{label}</span>
           {task && open && <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} bare />}
@@ -656,13 +668,14 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
           <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} />
           {task.kind !== "dms" && <b className="her-task">{task.title}</b>}
           {task.kind === "dms" ? (
-            <>
-              <Meter value={value} max={target} tone={tone} size="md" />
-              <div className="counter">
-                <button className="minus" aria-label="One less" disabled={!canCount || value <= 0} onClick={() => tap(value - 1)}>−</button>
-                <button className="plus" aria-label="One more" disabled={!canCount || value >= target} onClick={() => tap(value + 1)}>+ Sent one</button>
-              </div>
-            </>
+            <div className="counter">
+              <button className="minus" aria-label="One less" disabled={!canCount || value <= 0} onClick={() => tap(value - 1)}>−</button>
+              <Ring value={value} max={target} tone={tone} size={112}>
+                <strong className="ring-num">{value}</strong>
+                <span className="ring-of">of {target} DMs</span>
+              </Ring>
+              <button className="plus" aria-label="One more" disabled={!canCount || value >= target} onClick={() => tap(value + 1)}>+</button>
+            </div>
           ) : (
             <p className="hint">Tell {AGENT} when it is done.</p>
           )}
