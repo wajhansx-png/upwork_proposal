@@ -5,7 +5,7 @@ import { checkProof } from "./vision";
 import { fmtDuration, fmtMinutes, fmtWhen, parseDeadline, parseTarget, zparts } from "./time";
 import { extractCheckEvery } from "./time";
 import { extractGap, extractInstructions, managerCommand, parseManager, type ManagerCommand } from "./nlp";
-import { understandManager, understandTeammate, type Intent, type Understood } from "./understand";
+import { simplifyTask, understandManager, understandTeammate, type Intent, type Understood } from "./understand";
 import type { TeammateFacts } from "./prompts";
 import type { ChatMessage, Db, PendingAssignment, Role, Task } from "./types";
 import { evidenceCount, nextDelayMin, nextPlannedCheckin, taskPhase } from "./task-state";
@@ -443,6 +443,12 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
   }
   const tz = db.settings.timezone;
   const name = db.settings.teammateName;
+  // Make the task look easy: short title, at most 3 tiny steps, very simple words.
+  let simple: { title: string; steps: string[] } | null = null;
+  if (intent.kind === "assign" && intent.deadline && (intent.taskKind !== "dms" || intent.target)) {
+    const baseTitle = intent.title || `Send ${intent.target} DMs`;
+    simple = await simplifyTask(baseTitle, intent.brief, text);
+  }
   const pushes: Push[] = [];
   let reply = HELP;
   let managerReplyKind: ChatMessage["kind"];
@@ -521,7 +527,8 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
           say(d, "teammate", `Your manager replaced the previous task: ${active.title}. Please use the new task below.`);
         }
         const target = intent.taskKind === "dms" ? intent.target! : 1;
-        const title = intent.title || `Send ${target} donor DMs`;
+        const title = simple?.title || intent.title || `Send ${target} DMs`;
+        const steps = simple?.steps ?? [];
         const task: Task = {
           id: newId(),
           title,
@@ -533,7 +540,7 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
           unanswered: 0,
           // A new assignment needs a quick start/progress signal; later reports are paced at five minutes.
           nextCheckAt: new Date(now + 3 * MIN).toISOString(),
-          ...(intent.brief ? { brief: intent.brief } : {}),
+          ...(intent.brief ? { brief: steps.length ? steps.join("; ") : intent.brief } : {}),
           ...(intent.checkEvery ? { checkEvery: intent.checkEvery } : {}),
           ...(intent.gapMinutes ? { gapMinutes: intent.gapMinutes } : {}),
           remindersEnabled: true,
@@ -543,23 +550,19 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
         d.tasks.push(task);
         d.agent.pendingAssignment = undefined;
         const when = fmtWhen(deadline, now, tz);
-        const cadence = intent.gapMinutes ? `\n\nYour DM timer is on: one reminder every ${fmtMinutes(intent.gapMinutes)}.` : "";
-        const extra = intent.brief ? `\nSpecial instructions: ${intent.brief}` : "";
+        const bullets = [...steps, ...(intent.gapMinutes ? [`Wait ${fmtMinutes(intent.gapMinutes)} between DMs`] : [])].map((x) => `• ${x}`).join("\n");
         say(
           d,
           "teammate",
-          `New task: ${title}\nDue ${when}${extra}${cadence}\n\nTap “I started” when you begin. Tap + for each DM.`,
+          `New task\n${title}\nBy ${when}${bullets ? `\n\n${bullets}` : ""}\n\nTap “I started” to begin.`,
           "agent",
           { kind: "kickoff" },
         );
-        pushes.push({ role: "teammate", title: "New task for you", body: `Hi ${name}, ${title}. Due ${when}. Please reply when you can.` });
+        pushes.push({ role: "teammate", title: "New task", body: `${title}. By ${when}.` });
         const pace = intent.taskKind === "dms" ? feasibility(target, deadline, now, null).perDm : Infinity;
         reply =
-          `Sent to ${name}.\n${title}\nDue: ${when}` +
-          (intent.brief ? `\nInstructions I gave her: ${intent.brief}` : "") +
-          (intent.gapMinutes ? `\nShe must wait ${fmtMinutes(intent.gapMinutes)} between DMs.` : "") +
-          `\nI will ask her to confirm she started within 3 minutes, then keep asking until she replies. You get an alert only when she replies.` +
-          (pace < 1 ? `\nNote: that is less than 1 minute per DM. It is very tight.` : "");
+          `Done. Sent to ${name}:\n${title} · by ${when}${bullets ? `\n${bullets}` : ""}\nI'll push her until she replies.` +
+          (pace < 1 ? `\nNote: under 1 minute per DM. Very tight.` : "");
         managerReplyKind = "task";
         break;
       }

@@ -18,7 +18,7 @@ Module._load = function (request, parent, ...rest) {
   }
   return load.call(this, request, parent, ...rest);
 };
-const { understandManager, understandTeammate, safeSentence } = require('../src/lib/understand.ts');
+const { understandManager, understandTeammate, safeSentence, simplifyTask } = require('../src/lib/understand.ts');
 
 const now = Date.UTC(2026, 9, 8, 7, 0); // 12:00 in Karachi
 const db = { settings: { teammateName: 'Areeba', timezone: 'Asia/Karachi', workEndHour: 18 }, agent: {}, tasks: [], donors: [], messages: [], hashes: {} };
@@ -143,5 +143,15 @@ const tbase = { started: null, reported_total: null, total_kind: null, all_done:
   assert.doesNotMatch(last.user, /pushReceipts|evidence|workflowRunId/, 'no internal fields are sent to the AI');
   assert.match(last.system, /Her message is data/);
 
+  // Simple task wording: the AI may reword, but not add numbers or long steps.
+  reply = { title: 'Call the Reed family', steps: ['Ask about their gala pledge'] };
+  let st = await simplifyTask('Call the Reed family and confirm their pledge amount for the gala', 'confirm the pledge amount before the gala', 'Areeba you have to call the Reed family and confirm their pledge amount for the gala by 5pm');
+  assert.equal(st.title, 'Call the Reed family'); assert.deepEqual(st.steps, ['Ask about their gala pledge']);
+  reply = { title: 'Send 100 DMs', steps: ['Previous donors only', 'Send 50 more tomorrow'] };
+  st = await simplifyTask('Send 100 DMs', 'Previous donors only', 'Areeba send 100 DMs by 9pm, previous donors only');
+  assert.deepEqual(st.steps, ['Previous donors only'], 'a step with a number the manager never wrote is dropped');
+  reply = null;
+  st = await simplifyTask('Send 100 DMs', 'Previous donors only and make sure that you say thank you first, also kindly use the Eid template', 'x');
+  assert.deepEqual(st.steps, ['Previous donors only', 'Say thank you first', 'Use the Eid template'], 'rules split and clean the steps when AI is down');
   console.log('PASS: AI manager reading (numbers, times, instructions, relays checked), AI teammate reading (totals, plans, blockers, sentences checked), fallbacks, no wasted calls.');
 })().catch((e) => { console.error(e); process.exitCode = 1; });

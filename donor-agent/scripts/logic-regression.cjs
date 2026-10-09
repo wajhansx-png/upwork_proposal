@@ -29,7 +29,7 @@ const toMgr = async (m) => { const n = db.messages.length; await A.handleManager
   assert.match(await toHer('hi'), /Hi Areeba!.*\n.*start now/s);
   assert.match(await toHer('ok'), /start now/, 'an ok before starting is pushed to start');
   await toHer('I started');
-  assert.match(await toHer('how many do I have to send?'), /Your task: Send 100 donor DMs/);
+  assert.match(await toHer('how many do I have to send?'), /Your task: Send 100 DMs/);
   assert.match(await toHer('what is my count?'), /0 of 100 done, 100 to go/);
   assert.match(await toHer('kitne hogaye?'), /of 100 done/);
   assert.match(await toHer('who are you?'), /I am Wajdan/);
