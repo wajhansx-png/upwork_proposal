@@ -15,7 +15,7 @@
 - `src/lib/agent.ts` — all agent behaviour: replies to Areeba (buildReply, statusLine, goals), manager commands (runManagerCommand, summarize), the clock (runAgent: 4-min nudges, goal checks, deadline), +/− (setProgress).
 - `src/lib/nlp.ts` — rules that read messages (counts, questions, delay, mood, managerCommand). `understand.ts` merges rules + GPT. `prompts.ts` — GPT prompts. `llm.ts` — GPT call with self-healing retries.
 - `src/lib/task-state.ts` phases/check-in times · `evaluate.ts` task score · `auth.ts` manager link code, `x-as` roles · `push.ts` web push · `http.ts` safe request body · `types.ts` data shapes.
-- `src/app/App.tsx` — both screens (Manager, Teammate, chips, Bubble, settings). `globals.css` — styles (newest blocks at the end override older ones).
+- `src/app/App.tsx` — both screens (Manager, Teammate, chips, Bubble, settings, useHerBot, GiftTeddy). `Bot.tsx` — teddy bot (moods, reactions, speech bubble). `globals.css` — styles (newest blocks at the end override older ones).
 - `src/lib/donors.ts` — donor list logic (who to message now, messages, marks/undo, stats, ideas); `donor-list.ts` the 138 seeded donors. `src/app/Donors.tsx` — Donors page (/manager/donors, /areeba/donors).
 - `src/lib/case.ts` — case texts by the GiveLife writing guide (facts, N maths, main/DM/reminders/closing, Part 10 checks; AI writes only hook + story and is checked); `case-guide.ts` fixed lines, verses, reference lines. `src/app/Case.tsx` — /manager/case.
 - `src/app/api/*` — thin routes; logic lives in `src/lib`.

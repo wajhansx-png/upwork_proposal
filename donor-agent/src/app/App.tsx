@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { AgentState, ChatMessage, Role, Settings, Task } from "@/lib/types";
+import { Bot, oneOf, useBot, type Mood } from "./Bot";
 
 interface State {
   role: Role;
@@ -408,6 +409,37 @@ function ChipRow({ chips, busy, onPick }: { chips: Chip[]; busy: boolean; onPick
 
 // ---------- manager ----------
 
+/** On the manager's screen the teddy only appears when a donor gives, then hides again. */
+function GiftTeddy({ messages }: { messages: ChatMessage[] }) {
+  const bot = useBot();
+  const { fire } = bot;
+  const [show, setShow] = useState(false);
+  const gift = messages.filter((m) => m.from === "agent" && m.text.startsWith("🎉")).at(-1);
+  const giftId = gift?.id;
+  const giftText = gift?.text ?? "";
+  const seen = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    // Only gifts that arrive while the page is open; old ones never pop up.
+    if (seen.current === undefined) {
+      seen.current = giftId ?? "";
+      return;
+    }
+    if (!giftId || giftId === seen.current) return;
+    seen.current = giftId;
+    const text = giftText.replace(/^🎉\s*/, "").slice(0, 90);
+    const t1 = setTimeout(() => {
+      setShow(true);
+      fire("star", `🎉 ${text}`);
+    }, 0);
+    const t2 = setTimeout(() => setShow(false), 4500);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [giftId, giftText, fire]);
+  return show ? <div className="gift-teddy"><Bot mood="happy" bot={bot} size={56} side="left" /></div> : null;
+}
+
 function Manager({ s, refresh }: { s: State; refresh: () => void }) {
   const name = s.settings.teammateName;
   const task = currentTask(s) ?? s.tasks.at(-1);
@@ -475,6 +507,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
                 : "Not started";
   return (
     <main className="p-shell">
+      <GiftTeddy messages={s.messages} />
       <header className="p-top">
         <div>
           <p className="p-eyebrow">{name}</p>
@@ -593,6 +626,77 @@ function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
 
 // ---------- Areeba ----------
 
+/** The teddy on her screen: it only reacts to real things (her count, a new task, the deadline, her silence on screen). */
+function useHerBot(task: Task | undefined, value: number, busy: boolean, nowMs: number) {
+  const bot = useBot();
+  const { fire } = bot;
+  const [combo, setCombo] = useState(0);
+  const prev = useRef<{ value: number; taskId?: string } | null>(null);
+  const lastAdd = useRef(0);
+  const comboRef = useRef(0);
+  const lastTouch = useRef(0);
+  const lastNudge = useRef(0);
+  const target = task?.target ?? 0;
+  const open = !!task && (task.status === "open" || task.status === "missed");
+  const goal = task?.goal?.count;
+  const taskId = task?.id;
+
+  useEffect(() => {
+    const p = prev.current;
+    prev.current = { value, taskId };
+    if (!p) return; // first load: no fake reaction
+    if (taskId && taskId !== p.taskId) return fire("wave", oneOf(["New task! Let's go 💪", "Wake up! New task 🌟", "A new task is here! You can do it 🙂"]));
+    if (!taskId || value <= p.value) return;
+    const now = Date.now();
+    comboRef.current = now - lastAdd.current < 3 * 60_000 ? comboRef.current + 1 : 1;
+    lastAdd.current = now;
+    const c = comboRef.current;
+    setTimeout(() => setCombo(c), 0);
+    const left = target - value;
+    if (target && value >= target) return fire("party", oneOf([`You did it! All ${target} done 🎉`, `All ${target} done! Amazing 🏆`]));
+    if (goal && value >= goal && p.value < goal) return fire("cheer", "Goal reached! ⭐ Next one?");
+    if (left === 1) return fire("cheer", "Just 1 more! 🏁");
+    if (target >= 6 && value === Math.ceil(target / 2)) return fire("cheer", "Half done! 🔥 Keep going");
+    if (value % 5 === 0) return fire("cheer", `${value} done! You're on fire 🔥`);
+    if (c >= 3) return fire("jump", `${c} in a row! 🔥`);
+    if (goal && goal > value && goal - value <= 3) return fire("jump", `${goal - value} more to your goal!`);
+    fire("jump", oneOf(["Yay! +1 💕", "Nice one!", "Keep going!", "So fast! ⚡", "One more smile 🙂", "Love it! 💖"]));
+  }, [value, taskId, target, goal, fire]);
+
+  // If she stops touching the screen for a while during a task, the teddy peeks and taps the glass.
+  useEffect(() => {
+    lastTouch.current = Date.now();
+    const touch = () => (lastTouch.current = Date.now());
+    document.addEventListener("pointerdown", touch);
+    document.addEventListener("keydown", touch);
+    const t = setInterval(() => {
+      const now = Date.now();
+      if (!open || value >= target || document.hidden || now - lastTouch.current < 90_000 || now - lastNudge.current < 180_000) return;
+      lastNudge.current = now;
+      fire("hello", oneOf(["Psst… just 1 more? 👀", "I'm here! Let's do 1 now 🙂", `${target - value} to go. One tap at a time.`, "Hello? 👋 One quick DM?"]));
+    }, 15_000);
+    return () => {
+      document.removeEventListener("pointerdown", touch);
+      document.removeEventListener("keydown", touch);
+      clearInterval(t);
+    };
+  }, [open, value, target, fire]);
+
+  const leftMs = task ? new Date(task.deadlineAt).getTime() - nowMs : 0;
+  const mood: Mood = !task ? "sleep" : busy ? "think" : !open ? "happy" : leftMs > 0 && leftMs < 30 * 60_000 && value < target ? "worried" : "idle";
+  const tap = () => {
+    const mins = Math.max(1, Math.round(leftMs / 60_000));
+    fire("tickle",
+      !task ? "No task now. I'll wake you when one comes 😴"
+        : !open ? "All done! Your manager is checking it 🌸"
+          : !task.startedAt && value === 0 ? "Tap “I started”, then send just 1 🙂"
+            : goal && goal > value ? `${goal - value} more to your goal 💪`
+              : leftMs > 0 && leftMs < 30 * 60_000 ? `${mins} min left. One more now!`
+                : `${Math.max(0, target - value)} to go. You've got this!`);
+  };
+  return { bot, mood, combo: open ? combo : 0, tap };
+}
+
 function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
   const name = s.settings.teammateName;
   const task = currentTask(s) ?? (s.tasks.at(-1)?.status === "missed" ? s.tasks.at(-1) : undefined);
@@ -666,10 +770,14 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
     }, 1000);
   };
   const tone: Tone = !task ? "idle" : task.status === "missed" ? "bad" : "good";
+  const teddy = useHerBot(task, value, busy, new Date(s.now).getTime());
   return (
     <main className={`p-shell her ${typing ? "is-typing" : ""}`}>
       <header className="her-top">
-        <h1>Hi {name}</h1>
+        <div className="her-hi">
+          <Bot mood={teddy.mood} bot={teddy.bot} combo={teddy.combo} onTap={teddy.tap} />
+          <h1>Hi {name}</h1>
+        </div>
         <div className="top-btns">
           {alerts.subscribed === false && <button className="bell-btn" onClick={alerts.enable} aria-label="Turn on alerts">🔔 Alerts</button>}
           <a className="bell-btn" href="/areeba/donors">Donors</a>

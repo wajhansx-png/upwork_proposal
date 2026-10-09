@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Donor, DonorStatus } from "@/lib/types";
 import { api } from "./App";
+import { Bot, oneOf, useBot } from "./Bot";
 
 type Row = Donor & { canUndo: boolean };
 interface Pick { id: string; why: string; label: string; message: string }
@@ -59,6 +60,21 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
     return () => clearTimeout(t);
   }, [toast]);
 
+  const bot = useBot();
+  /** The teddy reacts to what she just marked. */
+  const react = (action: string) => {
+    const left = data?.task ? Math.max(0, data.task.target - data.task.done - 1) : null;
+    if (action === "sent") bot.fire(left === 0 ? "cheer" : "jump", left === 0 ? "Task done! 🎉" : left !== null ? `${oneOf(["Sent! 💌", "Yay! +1 💕", "Nice one!"])} ${left} to go` : oneOf(["Sent! 💌", "Nice one!", "Keep going! 🌟"]));
+    else if (action === "donated") bot.fire("star", "Someone gave! 🎉 You made this happen");
+    else if (action === "replied") bot.fire("cheer", "They replied! 💬 Answer kindly");
+    else if (action === "no") bot.fire("tickle", "Okay! Next one 🙂");
+  };
+  const tapBot = () => {
+    const first = data?.picks[0];
+    const d = first && data?.donors.find((x) => x.id === first.id);
+    bot.fire("tickle", !d ? "Everyone is done or waiting 🌸" : first!.why === "followup" ? `${label(d)} replied! Answer first 💬` : `Next: ${label(d)}. One tap! 💌`);
+  };
+
   const mark = async (d: Donor, action: "sent" | "replied" | "donated" | "no" | "undo") => {
     let amount: number | undefined;
     if (action === "donated") {
@@ -70,6 +86,7 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
     try {
       await api("/api/donors", "POST", { id: d.id, action, amount });
       navigator.vibrate?.(10);
+      if (entry === "teammate") react(action);
       setToast(action === "undo" ? null : { id: d.id, text: `${label(d)}: ${action === "donated" ? "gave" : action === "no" ? "not interested" : action}` });
       await load();
     } catch (e) {
@@ -121,9 +138,12 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
   return (
     <main className="p-shell donors">
       <header className="p-top">
-        <div>
-          <p className="p-eyebrow">Donors</p>
-          <h1 className="p-title">{s.total} donors</h1>
+        <div className="her-hi">
+          {entry === "teammate" && <Bot mood={busy ? "think" : "idle"} bot={bot} onTap={tapBot} />}
+          <div>
+            <p className="p-eyebrow">Donors</p>
+            <h1 className="p-title">{s.total} donors</h1>
+          </div>
         </div>
         <a className="text-btn back" href={back}>← Chat</a>
       </header>
