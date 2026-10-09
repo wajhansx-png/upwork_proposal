@@ -210,3 +210,16 @@ button,a,input{-webkit-tap-highlight-color:transparent}
 /* Chat wallpaper: soft paws, hearts and sparkles */
 .p-chat{background:url(/chat-bg.svg) 0 0/140px 140px repeat,radial-gradient(120% 80% at 50% 0%,rgba(85,209,172,.07),transparent 60%),var(--card)}
 @media (prefers-color-scheme:light){.p-chat{background:url(/chat-bg.svg) 0 0/140px 140px repeat,var(--card)}}
+/* Chat open: the count shrinks to one small row so the chat gets the screen */
+.p-hero.compact{flex-direction:row;justify-content:center;gap:12px}
+.p-hero.compact .ring-num{font-size:1.25rem}
+.p-hero.compact .ring-of{display:none}
+.p-hero.compact .status-line{padding:6px 12px;font-size:.82rem}
+.p-hero.compact .status-line .due-bare{font-size:.78rem}
+.chat-pill.on{padding:7px 18px;min-height:0;font-size:.85rem}
+/* Smaller suggestions, one row */
+.p-chips{flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:6px 0}
+.p-chips button{min-height:34px;padding:5px 12px;font-size:.8rem;font-weight:650}
+.her .p-chips button{min-height:34px;font-size:.8rem}
+.p-chips{overflow:hidden}
+.p-chips button{flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

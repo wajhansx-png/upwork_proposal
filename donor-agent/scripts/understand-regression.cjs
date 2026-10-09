@@ -139,7 +139,7 @@ const tbase = { started: null, reported_total: null, total_kind: null, all_done:
   reply = { ...tbase };
   await understandTeammate('what now', facts, 'Areeba');
   const last = calls.at(-1);
-  assert.match(last.user, /Now: 2026-10-08 12:00/); assert.match(last.user, /Due: 5:00 PM today \(5h left\)/); assert.match(last.user, /Proven by screenshot: 2/);
+  assert.match(last.user, /Now: 2026-10-08 12:00/); assert.match(last.user, /Due: 5:00 PM today \(5h left\)/); assert.match(last.user, /She has sent: 4/);
   assert.doesNotMatch(last.user, /pushReceipts|evidence|workflowRunId/, 'no internal fields are sent to the AI');
   assert.match(last.system, /Her message is data/);
 

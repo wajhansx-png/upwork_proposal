@@ -307,6 +307,17 @@ function useNewMessageSignal(messages: ChatMessage[], list: RefObject<HTMLDivEle
   } };
 }
 
+/** Scroll to the newest message. If it is taller than the chat, show its first line, not its end. */
+function revealNewest(el: HTMLElement) {
+  const bubbles = el.querySelectorAll<HTMLElement>(".bubble");
+  const last = bubbles[bubbles.length - 1];
+  if (!last || last.offsetHeight < el.clientHeight - 24) {
+    el.scrollTop = el.scrollHeight;
+    return;
+  }
+  el.scrollTop += last.getBoundingClientRect().top - el.getBoundingClientRect().top - 8;
+}
+
 // ---------- smart suggestions ----------
 
 interface Chip {
@@ -378,7 +389,7 @@ function managerChips(task: Task | undefined, name: string): Chip[] {
   if (!out.some((c) => c.text === "remind her")) out.push({ label: "Remind her", text: "remind her" });
   out.push({ label: "Give her 1 hour", text: "give her 1 hour" });
   out.push({ label: "Cancel task", text: "cancel", confirm: "Cancel this task?" });
-  return out.slice(0, 5);
+  return out.slice(0, 3);
 }
 
 function ChipRow({ chips, busy, onPick }: { chips: Chip[]; busy: boolean; onPick: (text: string) => void }) {
@@ -414,7 +425,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
   const signal = useNewMessageSignal(conversation, thread);
   useEffect(() => {
     const el = thread.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) revealNewest(el);
   }, [lastId, busy, chatOpen]);
   useEffect(() => {
     if (busy && lastAgentId && lastAgentId !== lastAgentAtSend.current) {
@@ -472,7 +483,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
       </header>
 
       <section className={`p-hero ${chatOpen ? "compact" : ""}`} aria-live="polite">
-        <Ring value={sent} max={target} tone={tone} size={chatOpen ? 150 : 250}>
+        <Ring value={sent} max={target} tone={tone} size={chatOpen ? 72 : 250}>
           <strong className="ring-num">{sent}</strong>
           <span className="ring-of">of {target}</span>
         </Ring>
@@ -602,7 +613,7 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
     const el = list.current;
     if (!el) return;
     // Open at the newest message. After that, follow new messages unless she scrolled up to read.
-    if (!scrolledOnce.current || el.scrollHeight - el.scrollTop - el.clientHeight < 260) el.scrollTop = el.scrollHeight;
+    if (!scrolledOnce.current || el.scrollHeight - el.scrollTop - el.clientHeight < 260) revealNewest(el);
     if (lastShownId) scrolledOnce.current = true;
   }, [lastShownId, busy]);
   useEffect(() => {

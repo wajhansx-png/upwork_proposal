@@ -70,8 +70,6 @@ function ruleReview(f: Facts, score: number): Omit<TaskEvaluation, "at"> {
   if (f.quality !== null && f.quality >= 4) good.push(`Messages were well written (quality ${f.quality}/5).`);
   if (f.startDelayMin !== null && f.startDelayMin <= 10) good.push("Started quickly.");
   if (f.reported > f.verified) problems.push(`Said ${f.reported}, but only ${f.verified} are proven.`);
-  if (f.duplicates) problems.push(`${f.duplicates} screenshot(s) were sent twice.`);
-  if (f.rejected) problems.push(`${f.rejected} screenshot(s) were not proof of a sent DM.`);
   if (f.quality !== null && f.quality < 3) problems.push(`Weak messages (quality ${f.quality}/5).`);
   problems.push(...f.issues.slice(0, 2));
   if (f.outcome === "missed") problems.push("The deadline was missed.");
@@ -80,7 +78,7 @@ function ruleReview(f: Facts, score: number): Omit<TaskEvaluation, "at"> {
   if (f.ignoredCheckinsAtEnd >= 2) problems.push(`Ignored ${f.ignoredCheckinsAtEnd} check-ins at the end.`);
   const advice =
     f.reported > f.verified
-      ? "Ask for the missing screenshots before you accept this."
+      ? "Ask her what is left before you accept this."
       : score >= 8
         ? "Good work. A short thank-you will keep this up."
         : "Talk through the problems above before the next task.";

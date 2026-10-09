@@ -75,7 +75,7 @@ export const factsBlock = (f: TeammateFacts) =>
     `Now: ${f.now}`,
     f.task ? `Task: ${f.task}` : "Task: none right now",
     f.instructions ? `Manager's instructions: ${f.instructions}` : "",
-    f.target ? `Target: ${f.target} DMs. She says she sent: ${f.reported ?? 0}. Proven by screenshot: ${f.proven ?? 0}.` : "",
+    f.target ? `Target: ${f.target} DMs. She has sent: ${f.reported ?? 0}.` : "",
     f.due ? `Due: ${f.due} (${f.left} left)` : "",
     f.task ? `Started: ${f.started ? "yes" : "not confirmed yet"}` : "",
     f.blocked ? `Open blocker: ${f.blocked}` : "",
