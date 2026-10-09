@@ -270,3 +270,17 @@ a.text-btn,a.bell-btn{display:inline-flex;align-items:center;text-decoration:non
 .d-add{flex-direction:column;padding:12px 14px;border-radius:16px;border:1px dashed var(--edge)}
 .d-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));width:min(528px,calc(100% - 32px));display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:var(--card);border:1px solid var(--edge);box-shadow:0 10px 30px rgba(0,0,0,.35);font-size:.88rem;z-index:20}
 .d-toast button{min-height:34px;padding:4px 12px;border-radius:999px;color:#55d1ac;border-color:#55d1ac;background:transparent;font-weight:650}
+/* ===== Case writer ===== */
+.d-case{display:grid;gap:2px;padding:10px 14px;border-radius:16px;border:1px solid rgba(85,209,172,.45);background:var(--glass),var(--card);font-size:.82rem;color:var(--mute)}
+.d-case b{color:var(--ink);font-size:.95rem}.d-case a{color:#55d1ac;font-weight:650;text-decoration:none}
+.c-form{display:grid;gap:4px}.c-form textarea{min-height:70px}
+.c-form select,.case-page select{font:inherit;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink)}
+.c-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}.c-two>div{min-width:0}
+.c-check{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:.88rem;margin:10px 0}.c-check input{width:auto}
+.c-notes{margin:0 0 6px;padding:8px 12px 8px 26px;border-radius:12px;background:var(--amber-soft);color:var(--ink);font-size:.82rem;display:grid;gap:3px}
+.c-stats{grid-template-columns:repeat(3,1fr)}
+.c-tabs button{font-size:.8rem;padding:6px 4px}
+.c-text{margin:0;white-space:pre-wrap;word-break:break-word;font:inherit;font-size:.86rem;line-height:1.45;padding:12px 14px;border-radius:14px;background:var(--glass),var(--card);border:1px solid var(--edge);user-select:text}
+.c-checks{list-style:none;margin:0;padding:0;display:grid;gap:2px;font-size:.76rem}
+.c-checks .ok{color:#55d1ac}.c-checks .bad{color:var(--danger);font-weight:650}
+.c-more{align-items:center}

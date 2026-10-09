@@ -481,6 +481,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
           <h1 className="p-title">{task ? task.title : "No task yet"}</h1>
         </div>
         <div className="top-btns">
+          <a className="text-btn" href="/manager/case">Case</a>
           <a className="text-btn" href="/manager/donors">Donors</a>
           <button className="text-btn" onClick={() => setSettingsOpen(true)}>Settings</button>
         </div>

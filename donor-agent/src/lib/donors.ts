@@ -1,5 +1,5 @@
 import { DONOR_LIST } from "./donor-list";
-import type { Donor, DonorStatus } from "./types";
+import type { CaseFile, Donor, DonorStatus } from "./types";
 
 const DAY = 86_400_000;
 const ms = (iso?: string) => (iso ? new Date(iso).getTime() : 0);
@@ -33,8 +33,12 @@ export function parseDonorLine(line: string, id: string, at: string): Donor | nu
   const phone = cleanPhone(right);
   const name = /^(?:contact|\(no name\))?$/i.test(left) ? "" : left.slice(0, 80);
   if (!name && !phone) return null;
-  return { id, name, phone, group: groupOf(name, phone), status: "new", sends: 0, updatedAt: at };
+  return { id, name, phone, group: groupOf(name, phone), gender: guessGender(name), status: "new", sends: 0, updatedAt: at };
 }
+
+/** Only clear women's names in the list; everyone else gets "Bhai". */
+const FEMALE = /^(?:iqra|hajra|kashmala|mubeena|madhu|ayesha|fatima|zainab|maryam|sana|hina|amna|areeba|sara|sarah|mehwish|nimra|rabia|saima|kiran)$/i;
+export const guessGender = (name: string): "m" | "f" => (FEMALE.test(name.trim().split(/\s+/)[0] ?? "") ? "f" : "m");
 
 export function seedDonors(at = new Date().toISOString()): Donor[] {
   return DONOR_LIST.split("\n")
@@ -53,6 +57,8 @@ export function normalizeDonor(raw: Omit<Partial<Donor>, "status"> & { status?: 
     name,
     phone,
     group: raw.group || groupOf(name, phone),
+    gender: raw.gender === "f" || raw.gender === "m" ? raw.gender : guessGender(name),
+    caseId: raw.caseId,
     status,
     sends: Number.isFinite(raw.sends) ? Math.max(0, raw.sends!) : status === "new" ? 0 : 1,
     sentAt: raw.sentAt,
@@ -77,7 +83,7 @@ export function greetName(d: Donor): string {
   return words[0];
 }
 
-export type PickWhy = "followup" | "again" | "reminder" | "new";
+export type PickWhy = "followup" | "again" | "reminder" | "new" | "case";
 export interface Pick {
   id: string;
   why: PickWhy;
@@ -86,9 +92,21 @@ export interface Pick {
   score: number;
 }
 
-/** Whether this donor should be messaged now, and why. Most likely to give comes first. */
-export function pickFor(d: Donor, now: number): Pick | null {
+/**
+ * Whether this donor should be messaged now, and why. Most likely to give comes first.
+ * With an open case, everyone gets that case's DM once (guide Part 8: one DM per person, no reminder DMs).
+ */
+export function pickFor(d: Donor, now: number, openCase?: CaseFile | null): Pick | null {
   const days = (iso?: string) => (now - ms(iso)) / DAY;
+  if (openCase && d.status !== "replied") {
+    if (d.status === "no" || d.caseId === openCase.id) return null;
+    const gave = d.status === "donated" || !!d.amount;
+    if (!gave && d.sends >= MAX_SENDS) return null;
+    const who = openCase.facts.name;
+    if (gave) return { id: d.id, why: "case", label: `Gave before — send ${who}'s case`, score: 90 + Math.min(9, Math.floor((d.amount ?? 0) / 1000)) };
+    if (d.status === "sent") return { id: d.id, why: "case", label: `New case — send ${who}'s case`, score: 70 - d.sends * 5 };
+    return { id: d.id, why: "case", label: d.phone ? `${who}'s case — WhatsApp in one tap` : `${who}'s case — copy message`, score: 40 + (d.phone ? 8 : 0) + (greetName(d) ? 4 : 0) };
+  }
   switch (d.status) {
     case "replied":
       return { id: d.id, why: "followup", label: "Replied — answer and ask kindly", score: 100 };
@@ -104,18 +122,19 @@ export function pickFor(d: Donor, now: number): Pick | null {
   }
 }
 
-export function todayPicks(donors: Donor[], now: number, n = 10): Pick[] {
+export function todayPicks(donors: Donor[], now: number, n = 10, openCase?: CaseFile | null): Pick[] {
   return donors
-    .map((d, i) => ({ p: pickFor(d, now), i }))
+    .map((d, i) => ({ p: pickFor(d, now, openCase), i }))
     .filter((x): x is { p: Pick; i: number } => !!x.p)
     .sort((a, b) => b.p.score - a.p.score || a.i - b.i)
     .slice(0, Math.max(0, n))
     .map((x) => x.p);
 }
 
-/** The message to send, in easy English. */
-export function draftMessage(d: Donor, why: PickWhy, teammate: string): string {
+/** The message to send, in easy English. With an open case, `caseDm` writes the case DM for this donor's first name. */
+export function draftMessage(d: Donor, why: PickWhy, teammate: string, caseDm?: (first: string, female: boolean) => string): string {
   const n = greetName(d);
+  if (why === "case" && caseDm) return caseDm(n.split(" ")[0] ?? "", d.gender === "f");
   const hi = `Assalam o Alaikum${n ? ` ${n}` : ""}!`;
   switch (why) {
     case "followup":
@@ -135,20 +154,21 @@ export type DonorAction = "sent" | "replied" | "donated" | "no" | "undo";
  * Change one donor. Returns how her task count should move: +1 for "sent", −1 when a counted "sent" is undone.
  * `counts` is false when the change should not touch the task (the manager marking, or no open task).
  */
-export function applyDonorAction(d: Donor, action: DonorAction, nowIso: string, opts: { amount?: number; counts?: boolean } = {}): number {
+export function applyDonorAction(d: Donor, action: DonorAction, nowIso: string, opts: { amount?: number; counts?: boolean; caseId?: string } = {}): number {
   if (action === "undo") {
     const u = d.undo;
     if (!u) return 0;
-    Object.assign(d, { status: u.status, sends: u.sends, sentAt: u.sentAt, repliedAt: u.repliedAt, donatedAt: u.donatedAt, amount: u.amount, undo: undefined, updatedAt: nowIso });
+    Object.assign(d, { status: u.status, sends: u.sends, sentAt: u.sentAt, repliedAt: u.repliedAt, donatedAt: u.donatedAt, amount: u.amount, caseId: u.caseId, undo: undefined, updatedAt: nowIso });
     return u.counted ? -1 : 0;
   }
   const counted = action === "sent" && !!opts.counts;
-  d.undo = { status: d.status, sends: d.sends, sentAt: d.sentAt, repliedAt: d.repliedAt, donatedAt: d.donatedAt, amount: d.amount, counted };
+  d.undo = { status: d.status, sends: d.sends, sentAt: d.sentAt, repliedAt: d.repliedAt, donatedAt: d.donatedAt, amount: d.amount, counted, caseId: d.caseId };
   d.updatedAt = nowIso;
   if (action === "sent") {
     d.status = "sent";
     d.sends += 1;
     d.sentAt = nowIso;
+    if (opts.caseId) d.caseId = opts.caseId;
   } else if (action === "replied") {
     d.status = "replied";
     d.repliedAt = nowIso;

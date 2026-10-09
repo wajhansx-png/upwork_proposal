@@ -35,6 +35,7 @@ function fresh(): Db {
     },
     hashes: {},
     donors: seedDonors(),
+    cases: [],
     tasks: [],
     messages: [],
     subs: [],
@@ -52,6 +53,7 @@ function normalize(raw: Partial<Db> | null): Db {
     agent: { ...base.agent, ...raw.agent },
     // The first time, load the manager's donor list. Seeded ids are fixed, so every read gives the same donors.
     donors: Array.isArray(raw.donors) && raw.donors.length ? raw.donors.map(normalizeDonor) : seedDonors(),
+    cases: Array.isArray(raw.cases) ? raw.cases : [],
   };
 }
 

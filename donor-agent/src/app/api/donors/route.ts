@@ -2,7 +2,8 @@ import { after, NextRequest, NextResponse } from "next/server";
 import { readBody } from "@/lib/http";
 import { getRole } from "@/lib/auth";
 import { readDb } from "@/lib/db";
-import { markDonor, saveDonor } from "@/lib/agent";
+import { markDonor, openCase, saveDonor } from "@/lib/agent";
+import { caseText, dmGreeting, fitAsk } from "@/lib/case";
 import { donorStats, draftMessage, ruleIdeas, todayPicks, type DonorAction } from "@/lib/donors";
 
 const ACTIONS: DonorAction[] = ["sent", "replied", "donated", "no", "undo"];
@@ -17,7 +18,9 @@ export async function GET(req: NextRequest) {
   // Today's list fits what is left of her task, 5 to 15 donors.
   const n = task ? Math.min(15, Math.max(5, task.target - (task.reportedDone ?? 0))) : 10;
   const name = db.settings.teammateName;
-  const picks = todayPicks(db.donors, now, n).map((p) => ({ ...p, message: draftMessage(db.donors.find((d) => d.id === p.id)!, p.why, name) }));
+  const c = openCase(db);
+  const caseDm = c ? (first: string, female: boolean) => caseText(c, { greet: dmGreeting(first, female) }) : undefined;
+  const picks = todayPicks(db.donors, now, n, c).map((p) => ({ ...p, message: draftMessage(db.donors.find((d) => d.id === p.id)!, p.why, name, caseDm) }));
   return NextResponse.json({
     role,
     teammate: name,
@@ -26,6 +29,7 @@ export async function GET(req: NextRequest) {
     stats: donorStats(db.donors),
     ideas: role === "manager" ? ruleIdeas(db.donors, now) : undefined,
     task: task ? { title: task.title, done: task.reportedDone ?? 0, target: task.target } : null,
+    case: c ? { name: c.facts.name, amountLeft: c.facts.amountLeft, ...fitAsk(c.facts.amountLeft, c.facts.askAmount), sent: db.donors.filter((d) => d.caseId === c.id).length } : null,
   });
 }
 

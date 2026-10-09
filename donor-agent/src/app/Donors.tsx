@@ -15,6 +15,7 @@ interface Data {
   stats: Stats;
   ideas?: string[];
   task: { title: string; done: number; target: number } | null;
+  case: { name: string; amountLeft: number; ask: number; n: number; any: boolean; sent: number } | null;
 }
 
 const STATUS_TEXT: Record<DonorStatus, string> = { new: "Not messaged", sent: "Waiting", replied: "Replied", donated: "Gave", no: "Not interested" };
@@ -152,6 +153,14 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
                 </div>
                 <ul>{(ideas?.list ?? data.ideas ?? []).map((t, i) => <li key={i}>{t}</li>)}</ul>
                 {ideas && <p className="hint">{ideas.by === "ai" ? "From the AI, based only on your numbers." : "AI is not available. These come from your numbers."}</p>}
+              </section>
+            )}
+            {data.case && (
+              <section className="d-case">
+                <b>{data.case.name}&apos;s case · {rs(data.case.amountLeft)} left</b>
+                <span>{data.case.any ? "Any amount helps" : `${data.case.n} people × ${data.case.ask.toLocaleString("en-US")}`} · sent to {data.case.sent}</span>
+                <span>Send the case poster first, then the text. One DM per person.</span>
+                {data.role === "manager" && <a href="/manager/case">Open case writer →</a>}
               </section>
             )}
             {data.task && <p className="hint d-task">Task: {data.task.title} · {data.task.done} of {data.task.target} sent. “Sent” here adds 1.</p>}

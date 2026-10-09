@@ -15,7 +15,7 @@ Module._load = function (request, parent, ...rest) {
     if (request === './db') return fakeDb;
     if (request === './push') return { notify: async (...a) => pushes.push(a) };
   }
-  if ((from.endsWith(path.join('lib', 'understand.ts')) || from.endsWith(path.join('lib', 'agent.ts'))) && request === './llm') return { llm: async () => ({ text: null, status: 'off' }), parseJson: () => null };
+  if ((from.endsWith(path.join('lib', 'understand.ts')) || from.endsWith(path.join('lib', 'agent.ts')) || from.endsWith(path.join('lib', 'case.ts'))) && request === './llm') return { llm: async () => ({ text: null, status: 'off' }), parseJson: () => null };
   return load.call(this, request, parent, ...rest);
 };
 const D = require('../src/lib/donors.ts');
@@ -136,6 +136,42 @@ const iso = (t) => new Date(t).toISOString();
   const reply = db.messages.filter((m) => m.owner === 'teammate' && m.from === 'agent').pop();
   assert.match(reply.text, /Open “Donors” at the top\. Start with: /);
   assert.equal(db.tasks[0].pendingAsk, undefined, 'no question waits on the manager');
+
+  // 10. With an open case: everyone gets that case's DM once; gifts lower the amount left; undo puts it back.
+  const C = require('../src/lib/case.ts');
+  const facts = C.cleanFacts({ type: 'child', name: 'Affan', problem: 'bleeding inside', worstRisk: 'leg can be removed', doctorLine: 'delay is risky', proof: 'Aga Khan report', amountLeft: 26000, askAmount: 2000 });
+  const kase = { id: 'c1', facts, status: 'open', createdAt: iso(now), hook: 'Affan could lose his LEG.', story: 'Helpless Affan is bleeding inside.', verse: 0, by: 'rules', posts: [] };
+  db.cases = [kase];
+  db.donors = D.seedDonors(iso(now));
+  db.donors.find((x) => x.id === 'd3').status = 'donated';
+  db.donors.find((x) => x.id === 'd3').amount = 5000;
+  db.donors.find((x) => x.id === 'd4').status = 'no';
+  let picks = D.todayPicks(db.donors, now, 200, kase);
+  assert.equal(picks[0].id, 'd3', 'past donors get the new case first');
+  assert.ok(!picks.some((p) => p.id === 'd4'), 'not interested stays out');
+  assert.ok(picks.every((p) => p.why === 'case'));
+  const iqra = db.donors.find((x) => x.name === 'Iqra');
+  assert.equal(iqra.gender, 'f');
+  const msg = D.draftMessage(iqra, 'case', 'Areeba', (first, female) => C.caseText(kase, { greet: C.dmGreeting(first, female) }));
+  assert.match(msg, /^Iqra Behen,\n\n\*Affan could lose his LEG\.\*/);
+  assert.match(D.draftMessage(db.donors.find((x) => x.id === 'd60'), 'case', 'Areeba', (first, female) => C.dmGreeting(first, female)), /^Assalam o Alaikum,$/);
+  await markDonor('teammate', 'd3', 'sent');
+  assert.equal(db.donors.find((x) => x.id === 'd3').caseId, 'c1');
+  picks = D.todayPicks(db.donors, now, 200, kase);
+  assert.ok(!picks.some((p) => p.id === 'd3'), 'one DM per person per case');
+  await markDonor('teammate', 'd3', 'undo');
+  assert.equal(db.donors.find((x) => x.id === 'd3').caseId, undefined, 'undo clears the case DM mark');
+  await markDonor('teammate', 'd5', 'donated', { amount: 2000 });
+  assert.equal(kase.facts.amountLeft, 24000);
+  assert.ok(db.messages.some((m) => /Affan: Rs 24,000 left/.test(m.text)));
+  await markDonor('teammate', 'd5', 'undo');
+  assert.equal(kase.facts.amountLeft, 26000, 'undo puts the amount back');
+  await markDonor('manager', 'd6', 'donated', { amount: 99999 });
+  assert.equal(kase.facts.amountLeft, 0, 'never below 0');
+  assert.ok(db.messages.some((m) => /fully funded/.test(m.text)));
+  kase.status = 'closed';
+  picks = D.todayPicks(db.donors, now, 200, null);
+  assert.ok(picks.every((p) => p.why !== 'case'), 'closed case: back to normal picks');
 
   console.log('donors regression: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

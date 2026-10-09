@@ -19,8 +19,68 @@ export interface Donor {
   amount?: number;
   note?: string;
   updatedAt: string;
+  /** "f" when the name is clearly a woman's, so a DM says "Behen" instead of "Bhai". */
+  gender?: "m" | "f";
+  /** The case this donor already got a DM for. One DM per person per case. */
+  caseId?: string;
   /** The donor before the last change, so one tap can undo it. */
-  undo?: { status: DonorStatus; sends: number; sentAt?: string; repliedAt?: string; donatedAt?: string; amount?: number; counted?: boolean };
+  undo?: { status: DonorStatus; sends: number; sentAt?: string; repliedAt?: string; donatedAt?: string; amount?: number; counted?: boolean; caseId?: string; caseAmount?: number };
+}
+
+/** Case kinds from the GiveLife writing guide (Part 12). */
+export type CaseType = "child" | "adult" | "death" | "orphans" | "needs";
+
+/** The facts of one case (guide Part 2). Only real facts; nothing is guessed. */
+export interface CaseFacts {
+  type: CaseType;
+  name: string;
+  /** For his/her and Bhai/Behen wording. */
+  gender: "m" | "f";
+  age?: number;
+  city?: string;
+  /** What is happening, in easy words. */
+  problem: string;
+  illness?: string;
+  /** The illness in easy words, shown in brackets. */
+  illnessMeaning?: string;
+  /** What will be lost, as the doctor or family said. */
+  worstRisk?: string;
+  /** One word in CAPITALS for the hook: LEG, KIDNEY, HOME. */
+  riskWord?: string;
+  /** The doctor's real words. Medical cases only. */
+  doctorLine?: string;
+  /** Real documents: "Aga Khan lab report + Nishtar doctor's diagnosis". */
+  proof: string;
+  amountLeft: number;
+  askAmount: number;
+  /** Only a real deadline from the hospital or family. */
+  deadline?: string;
+  /** Real costs: ration, rent, kafan. The app adds them up. */
+  items?: { item: string; period?: string; amount: number }[];
+  /** The family really said the pain is getting worse (allows the "feeling" reminder). */
+  familySaidPain?: boolean;
+}
+
+export interface CasePost {
+  kind: "main" | "dm" | "number" | "people" | "feeling" | "unity" | "proof" | "lastpush" | "tag" | "closing";
+  text: string;
+  at: string;
+  amountLeft: number;
+}
+
+export interface CaseFile {
+  id: string;
+  facts: CaseFacts;
+  status: "open" | "closed";
+  createdAt: string;
+  closedAt?: string;
+  /** The written lines (hook, story), kept so the post stays the same when only the amount changes. */
+  hook: string;
+  story: string;
+  verse: number;
+  by: "ai" | "rules";
+  /** Texts the manager copied, newest last. Used so reminders never repeat. */
+  posts: CasePost[];
 }
 
 /** Each person has one private thread with the agent. */
@@ -191,6 +251,7 @@ export interface Db {
   hashes: Record<string, string>;
   settings: Settings;
   donors: Donor[];
+  cases: CaseFile[];
   tasks: Task[];
   messages: ChatMessage[];
   subs: PushSub[];

@@ -4,7 +4,7 @@ import { extractCheckEvery, fmtDuration, fmtMinutes, fmtWhen, parseDeadline, par
 import { extractGap, extractInstructions, managerCommand, parseManager, type ManagerCommand } from "./nlp";
 import { simplifyTask, understandManager, understandTeammate, type Intent, type Understood } from "./understand";
 import type { TeammateFacts } from "./prompts";
-import type { ChatMessage, Db, Donor, PendingAssignment, Role, Task } from "./types";
+import type { CaseFile, ChatMessage, Db, Donor, PendingAssignment, Role, Task } from "./types";
 import { evidenceCount, nextDelayMin, nextPlannedCheckin, taskPhase } from "./task-state";
 import { applyDonorAction, cleanPhone, donorLabel, groupOf, todayPicks, type DonorAction } from "./donors";
 
@@ -757,7 +757,7 @@ function herPromise(text: string): { more: number; minutes: number } | null {
 /** "Who do I message?" answered from the donor list: the first 3 picks and where the messages are. */
 function donorHelp(t: Task, d: Db, now: number): string {
   if (t.kind !== "dms") return "";
-  const picks = todayPicks(d.donors ?? [], now, 3);
+  const picks = todayPicks(d.donors ?? [], now, 3, openCase(d));
   if (!picks.length) return "";
   const names = picks.map((p) => donorLabel(d.donors.find((x) => x.id === p.id)!)).join(", ");
   return `Open “Donors” at the top. Start with: ${names}.\nEach one has the message ready. Tap “Sent” after each one.`;
@@ -1209,6 +1209,9 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
 
 // ---------- donors page ----------
 
+/** The case being raised for now: the newest open one. */
+export const openCase = (d: Db): CaseFile | null => [...(d.cases ?? [])].reverse().find((c) => c.status === "open") ?? null;
+
 /** She (or the manager) marks one donor. Her "Sent" adds 1 to her open DM task; undo takes it back. A gift alerts the manager. */
 export async function markDonor(role: Role, id: string, action: DonorAction, opts: { amount?: number; defer?: Defer } = {}): Promise<Donor> {
   const now = Date.now();
@@ -1217,10 +1220,20 @@ export async function markDonor(role: Role, id: string, action: DonorAction, opt
     const donor = d.donors.find((x) => x.id === id);
     if (!donor) throw new Error("That donor is not in the list.");
     const task = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.kind === "dms");
-    const delta = applyDonorAction(donor, action, iso(now), { amount: opts.amount, counts: role === "teammate" && !!task });
+    const open = openCase(d);
+    const undo = donor.undo;
+    const delta = applyDonorAction(donor, action, iso(now), { amount: opts.amount, counts: role === "teammate" && !!task, caseId: open?.id });
+    // A gift lowers the open case's amount left; undo puts it back.
+    let caseLine = "";
+    if (open && action === "donated" && opts.amount && opts.amount > 0 && donor.undo) {
+      donor.undo.caseAmount = open.facts.amountLeft;
+      open.facts.amountLeft = Math.max(0, open.facts.amountLeft - Math.round(opts.amount));
+      caseLine = open.facts.amountLeft > 0 ? ` ${open.facts.name}: Rs ${open.facts.amountLeft.toLocaleString("en-US")} left.` : ` ${open.facts.name}'s case is fully funded. Open “Case” to send the closing post.`;
+    }
+    if (open && action === "undo" && undo?.caseAmount !== undefined) open.facts.amountLeft = undo.caseAmount;
     if (action === "donated") {
       const name = d.settings.teammateName;
-      const line = `🎉 ${donorLabel(donor)} gave${opts.amount && opts.amount > 0 ? ` Rs ${Math.round(opts.amount).toLocaleString("en-US")}` : ""}${role === "teammate" ? ` (marked by ${name})` : ""}.`;
+      const line = `🎉 ${donorLabel(donor)} gave${opts.amount && opts.amount > 0 ? ` Rs ${Math.round(opts.amount).toLocaleString("en-US")}` : ""}${role === "teammate" ? ` (marked by ${name})` : ""}.${caseLine}`;
       say(d, "manager", line, "agent");
       if (role === "teammate") pushes.push({ role: "manager", title: "New gift", body: line, tag: `gift-${donor.id}` });
     }
