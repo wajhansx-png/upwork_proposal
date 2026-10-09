@@ -79,6 +79,8 @@ export interface CaseFile {
   story: string;
   verse: number;
   by: "ai" | "rules";
+  /** Other good openings the AI wrote; the manager can switch with one tap. */
+  options?: { hook: string; story: string }[];
   /** Texts the manager copied, newest last. Used so reminders never repeat. */
   posts: CasePost[];
 }

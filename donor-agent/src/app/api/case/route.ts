@@ -31,7 +31,7 @@ const KINDS: CasePost["kind"][] = ["main", "dm", "number", "people", "feeling", 
  */
 export async function POST(req: NextRequest) {
   if ((await getRole(req)) !== "manager") return NextResponse.json({ error: "Managers only" }, { status: 403 });
-  const body = await readBody<{ action: string; details: string; facts: Record<string, unknown>; replace: boolean; amountLeft: number; kind: string; text: string }>(req);
+  const body = await readBody<{ action: string; details: string; facts: Record<string, unknown>; replace: boolean; amountLeft: number; kind: string; text: string; index: number }>(req);
   try {
     if (body.action === "read") {
       const details = String(body.details ?? "").trim();
@@ -52,14 +52,14 @@ export async function POST(req: NextRequest) {
       await withDb((d) => {
         const cur = openCase(d);
         if (cur && same && cur.id === open!.id) {
-          Object.assign(cur, { facts, hook: lines.hook, story: lines.story, by: lines.by });
+          Object.assign(cur, { facts, hook: lines.hook, story: lines.story, by: lines.by, options: lines.options });
           return;
         }
         if (cur) Object.assign(cur, { status: "closed", closedAt: now });
         // A different verse from the last case, so posts do not look copy-pasted.
         const lastVerse = d.cases[d.cases.length - 1]?.verse ?? -1;
         const verses = facts.type === "child" || facts.type === "adult" ? [0, 1] : [0, 2];
-        d.cases.push({ id: newId(), facts: facts as CaseFacts, status: "open", createdAt: now, hook: lines.hook, story: lines.story, verse: verses.find((v) => v !== lastVerse) ?? 0, by: lines.by, posts: [] });
+        d.cases.push({ id: newId(), facts: facts as CaseFacts, status: "open", createdAt: now, hook: lines.hook, story: lines.story, options: lines.options, verse: verses.find((v) => v !== lastVerse) ?? 0, by: lines.by, posts: [] });
         d.cases = d.cases.slice(-30);
       });
       return NextResponse.json({ ...view(await readDb()), dropped: lines.dropped });
@@ -85,6 +85,16 @@ export async function POST(req: NextRequest) {
         if (failed.length) throw new Error(`This text failed a check: ${failed[0].label}.`);
         c.posts.push({ kind, text, at: new Date().toISOString(), amountLeft: c.facts.amountLeft });
         c.posts = c.posts.slice(-40);
+      });
+      return NextResponse.json(view(await readDb()));
+    }
+    if (body.action === "pick") {
+      await withDb((d) => {
+        const c = openCase(d);
+        const o = c?.options?.[Number(body.index)];
+        if (!c || !o) throw new Error("That opening is not there.");
+        c.hook = o.hook;
+        c.story = o.story;
       });
       return NextResponse.json(view(await readDb()));
     }

@@ -162,6 +162,9 @@ export async function readDetails(details: string): Promise<{ facts: Partial<Cas
 
 // ---------- the written lines (hook + story) ----------
 
+/** Words that make a post read like a form or a report. */
+const HARD = /^(?:unfortunately|currently|approximately|assistance|financial|condition|situation|individual|requires?|required|immediate(?:ly)?|extremely|desperately|severely|therefore|however|regarding|kindly|deteriorat\w*|undergo\w*|treatment's)$/i;
+const sentences = (s: string) => s.split(/(?<=[.!?])\s+/).map((x) => x.trim()).filter(Boolean);
 const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9' ]/g, " ").split(/\s+/).filter(Boolean);
 export function similarity(a: string, b: string): number {
   const A = new Set(words(a));
@@ -191,6 +194,12 @@ export function lineProblems(line: string, f: CaseFacts, part: "hook" | "story",
   if (all.some((r) => similarity(r, line) >= 0.8)) p.push("copied from an old case");
   if (avoid.some((h) => similarity(h, line) >= 0.6)) p.push("too close to a recent case");
   const wc = words(line).length;
+  // Extremely easy English: short sentences, words a 10-year-old knows.
+  const longest = Math.max(...sentences(line).map((x) => words(x).length));
+  if (longest > (part === "hook" ? 12 : 16)) p.push("sentence too long");
+  if (part === "story" && words(sentences(line)[0] ?? "").length > 14) p.push("first sentence too long");
+  const knownWords = `${known} ${f.name} ${f.city ?? ""}`.toLowerCase();
+  for (const w of line.match(/[A-Za-z']+/g) ?? []) if ((w.length >= 11 || HARD.test(w)) && !knownWords.includes(w.toLowerCase())) p.push(`hard word “${w}”`);
   if (part === "hook") {
     const caps = line.match(/\b[A-Z]{2,}\b/g)?.filter((w) => !["PKR", "VP", "CT", "MRI", "BP"].includes(w)) ?? [];
     if (caps.length !== 1) p.push("needs exactly 1 word in CAPITALS");
@@ -228,39 +237,65 @@ export function fallbackStory(f: CaseFacts): string {
   return f.illness ? `Helpless ${f.name} has ${f.illness}${f.illnessMeaning ? ` (${f.illnessMeaning})` : ""}. ${He} ${body}.` : `Helpless ${f.name} ${body}.`;
 }
 
-/** The AI writes a new hook and story for these facts. Bad lines are replaced by the formula lines. */
-export async function writeLines(f: CaseFacts, recentHooks: string[]): Promise<{ hook: string; story: string; by: "ai" | "rules"; dropped: string[] }> {
+/** How strongly an opening stops a scrolling reader. Short punches, "you", the thing at risk, present tense. */
+export function gripScore(hook: string, story: string, f: CaseFacts): number {
+  let score = 10 - Math.max(0, words(hook).length - 14);
+  if (/\byou(?:r)?\b/i.test(hook)) score += 2;
+  if (sentences(hook).some((x) => words(x).length <= 5)) score += 2;
+  if (f.riskWord && hook.includes(f.riskWord.toUpperCase())) score += 1;
+  if (/\b(?:is|are|cannot|can't)\b/i.test(hook)) score += 1;
+  if (words(sentences(story)[0] ?? "").length <= 10) score += 1;
+  if (/\bmoney\b/i.test(hook) && !/not about money/i.test(hook)) score -= 2;
+  return score;
+}
+
+export interface Opening { hook: string; story: string }
+
+/**
+ * The AI writes 4 openings, each with a different mind trigger. Code drops any that break a rule
+ * (new claims, hard words, long sentences, copies), ranks the rest, and keeps the best 3.
+ * With no good AI opening, the guide's formula is used.
+ */
+export async function writeLines(f: CaseFacts, recentHooks: string[]): Promise<{ hook: string; story: string; options: Opening[]; by: "ai" | "rules"; dropped: string[] }> {
   const dropped: string[] = [];
   const r = await llm(
-    "You write the first lines of a WhatsApp donation post for GiveLife Foundation (Pakistan). Very easy English (Class 8). Short lines.\n" +
-      "Write two things:\n" +
-      "hook: line 1, seen in the WhatsApp preview. Name the LOSS, not the money. One or two very short sentences, max 25 words. " +
-      "Exactly ONE word in CAPITALS (the thing at risk). No emoji, no numbers except age, no * or _.\n" +
-      `story: 1-2 sentences of what is happening, in body words a normal person feels.${medical(f.type) ? " Start with 'Helpless NAME' or 'Little NAME'." : ""} ` +
-      `${f.illness ? "Include the illness name with its meaning in brackets. " : ""}Do NOT write what doctors said (the app adds it). No emoji, no * or _.\n` +
-      "Rules: use ONLY the facts given. Never add a claim, a time, a number or a danger that is not in the facts. Never use: kindly, request, generous, contribution, needy. " +
-      "The style examples are from OLD cases: learn the style, but NEVER copy them. Also do not repeat the recent hooks.\n" +
-      'Return ONLY JSON: {"hook":"...","story":"..."}',
+    "You write the first 2 lines of a WhatsApp donation post for GiveLife Foundation (Pakistan). People scroll fast. These 2 lines must STOP them, hold their mind, and make them feel they must give NOW.\n" +
+      "ENGLISH: extremely easy. Words a 10-year-old knows. Sentences of 3 to 10 words. Present tense. No long words, no report words (condition, situation, financial, assistance, currently, unfortunately).\n" +
+      "LINE 1 (hook): the WhatsApp preview line. Name the LOSS, never the money. Max 2 short sentences. Exactly ONE word in CAPITALS: the thing at risk. No emoji, no numbers except age, no * or _, no 'please'.\n" +
+      `LINE 2 (story): 1-2 sentences. The first sentence is one picture the reader can SEE (the body, the home, the child), max 10 words.${medical(f.type) ? " Start with 'Helpless NAME' or 'Little NAME'." : ""}` +
+      `${f.illness ? " Include the illness name with its meaning in easy words in brackets." : ""} Do NOT write what doctors said (the app adds it). No emoji, no * or _.\n` +
+      "Write 4 openings. Each uses a different trigger:\n" +
+      "1. loss: what will be lost, and put the choice on the reader ('You decide.').\n" +
+      "2. contrast: the reader's normal moment next to this person's moment.\n" +
+      "3. now: one true picture of what is happening right now.\n" +
+      "4. you: break 'someone else will help' — speak to the reader directly.\n" +
+      "HONESTY (strict): use ONLY the facts given. Never add a claim, a time, a number, a danger or a feeling that is not in the facts. Never use: kindly, request, generous, contribution, needy. " +
+      "The style examples are from OLD cases: learn the style, NEVER copy them. Do not repeat the recent hooks.\n" +
+      'Return ONLY JSON: {"openings":[{"trigger":"loss","hook":"...","story":"..."}, ...]}',
     JSON.stringify({ facts: f, case_type: TYPE_LABEL[f.type], style_examples_do_not_copy: REFERENCE[f.type], recent_hooks_do_not_repeat: recentHooks }),
     { json: true },
   );
-  const j = parseJson<{ hook?: unknown; story?: unknown }>(r.text);
-  let hook = typeof j?.hook === "string" ? j.hook.replace(/\s+/g, " ").trim() : "";
-  let story = typeof j?.story === "string" ? j.story.replace(/\s+/g, " ").trim() : "";
-  let by: "ai" | "rules" = j ? "ai" : "rules";
-  const hp = hook ? lineProblems(hook, f, "hook", recentHooks) : ["no AI"];
-  if (hp.length) {
-    if (hook) dropped.push(`AI hook dropped (${hp.join(", ")})`);
-    hook = fallbackHooks(f).find((h) => !recentHooks.some((x) => similarity(x, h) >= 0.6)) ?? fallbackHooks(f)[0];
-    by = "rules";
+  const j = parseJson<{ openings?: unknown; hook?: unknown; story?: unknown }>(r.text);
+  const raw = Array.isArray(j?.openings) ? (j!.openings as Record<string, unknown>[]) : j ? [j as Record<string, unknown>] : [];
+  const clean = (v: unknown) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim() : "");
+  const good: (Opening & { score: number })[] = [];
+  const goodStories: string[] = [];
+  for (const o of raw.slice(0, 6)) {
+    const hook = clean(o?.hook);
+    const story = clean(o?.story);
+    const hp = lineProblems(hook, f, "hook", recentHooks);
+    const sp = lineProblems(story, f, "story");
+    if (!sp.length) goodStories.push(story);
+    if (hp.length) dropped.push(`AI opening dropped: “${hook.slice(0, 60)}” (${hp.join(", ")})`);
+    else if (sp.length) dropped.push(`AI story dropped (${sp.join(", ")})`);
+    if (!hp.length) good.push({ hook, story: sp.length ? goodStories[0] ?? fallbackStory(f) : story, score: 0 });
   }
-  const sp = story ? lineProblems(story, f, "story") : ["no AI"];
-  if (sp.length) {
-    if (story) dropped.push(`AI story dropped (${sp.join(", ")})`);
-    story = fallbackStory(f);
-    by = "rules";
-  }
-  return { hook, story, by, dropped };
+  for (const g of good) g.score = gripScore(g.hook, g.story, f);
+  good.sort((a, b) => b.score - a.score);
+  const options = good.filter((g, i) => good.findIndex((x) => similarity(x.hook, g.hook) >= 0.8) === i).slice(0, 3).map(({ hook, story }) => ({ hook, story }));
+  if (options.length) return { ...options[0], options, by: "ai", dropped };
+  const hook = fallbackHooks(f).find((h) => !recentHooks.some((x) => similarity(x, h) >= 0.6)) ?? fallbackHooks(f)[0];
+  return { hook, story: goodStories[0] ?? fallbackStory(f), options: [], by: "rules", dropped };
 }
 
 // ---------- the texts ----------

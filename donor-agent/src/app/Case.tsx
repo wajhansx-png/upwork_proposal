@@ -257,6 +257,17 @@ export default function CasePage() {
                 <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t === "main" ? "Group post" : t === "dm" ? "DM" : t === "reminder" ? "Reminder" : "Close"}</button>
               ))}
             </div>
+            {tab === "main" && isOpen && (c.options?.length ?? 0) > 1 && (
+              <section className="c-openings">
+                <b>Pick the opening</b>
+                {c.options!.map((o, i) => (
+                  <button key={i} className={o.hook === c.hook ? "on" : ""} disabled={!!busy} onClick={() => run("pick", async () => setData(await api<Data>("/api/case", "POST", { action: "pick", index: i })))}>
+                    <span>{o.hook}</span>
+                    <small>{o.story}</small>
+                  </button>
+                ))}
+              </section>
+            )}
             {tab === "main" && (isOpen ? out(v.main, "main") : <p className="p-empty">This case is closed.</p>)}
             {tab === "dm" && isOpen && (
               <>

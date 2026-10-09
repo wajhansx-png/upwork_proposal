@@ -59,12 +59,21 @@ const mkCase = (facts, o = {}) => ({ id: 'c1', facts, status: 'open', createdAt:
   assert.equal(r3.by, 'rules');
   assert.equal(r3.facts.amountLeft, 26000);
 
-  // 4. AI lines are checked; bad ones fall back to the formula.
+  // 4. The AI writes 4 openings; code drops bad ones, ranks the rest, keeps 3. Bad ones fall back to the formula.
   const f = C.cleanFacts(affan);
-  aiReply = { hook: 'Little Affan could lose his LEG. Only you can change that.', story: 'Little Affan has hemophilia (his bleeding does not stop). Blood is filling his knee and hand.' };
+  const story = 'Little Affan has hemophilia (his bleeding does not stop). Blood fills his knee and hand.';
+  aiReply = { openings: [
+    { trigger: 'loss', hook: 'Affan may lose his LEG. You decide.', story },
+    { trigger: 'contrast', hook: 'You walk with no pain. Affan may lose his LEG.', story },
+    { trigger: 'now', hook: 'Affan has only 48 hours to save his LEG.', story },
+    { trigger: 'you', hook: 'Unfortunately Affan is in a critical situation regarding his LEG.', story },
+  ] };
   let w = await C.writeLines(f, []);
   assert.equal(w.by, 'ai');
-  assert.equal(w.hook, aiReply.hook);
+  assert.equal(w.hook, 'Affan may lose his LEG. You decide.', 'short punch + you + risk word ranks first');
+  assert.equal(w.story, story);
+  assert.equal(w.options.length, 2, 'the 48-hours claim and the hard words are dropped');
+  assert.equal(w.dropped.length, 2);
   const bad = [
     ['Affan has only 48 hours to save his LEG.', /deadline|claim|number/],
     ['This is not about money. This is about a child keeping his LEG or losing it. You decide.', /copied/],
@@ -72,14 +81,19 @@ const mkCase = (facts, o = {}) => ({ id: 'c1', facts, status: 'open', createdAt:
     ['AFFAN could lose his LEG.', /CAPITALS/],
     ['🩸 Affan could lose his LEG.', /emoji/],
     ['Affan is on a ventilator and may lose his LEG.', /claim/],
+    ['Affan currently needs financial assistance for his LEG.', /hard word/],
+    ['Affan the little boy from the city who is seven years old may lose his LEG.', /sentence too long/],
   ];
   for (const [hook, why] of bad) assert.match(C.lineProblems(hook, f, 'hook').join(','), why, hook);
-  aiReply = { hook: 'Affan has only 48 hours left. Save his LEG.', story: 'Doctors say Affan will die.' };
+  assert.deepEqual(C.lineProblems('Affan may lose his LEG. You decide.', f, 'hook'), []);
+  assert.ok(C.gripScore('Affan may lose his LEG. You decide.', story, f) > C.gripScore('This boy from Peshawar has a problem with his LEG and needs money for help', story, f));
+  aiReply = { openings: [{ hook: 'Affan has only 48 hours left. Save his LEG.', story: 'Doctors say Affan will die.' }] };
   w = await C.writeLines(f, []);
   assert.equal(w.by, 'rules');
   assert.equal(w.hook, 'This is not about money. This is about Affan keeping his LEG or losing it. You decide.');
   assert.equal(w.story, 'Helpless Affan has hemophilia (his bleeding does not stop). He is bleeding inside, and blood is collecting in his knee and hand.');
-  assert.equal(w.dropped.length, 2);
+  assert.deepEqual(w.options, []);
+  aiReply = null;
   // A recent case used the first formula: the next one is picked.
   w = await C.writeLines(f, ['This is not about money. This is about Bilal keeping his KIDNEY or losing it. You decide.']);
   assert.match(w.hook, /^A child is at risk of losing his LEG/);
