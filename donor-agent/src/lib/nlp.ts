@@ -373,6 +373,8 @@ export function extractInstructions(text: string, teammate: string): string | un
   if (meaningful.length < 1) return undefined;
   const cleaned = rest.replace(/^(?:to|that|and|only to)\s+/i, "").replace(/\s+(?:and|to)$/i, "").trim();
   if (cleaned.length < 4) return undefined;
+  // Time words are part of the deadline, not an instruction.
+  if (/^(?:yesterday|today|tomorrow|tonight|now|asap|later|soon|this (?:morning|evening|afternoon))$/i.test(cleaned)) return undefined;
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 

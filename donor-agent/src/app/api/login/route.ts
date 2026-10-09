@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readBody } from "@/lib/http";
 import { codeMatches, COOKIE_MAX_AGE, MANAGER_COOKIE, managerToken } from "@/lib/auth";
 import { readDb, withDb } from "@/lib/db";
 
@@ -7,7 +8,7 @@ const LOCK_MS = 15 * 60_000;
 
 /** The manager opens /manager?k=CODE once. Five wrong codes lock it for 15 minutes. */
 export async function POST(req: NextRequest) {
-  const body = (await req.json().catch(() => ({}))) as { code?: string };
+  const body = await readBody<{ code: string }>(req);
   try {
     const db = await readDb();
     const lock = db.agent.loginLockUntil ? new Date(db.agent.loginLockUntil).getTime() : 0;

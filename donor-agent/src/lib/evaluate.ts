@@ -164,6 +164,7 @@ export async function evaluatePending(): Promise<number> {
       x.evaluation = e;
       x.evaluatingAt = undefined;
       d.messages.push({ id: newId(), owner: "manager", from: "agent", text, at: e.at, kind: "agent" });
+      if (d.messages.length > 400) d.messages = d.messages.slice(-400);
     });
     await notify("manager", `Task review: ${e.score}/10 (${e.verdict})`, `${t.title}. ${e.problems[0] ?? e.good[0] ?? ""}`.slice(0, 160));
   }

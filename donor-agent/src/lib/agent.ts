@@ -59,6 +59,7 @@ export function summarize(db: Db, now = Date.now()): string {
 /** "tell her to send her update" -> "send your update". */
 function toHer(text: string, name: string) {
   return text
+    .slice(0, 1000)
     .replace(/\bshe is\b/gi, "you are")
     .replace(/\bshe has\b/gi, "you have")
     .replace(/\bshe was\b/gi, "you were")
@@ -176,7 +177,9 @@ function mergeDraft(draft: PendingAssignment, text: string, now: number, db: Db)
   const deadline = conversationDeadline(every.rest, now, db) ?? (draft.deadlineAt ? ms(draft.deadlineAt) : null);
   const gapMinutes = extractGap(text) ?? draft.gapMinutes;
   const noExtra = /\b(no (?:special )?(?:instructions|precautions)|nothing else|no precautions)\b/i.test(text) || /^\s*(?:yes,?\s*)?(?:replace|switch)\b/i.test(text);
-  const instructions = noExtra ? undefined : extractInstructions(text, db.settings.teammateName) ?? draft.instructions;
+  const found = noExtra ? undefined : extractInstructions(text, db.settings.teammateName);
+  // One stray word is not an instruction.
+  const instructions = noExtra ? undefined : found && found.split(/\s+/).length >= 2 ? found : draft.instructions;
   return {
     ...draft,
     request: `${draft.request}\n${text}`.trim().slice(0, 3000),
@@ -266,6 +269,10 @@ async function runManagerCommand(cmd: ManagerCommand, text: string, now: number,
           reply = "There is no DM task to change.";
           break;
         }
+        if (cmd.target < 1 || cmd.target > 5000) {
+          reply = "The number must be between 1 and 5000.";
+          break;
+        }
         t.target = cmd.target;
         t.title = `Send ${cmd.target} donor DMs`;
         if (t.status === "review" && (t.reportedDone ?? 0) < cmd.target) {
@@ -336,12 +343,14 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
   const draftNow = db.agent.pendingAssignment;
   const running = [...db.tasks].reverse().find((t) => t.status === "open" || t.status === "missed" || t.status === "review");
   const cmd = managerCommand(text, db.settings.teammateName, !!running?.pendingAsk);
-  if (cmd && (cmd.kind === "identity" || cmd.kind === "status" || running)) {
+  if (cmd) {
     await runManagerCommand(cmd, text, now, opts.defer);
     return;
   }
   // An unfinished assignment takes the manager's next answer ("100, 6pm"), but only when that answer adds something to it.
-  const merged = draftNow ? mergeDraft(draftNow, text, now, db) : null;
+  // A complete new task ("send 50 DMs by 9pm") replaces an old unfinished draft; it is never merged into it.
+  const fullNewTask = parsed.isRequest && conversationTarget(extractCheckEvery(text).rest) !== null && conversationDeadline(extractCheckEvery(text).rest, now, db) !== null;
+  const merged = draftNow && !fullNewTask ? mergeDraft(draftNow, text, now, db) : null;
   const addsToDraft = !!draftNow && !!merged && (
     merged.target !== draftNow.target || merged.deadlineAt !== draftNow.deadlineAt || merged.instructions !== draftNow.instructions ||
     merged.checkEvery !== draftNow.checkEvery || merged.gapMinutes !== draftNow.gapMinutes || /\b(replace|switch tasks?|replace current|cancel old|stop old)\b/i.test(text));

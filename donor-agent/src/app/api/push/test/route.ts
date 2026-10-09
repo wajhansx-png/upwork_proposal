@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readBody } from "@/lib/http";
 import { getRole } from "@/lib/auth";
 import { readDb } from "@/lib/db";
 import { notify, pushEnabled } from "@/lib/push";
@@ -7,7 +8,7 @@ import { notify, pushEnabled } from "@/lib/push";
 export async function POST(req: NextRequest) {
   const role = (await getRole(req));
   if (!role) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
-  const body = (await req.json().catch(() => ({}))) as { to?: "manager" | "teammate" };
+  const body = await readBody<{ to: "manager" | "teammate" }>(req);
   const target = role === "manager" && body.to === "teammate" ? "teammate" : role;
   if (!pushEnabled()) return NextResponse.json({ error: "Server push keys (VAPID) are not set." }, { status: 400 });
   const db = await readDb();
