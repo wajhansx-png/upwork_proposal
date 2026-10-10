@@ -7,6 +7,7 @@ import type { TeammateFacts } from "./prompts";
 import type { CaseFile, ChatMessage, Db, Donor, PendingAssignment, Role, Task } from "./types";
 import { evidenceCount, nextDelayMin, nextPlannedCheckin, taskPhase } from "./task-state";
 import { applyDonorAction, cleanPhone, donorLabel, groupOf, todayPicks, type DonorAction } from "./donors";
+import { planCounter, type CounterEvent } from "./counter";
 
 /** Runs work after the reply has been sent. In a request this is Next's after(); elsewhere it runs inline. */
 export type Defer = (fn: () => Promise<void>) => void;
@@ -1274,4 +1275,74 @@ export async function saveDonor(input: { id?: string; name?: string; phone?: str
     d.donors.push(donor);
     return structuredClone(donor);
   });
+}
+
+// ---------- WhatsApp counter add-on ----------
+
+const randToken = () => `gc_${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
+
+/** Turn the add-on on (making a token the first time), off, or make a fresh token. Manager only. */
+export async function setCounter(action: "on" | "off" | "new"): Promise<{ on: boolean; token: string }> {
+  return withDb((d) => {
+    const c = (d.agent.counter ??= {});
+    if (action === "new" || (action === "on" && !c.token)) c.token = randToken();
+    if (action !== "off") c.on = true;
+    else c.on = false;
+    return { on: !!c.on, token: c.token ?? "" };
+  });
+}
+
+export interface CounterResult { ok: boolean; on: boolean; counted: number; replied: number; unknown: number }
+
+/**
+ * The add-on sends what it saw. We match donors, mark them, and move her task count — the same as if she
+ * tapped "Sent", but automatic. The add-on only watches; she sends every DM by hand, so the number stays safe.
+ */
+export async function recordCounterEvents(token: string, from: Role, events: CounterEvent[], opts: { defer?: Defer } = {}): Promise<CounterResult> {
+  const now = Date.now();
+  const pushes: Push[] = [];
+  const clean = (Array.isArray(events) ? events : [])
+    .filter((e): e is CounterEvent => !!e && typeof e.id === "string" && (e.dir === "out" || e.dir === "in"))
+    .slice(0, 500)
+    .map((e) => ({ id: String(e.id).slice(0, 120), phone: typeof e.phone === "string" ? e.phone.slice(0, 24) : undefined, name: typeof e.name === "string" ? e.name.slice(0, 80) : undefined, dir: e.dir, at: Number.isFinite(e.at) ? Math.min(now, Math.max(0, e.at)) : now }));
+
+  const { delta, result } = await withDb((d) => {
+    const c = d.agent.counter;
+    // The token is the add-on's key. A wrong token, or the switch off, means do nothing.
+    if (!c?.token || token !== c.token || !c.on) return { delta: 0, result: { ok: false, on: !!c?.on, counted: 0, replied: 0, unknown: 0 } };
+    const plan = planCounter(clean, d.donors, c.seen ?? []);
+    c.seen = plan.seen;
+    c.lastAt = iso(now);
+    c.lastFrom = from;
+    const task = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.kind === "dms");
+    const room = task ? Math.max(0, task.target - (task.reportedDone ?? 0)) : 0;
+    const open = openCase(d);
+    let delta = 0;
+    for (const id of plan.sent) {
+      const donor = d.donors.find((x) => x.id === id);
+      if (!donor) continue;
+      const counts = delta < room;
+      delta += applyDonorAction(donor, "sent", iso(now), { counts, caseId: open?.id, taskId: task?.id });
+    }
+    for (const id of plan.replied) {
+      const donor = d.donors.find((x) => x.id === id);
+      if (donor) applyDonorAction(donor, "replied", iso(now));
+    }
+    // Tell the manager about replies: these are the hottest leads.
+    if (plan.replied.length) {
+      const names = plan.replied.map((id) => donorLabel(d.donors.find((x) => x.id === id)!)).slice(0, 5).join(", ");
+      say(d, "manager", `💬 Reply from ${names}. Answer first — most likely to give.`, "agent");
+      pushes.push({ role: "manager", title: plan.replied.length === 1 ? "A donor replied" : `${plan.replied.length} donors replied`, body: names, tag: "ext-reply" });
+    }
+    const day = zparts(now, d.settings.timezone).day;
+    if (c.day !== day) {
+      c.day = day;
+      c.sentToday = 0;
+    }
+    c.sentToday = (c.sentToday ?? 0) + plan.sent.length;
+    return { delta, result: { ok: true, on: true, counted: plan.sent.length, replied: plan.replied.length, unknown: plan.unknown } };
+  });
+  if (delta) await setProgress((cur) => cur + delta, opts).catch(() => undefined);
+  await sendPushes(pushes, opts.defer);
+  return result;
 }

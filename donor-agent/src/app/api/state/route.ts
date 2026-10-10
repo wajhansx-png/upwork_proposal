@@ -30,6 +30,12 @@ export async function GET(req: NextRequest) {
     teammateMessages: manager ? db.messages.filter((m) => m.owner === "teammate").slice(-150) : undefined,
     agent: manager ? db.agent : undefined,
     system: manager ? { ai: aiKind(), vision: visionEnabled(), push: pushEnabled(), persistent: usingPersistentStore() } : undefined,
+    // Counter status. The manager sees the token (to pair the add-on); Areeba only sees on/off + last seen.
+    counter: (() => {
+      const c = db.agent.counter;
+      const base = { on: !!c?.on, lastAt: c?.lastAt, sentToday: c?.sentToday ?? 0 };
+      return manager ? { ...base, token: c?.token ?? "", linked: !!c?.lastAt } : base;
+    })(),
     now: new Date().toISOString(),
     vapidPublicKey: pushEnabled() ? process.env.VAPID_PUBLIC_KEY : null,
   });

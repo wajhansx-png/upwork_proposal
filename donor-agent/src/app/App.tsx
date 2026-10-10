@@ -11,6 +11,7 @@ interface State {
   messages: ChatMessage[];
   agent?: AgentState;
   system?: { ai: "key" | "shared" | "off"; vision: boolean; push: boolean; persistent: boolean };
+  counter?: { on: boolean; lastAt?: string; sentToday: number; token?: string; linked?: boolean };
   vapidPublicKey: string | null;
   now: string;
 }
@@ -620,6 +621,52 @@ function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
         </button>
       </div>
       {aiTest && aiTest !== "…" ? <p className={aiTest.startsWith("✓") ? "hint" : "err"}>{aiTest}</p> : aiError ? <p className="err">Last AI error: {s.agent!.llmStatus}</p> : null}
+      <CounterPanel s={s} refresh={refresh} />
+    </div>
+  );
+}
+
+/** The WhatsApp counter add-on: install button, on/off, and the pairing codes. */
+function CounterPanel({ s, refresh }: { s: State; refresh: () => void }) {
+  const name = s.settings.teammateName;
+  const c = s.counter;
+  const [copied, setCopied] = useState("");
+  const [busy, setBusy] = useState(false);
+  const origin = typeof window !== "undefined" ? location.origin : "";
+  const pairCode = (role: "manager" | "teammate") => (c?.token ? `${origin}|${role}|${c.token}` : "");
+  const lastSeen = c?.lastAt ? `Last update ${time(c.lastAt)}` : "No update yet";
+  const copy = async (role: "manager" | "teammate") => {
+    const code = pairCode(role);
+    if (!code) return;
+    await navigator.clipboard.writeText(code).catch(() => undefined);
+    setCopied(role);
+    setTimeout(() => setCopied(""), 2500);
+  };
+  const toggle = async (action: "on" | "off" | "new") => {
+    setBusy(true);
+    try {
+      await api("/api/counter/pair", "POST", { action });
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="counter-box">
+      <div className="set-row">
+        <span>WhatsApp counter</span>
+        <button className={c?.on ? "" : "primary"} disabled={busy} onClick={() => toggle(c?.on ? "off" : "on")}>{c?.on ? "On ✓" : "Turn on"}</button>
+      </div>
+      <p className="hint">Counts donor DMs for you — she sends them by hand, it only watches. {c?.on ? lastSeen : "Off now."}{c?.on && (c?.sentToday ?? 0) > 0 ? ` · ${c!.sentToday} counted today.` : ""}</p>
+      {c?.on && (
+        <>
+          <a className="counter-dl" href="/api/counter/extension" download>⬇ Download add-on (for Chrome)</a>
+          <div className="set-row"><span>{name}&apos;s pairing code</span><button disabled={!c.token} onClick={() => copy("teammate")}>{copied === "teammate" ? "Copied ✓" : "Copy"}</button></div>
+          <div className="set-row"><span>My pairing code</span><button disabled={!c.token} onClick={() => copy("manager")}>{copied === "manager" ? "Copied ✓" : "Copy"}</button></div>
+          <p className="hint">Send {name} her code and the add-on. She installs it in Chrome, pastes the code once, then opens WhatsApp Web. Steps are in the zip.</p>
+          <button className="text-btn" disabled={busy} onClick={() => toggle("new")}>Make a new code (old one stops)</button>
+        </>
+      )}
     </div>
   );
 }

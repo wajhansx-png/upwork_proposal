@@ -18,11 +18,12 @@
 - `src/app/App.tsx` — both screens (Manager, Teammate, chips, Bubble, settings, useHerBot, GiftTeddy). `Bot.tsx` — teddy bot (moods, reactions, speech bubble). `globals.css` — styles (newest blocks at the end override older ones).
 - `src/lib/donors.ts` — donor list logic (who to message now, messages, marks/undo, stats, ideas); `donor-list.ts` the 138 seeded donors. `src/app/Donors.tsx` — Donors page (/manager/donors, /areeba/donors).
 - `src/lib/case.ts` — case texts by the GiveLife writing guide (facts, N maths, main/DM/reminders/closing, Part 10 checks; AI writes only hook + story and is checked); `case-guide.ts` fixed lines, verses, reference lines. `src/app/Case.tsx` — /manager/case.
+- `src/lib/counter.ts` — WhatsApp counter add-on logic (planCounter: phone match, dedupe, first-contact count, replies); `extension-files.ts` the add-on source (read-only, never sends); `zip.ts` zip writer. `src/app/api/counter/*` routes; CounterPanel in App.tsx.
 - `src/app/api/*` — thin routes; logic lives in `src/lib`.
 
 # Tests (scripts/, plain node)
 
-- `scenario-regression.cjs` real-life simulation with a fake clock + 600 random inputs, rules checked after every step (`SEED=n` for other runs) · `logic-regression.cjs` her/manager conversation logic · `regression.cjs` clock, nudges, +/− · `nlp-regression.cjs` rule parsing · `understand-regression.cjs` GPT checks · `evaluate-regression.cjs` scoring · `llm-regression.cjs` GPT retries · `storage-regression.cjs` storage · `donors-regression.cjs` donor list, picks, marks, task count, case DMs · `case-regression.cjs` case texts, maths, checks, reminders.
+- `scenario-regression.cjs` real-life simulation with a fake clock + 600 random inputs, rules checked after every step (`SEED=n` for other runs) · `logic-regression.cjs` her/manager conversation logic · `regression.cjs` clock, nudges, +/− · `nlp-regression.cjs` rule parsing · `understand-regression.cjs` GPT checks · `evaluate-regression.cjs` scoring · `llm-regression.cjs` GPT retries · `storage-regression.cjs` storage · `donors-regression.cjs` donor list, picks, marks, task count, case DMs · `case-regression.cjs` case texts, maths, checks, reminders · `counter-regression.cjs` add-on counting, dedupe, replies, zip.
 - `api-check.cjs` (needs a running server): logins, roles, broken input. Not part of `npm test`.
 
 # Deploy

@@ -246,6 +246,21 @@ export interface AgentState {
   pendingAssignment?: PendingAssignment;
   /** Manager text that may be an answer to her question; sent only after he confirms. */
   heldAnswer?: string;
+  /** The WhatsApp counter add-on. */
+  counter?: {
+    /** Secret the add-on sends with each update. Empty until the manager turns it on. */
+    token?: string;
+    /** Master switch. When off, the app ignores all add-on updates. */
+    on?: boolean;
+    /** Last time an update arrived, and from which role's add-on. */
+    lastAt?: string;
+    lastFrom?: Role;
+    /** Message ids already counted, so nothing counts twice. Capped. */
+    seen?: string[];
+    /** Running tallies, for the manager to see. */
+    sentToday?: number;
+    day?: string;
+  };
 }
 
 export interface Db {

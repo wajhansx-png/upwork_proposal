@@ -8,7 +8,7 @@
     "start": "next start -p 43118",
     "lint": "eslint",
     "vapid": "web-push generate-vapid-keys",
-    "test": "node scripts/nlp-regression.cjs && node scripts/understand-regression.cjs && node scripts/regression.cjs && node scripts/storage-regression.cjs && node scripts/evaluate-regression.cjs && node scripts/logic-regression.cjs && node scripts/llm-regression.cjs && node scripts/scenario-regression.cjs && node scripts/donors-regression.cjs && node scripts/case-regression.cjs"
+    "test": "node scripts/nlp-regression.cjs && node scripts/understand-regression.cjs && node scripts/regression.cjs && node scripts/storage-regression.cjs && node scripts/evaluate-regression.cjs && node scripts/logic-regression.cjs && node scripts/llm-regression.cjs && node scripts/scenario-regression.cjs && node scripts/donors-regression.cjs && node scripts/case-regression.cjs && node scripts/counter-regression.cjs"
   },
   "dependencies": {
     "@vercel/blob": "2.8.0",

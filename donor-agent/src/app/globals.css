@@ -352,3 +352,6 @@ a.text-btn,a.bell-btn{display:inline-flex;align-items:center;text-decoration:non
 @media (prefers-reduced-motion:reduce){.bot,.bot *,.bot-confetti i,.bot-bubble{animation:none!important}}
 .bot-combo{left:50%;bottom:-12px;transform:translateX(-50%);animation:none}
 .bot-bubble{top:calc(100% + 16px)}
+/* ===== WhatsApp counter ===== */
+.counter-box{margin-top:12px;padding-top:12px;border-top:1px solid var(--edge);display:grid;gap:6px}
+.counter-dl{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:8px 12px;border-radius:12px;background:var(--grad);color:#06120e;font-weight:700;text-decoration:none}
