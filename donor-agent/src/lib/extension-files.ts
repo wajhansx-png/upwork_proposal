@@ -30,10 +30,12 @@ async function cfg() {
   return { app: s.app || "", token: s.token || "", role: s.role || "teammate", on: s.on !== false };
 }
 
+function later(ms) { if (!timer) timer = setTimeout(flush, ms); }
+
 async function flush() {
   timer = null;
   const c = await cfg();
-  if (!c.app || !c.token || !c.on || !queue.length) { queue = []; return; }
+  if (!c.app || !c.token || !c.on || !queue.length) { if (!c.on) queue = []; return; }
   const events = queue.splice(0, 200);
   try {
     const res = await fetch(c.app.replace(/\\/$/, "") + "/api/counter", {
@@ -42,19 +44,24 @@ async function flush() {
       body: JSON.stringify({ token: c.token, from: c.role, events }),
     });
     const j = await res.json().catch(() => ({}));
-    // If the app says off or the token is wrong, stop sending until the person fixes it.
+    // Off or a wrong token: the app ignored them. Tell the person, and do not retry forever.
     if (!res.ok || j.ok === false) await chrome.storage.local.set({ lastError: (j && j.error) || ("off or wrong token (" + res.status + ")"), lastOkAt: 0 });
     else await chrome.storage.local.set({ lastError: "", lastOkAt: Date.now(), lastCount: (j.counted || 0) });
   } catch (e) {
-    await chrome.storage.local.set({ lastError: "no internet" });
+    // No internet: keep them and try again. The app ignores repeats, so nothing is counted twice.
+    queue = events.concat(queue).slice(-1000);
+    await chrome.storage.local.set({ lastError: "no internet, will retry" });
+    later(15000);
+    return;
   }
+  if (queue.length) later(1000);
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === "events" && Array.isArray(msg.events)) {
     queue.push(...msg.events);
     if (queue.length > 1000) queue = queue.slice(-1000);
-    if (!timer) timer = setTimeout(flush, 4000);
+    later(1500);
   }
 });`;
 
@@ -62,11 +69,17 @@ const CONTENT = `// Watches the open WhatsApp chat and reports which donor DMs w
 // It reads ONLY the "data-id" of each message bubble. It never reads message text.
 (function () {
   const seen = new Set();
+  let on = true;
   const badge = document.createElement("div");
   badge.textContent = "GiveLife Counter ON";
   badge.style.cssText = "position:fixed;z-index:99999;right:12px;bottom:12px;background:#1f8f72;color:#fff;font:600 12px system-ui;padding:6px 10px;border-radius:999px;box-shadow:0 4px 12px rgba(0,0,0,.3);opacity:.9";
-  function showBadge() { if (!badge.isConnected) document.body.appendChild(badge); }
-  chrome.storage.local.get(["on"], (s) => { if (s.on !== false) showBadge(); });
+  function showBadge() { if (on && !badge.isConnected && document.body) document.body.appendChild(badge); }
+  chrome.storage.local.get(["on"], (s) => { on = s.on !== false; showBadge(); });
+  chrome.storage.onChanged.addListener((ch) => {
+    if (!ch.on) return;
+    on = ch.on.newValue !== false;
+    if (on) showBadge(); else badge.remove();
+  });
 
   // data-id looks like "true_923001234567@c.us_3EB0XXXX" (true = I sent it) or "false_..._..." (donor sent it).
   function parse(id) {
@@ -75,28 +88,46 @@ const CONTENT = `// Watches the open WhatsApp chat and reports which donor DMs w
     return { id, phone: m[2], dir: m[1] === "true" ? "out" : "in", at: Date.now() };
   }
 
-  function scan(root) {
-    const nodes = root.querySelectorAll ? root.querySelectorAll("[data-id]") : [];
-    const batch = [];
-    nodes.forEach((n) => {
+  // Every new message bubble under root (or root itself). Each id is remembered, so it is read once.
+  function collect(root) {
+    const nodes = [];
+    if (root.matches && root.matches("[data-id]")) nodes.push(root);
+    if (root.querySelectorAll) root.querySelectorAll("[data-id]").forEach((n) => nodes.push(n));
+    const out = [];
+    for (const n of nodes) {
       const id = n.getAttribute("data-id");
-      if (!id || seen.has(id)) return;
+      if (!id || seen.has(id)) continue;
       seen.add(id);
       const ev = parse(id);
-      if (ev) batch.push(ev);
-    });
-    if (batch.length) chrome.runtime.sendMessage({ type: "events", events: batch });
+      if (ev) out.push(ev);
+    }
+    return out;
+  }
+
+  // Opening a chat loads many old messages at once. That is history, not new DMs: remember it, never send it.
+  // A real new message arrives alone (or 2-3 at most), so a bigger burst inside one short window is dropped.
+  const HISTORY_BURST = 3;
+  let win = [];
+  let winTimer = null;
+  function push(events) {
+    if (!events.length) return;
+    win.push(...events);
+    if (winTimer) return;
+    winTimer = setTimeout(() => {
+      const batch = win;
+      win = [];
+      winTimer = null;
+      if (on && batch.length <= HISTORY_BURST) chrome.runtime.sendMessage({ type: "events", events: batch });
+    }, 700);
   }
 
   const obs = new MutationObserver((muts) => {
-    chrome.storage.local.get(["on"], (s) => {
-      if (s.on === false) { badge.remove(); return; }
-      showBadge();
-      for (const mu of muts) mu.addedNodes && mu.addedNodes.forEach((node) => { if (node.nodeType === 1) scan(node); });
-    });
+    if (!on) return;
+    for (const mu of muts) mu.addedNodes && mu.addedNodes.forEach((node) => { if (node.nodeType === 1) push(collect(node)); });
   });
   obs.observe(document.body, { childList: true, subtree: true });
-  setTimeout(() => scan(document.body), 3000);
+  // What is already on screen when the page opens is history too: remember it, do not send it.
+  setTimeout(() => collect(document.body), 2500);
 })();`;
 
 const POPUP_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>

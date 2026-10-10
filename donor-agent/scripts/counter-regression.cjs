@@ -116,5 +116,45 @@ const ev = (id, phone, dir = 'out', at = now) => ({ id, phone, dir, at });
   assert.equal(zip.readUInt32LE(zip.length - 22), 0x06054b50, 'ends with the end-of-central-directory record');
   assert.equal(zip.readUInt16LE(zip.length - 22 + 10), files.length, 'the zip lists every file');
 
+  // 7. Review fixes: his add-on never moves HER task count; the id list is capped; the state never ships it.
+  db = freshDb([task()]);
+  const dm = db.donors.filter((d) => d.phone).slice(0, 3);
+  r = await recordCounterEvents('tok', 'manager', dm.map((d, i) => ev('mg' + i, d.phone.slice(1))));
+  assert.equal(r.counted, 3, 'his DMs still mark the donors sent');
+  assert.equal(db.tasks[0].reportedDone, 0, 'but they never move her task count');
+  assert.equal(db.donors.find((d) => d.id === dm[0].id).status, 'sent');
+
+  // 8. Stress: 3,000 random batches, bad ids, repeats, wrong direction, junk. Rules checked after every batch.
+  let seedN = Number(process.env.SEED || 7);
+  const rnd = () => ((seedN = (seedN * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  db = freshDb([{ ...task(), target: 25 }]);
+  const pool = db.donors.filter((d) => d.phone);
+  const ids = [];
+  let lastDone = 0;
+  for (let i = 0; i < 3000; i++) {
+    const batch = [];
+    for (let j = 0, n = Math.floor(rnd() * 6); j < n; j++) {
+      const roll = rnd();
+      const d = pool[Math.floor(rnd() * pool.length)];
+      if (roll < 0.15 && ids.length) batch.push(ev(ids[Math.floor(rnd() * ids.length)], d.phone.slice(1), rnd() < 0.5 ? 'out' : 'in')); // repeated id
+      else if (roll < 0.2) batch.push({ id: null, phone: 'x', dir: 'out', at: now }); // junk
+      else if (roll < 0.25) batch.push({ id: 'g' + i + j, phone: '000', dir: 'sideways', at: 'soon' }); // bad direction / time
+      else { const id = `e${i}_${j}`; ids.push(id); batch.push(ev(id, (rnd() < 0.1 ? '99' : '') + d.phone.slice(1), rnd() < 0.7 ? 'out' : 'in')); }
+    }
+    const before = db.donors.map((d) => d.sends).reduce((a, b) => a + b, 0);
+    const token = rnd() < 0.05 ? 'bad' : 'tok';
+    r = await recordCounterEvents(token, rnd() < 0.1 ? 'manager' : 'teammate', batch);
+    const t = db.tasks[0];
+    assert.ok(t.reportedDone >= lastDone, 'her count never goes down');
+    assert.ok(t.reportedDone <= t.target, 'her count never passes the target');
+    lastDone = t.reportedDone;
+    const after = db.donors.map((d) => d.sends).reduce((a, b) => a + b, 0);
+    if (token === 'bad') assert.equal(after, before, 'a wrong token changes nothing');
+    assert.ok(after - before <= pool.length, 'a donor is counted sent once, ever, by the add-on');
+    assert.ok(db.agent.counter.seen.length <= C.SEEN_CAP, 'the id list stays capped');
+  }
+  assert.ok(db.donors.every((d) => d.sends <= 1), 'no donor got more than one counted DM');
+  assert.ok(db.donors.every((d) => d.status !== 'new' || d.sends === 0), 'status and send count agree');
+
   console.log('counter regression: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

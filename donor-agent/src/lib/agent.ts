@@ -1315,7 +1315,8 @@ export async function recordCounterEvents(token: string, from: Role, events: Cou
     c.lastAt = iso(now);
     c.lastFrom = from;
     const task = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.kind === "dms");
-    const room = task ? Math.max(0, task.target - (task.reportedDone ?? 0)) : 0;
+    // Only HER add-on moves HER task count. His own DMs mark donors sent but never touch her count.
+    const room = task && from === "teammate" ? Math.max(0, task.target - (task.reportedDone ?? 0)) : 0;
     const open = openCase(d);
     let delta = 0;
     for (const id of plan.sent) {

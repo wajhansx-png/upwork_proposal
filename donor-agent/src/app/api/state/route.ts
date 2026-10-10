@@ -28,7 +28,8 @@ export async function GET(req: NextRequest) {
     // The manager has two threads: with the agent, and the teammate's own chat.
     messages: db.messages.filter((m) => m.owner === role).slice(-150),
     teammateMessages: manager ? db.messages.filter((m) => m.owner === "teammate").slice(-150) : undefined,
-    agent: manager ? db.agent : undefined,
+    // The "already counted" id list can be 2,000 long; the phone never needs it.
+    agent: manager ? { ...db.agent, counter: db.agent.counter ? { ...db.agent.counter, seen: undefined } : undefined } : undefined,
     system: manager ? { ai: aiKind(), vision: visionEnabled(), push: pushEnabled(), persistent: usingPersistentStore() } : undefined,
     // Counter status. The manager sees the token (to pair the add-on); Areeba only sees on/off + last seen.
     counter: (() => {
