@@ -154,7 +154,7 @@ export type DonorAction = "sent" | "replied" | "donated" | "no" | "undo";
  * Change one donor. Returns how her task count should move: +1 for "sent", −1 when a counted "sent" is undone.
  * `counts` is false when the change should not touch the task (the manager marking, or no open task).
  */
-export function applyDonorAction(d: Donor, action: DonorAction, nowIso: string, opts: { amount?: number; counts?: boolean; caseId?: string } = {}): number {
+export function applyDonorAction(d: Donor, action: DonorAction, nowIso: string, opts: { amount?: number; counts?: boolean; caseId?: string; taskId?: string } = {}): number {
   if (action === "undo") {
     const u = d.undo;
     if (!u) return 0;
@@ -162,7 +162,7 @@ export function applyDonorAction(d: Donor, action: DonorAction, nowIso: string, 
     return u.counted ? -1 : 0;
   }
   const counted = action === "sent" && !!opts.counts;
-  d.undo = { status: d.status, sends: d.sends, sentAt: d.sentAt, repliedAt: d.repliedAt, donatedAt: d.donatedAt, amount: d.amount, counted, caseId: d.caseId };
+  d.undo = { status: d.status, sends: d.sends, sentAt: d.sentAt, repliedAt: d.repliedAt, donatedAt: d.donatedAt, amount: d.amount, counted, taskId: counted ? opts.taskId : undefined, caseId: d.caseId };
   d.updatedAt = nowIso;
   if (action === "sent") {
     d.status = "sent";

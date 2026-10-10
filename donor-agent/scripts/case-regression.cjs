@@ -185,5 +185,26 @@ Wajdan Khan — GiveLife Foundation
   assert.ok(!/Doctors said/.test(st));
   for (const ch of C.checkText(sc, st, 'main')) assert.ok(ch.ok, ch.label);
 
+  // 9. Review fixes: typed amounts, exact numbers, family pronouns, 0 left.
+  const { parseAmount } = require('../src/lib/money.ts');
+  assert.equal(parseAmount('19k'), 19000);
+  assert.equal(parseAmount('Rs 26,000'), 26000);
+  assert.equal(parseAmount('1.5 lakh'), 150000);
+  assert.equal(parseAmount('19.5k'), 19500);
+  assert.equal(parseAmount('abc'), undefined);
+  assert.equal(parseAmount(0), undefined);
+  assert.equal(C.cleanFacts({ amountLeft: '26k', askAmount: '2,000' }).amountLeft, 26000, '"26k" in the form is 26,000, never 26');
+  assert.deepEqual(C.numbersIn('1.5 lakh baqi'), [150000]);
+  assert.equal(C.k(19950), '19,950', 'never round 19,950 up to 20k');
+  assert.equal(C.k(19900), '19.9k');
+  const exact = mkCase(C.cleanFacts({ ...affan, amountLeft: 19950 }), { hook: 'x', story: 'y' });
+  assert.deepEqual(C.reminderText(exact, 'number'), '19,950 remaining');
+  for (const ch of C.checkText(exact, '19,950 remaining', 'number')) assert.ok(ch.ok, ch.label);
+  const fam = mkCase(C.cleanFacts({ type: 'orphans', name: "Iflak's children", gender: 'f', problem: 'x', proof: 'y', amountLeft: 38000, askAmount: 2000 }), { hook: 'x', story: 'y' });
+  assert.match(C.reminderText(fam, 'people'), /can help Iflak's children_\*/);
+  const zero = mkCase(C.cleanFacts({ ...affan, amountLeft: 0 }), { hook: 'x', story: 'y' });
+  zero.facts.amountLeft = 0;
+  assert.ok(C.checkText(zero, C.caseText(zero), 'main').some((x) => !x.ok && /more than 0/.test(x.label)), 'a 0-left post is blocked');
+
   console.log('case regression: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

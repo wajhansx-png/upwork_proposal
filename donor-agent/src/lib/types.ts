@@ -24,7 +24,7 @@ export interface Donor {
   /** The case this donor already got a DM for. One DM per person per case. */
   caseId?: string;
   /** The donor before the last change, so one tap can undo it. */
-  undo?: { status: DonorStatus; sends: number; sentAt?: string; repliedAt?: string; donatedAt?: string; amount?: number; counted?: boolean; caseId?: string; caseAmount?: number };
+  undo?: { status: DonorStatus; sends: number; sentAt?: string; repliedAt?: string; donatedAt?: string; amount?: number; counted?: boolean; taskId?: string; caseId?: string; caseGift?: number };
 }
 
 /** Case kinds from the GiveLife writing guide (Part 12). */

@@ -671,6 +671,11 @@ function useHerBot(task: Task | undefined, value: number, busy: boolean, nowMs: 
     document.addEventListener("keydown", touch);
     const t = setInterval(() => {
       const now = Date.now();
+      // The streak ends after 3 quiet minutes.
+      if (comboRef.current && now - lastAdd.current > 3 * 60_000) {
+        comboRef.current = 0;
+        setCombo(0);
+      }
       if (!open || value >= target || document.hidden || now - lastTouch.current < 90_000 || now - lastNudge.current < 180_000) return;
       lastNudge.current = now;
       fire("hello", oneOf(["Psst… just 1 more? 👀", "I'm here! Let's do 1 now 🙂", `${target - value} to go. One tap at a time.`, "Hello? 👋 One quick DM?"]));

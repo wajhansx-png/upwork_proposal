@@ -169,9 +169,34 @@ const iso = (t) => new Date(t).toISOString();
   await markDonor('manager', 'd6', 'donated', { amount: 99999 });
   assert.equal(kase.facts.amountLeft, 0, 'never below 0');
   assert.ok(db.messages.some((m) => /fully funded/.test(m.text)));
+  // Review fixes: undo adds the gift back on top of a newer amount the manager typed; he is told.
+  db.donors.find((x) => x.id === 'd6').undo = undefined;
+  kase.facts.amountLeft = 26000;
+  await markDonor('teammate', 'd7', 'donated', { amount: 2000 });
+  assert.equal(kase.facts.amountLeft, 24000);
+  kase.facts.amountLeft = 20000; // the manager typed the real amount from his account
+  await markDonor('teammate', 'd7', 'undo');
+  assert.equal(kase.facts.amountLeft, 22000, 'undo adds the 2,000 back, it does not jump to an old number');
+  assert.ok(db.messages.some((m) => m.owner === 'manager' && /gift from .* is removed\. Affan: Rs 22,000 left/.test(m.text)));
   kase.status = 'closed';
   picks = D.todayPicks(db.donors, now, 200, null);
   assert.ok(picks.every((p) => p.why !== 'case'), 'closed case: back to normal picks');
+
+  // Review fixes: a full task stays full; undo never takes 1 from a newer task; no duplicate phones on edit.
+  db.cases = [];
+  db.tasks = [{ ...task, id: 't2', status: 'open', reportedDone: 10, target: 10 }];
+  await markDonor('teammate', 'd20', 'sent');
+  assert.equal(db.tasks[0].reportedDone, 10);
+  await markDonor('teammate', 'd20', 'undo');
+  assert.equal(db.tasks[0].reportedDone, 10, 'a send that did not count is not taken back');
+  db.tasks[0].reportedDone = 4;
+  await markDonor('teammate', 'd21', 'sent');
+  assert.equal(db.tasks[0].reportedDone, 5);
+  db.tasks.push({ ...db.tasks[0], id: 't3', reportedDone: 2 });
+  db.tasks[0].status = 'done';
+  await markDonor('teammate', 'd21', 'undo');
+  assert.equal(db.tasks[1].reportedDone, 2, 'undo of an old task\'s send leaves the new task alone');
+  await assert.rejects(saveDonor({ id: 'd2', phone: '+923414757829' }), /already in the list/);
 
   console.log('donors regression: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

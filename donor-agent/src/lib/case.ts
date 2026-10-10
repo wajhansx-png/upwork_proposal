@@ -6,6 +6,7 @@ import { llm, parseJson } from "./llm";
 import {
   BANNED, CLAIM_WORDS, DEADLINE_WORDS, DIVIDER, PAY_BLOCK, PAY_NUMBER, PAY_SHORT, PROOF_ASK, REFERENCE, RETURN_LINE, SIGN_OFF, TYPE_LABEL, VERSES,
 } from "./case-guide";
+import { parseAmount } from "./money";
 import type { CaseFacts, CaseFile, CasePost, CaseType } from "./types";
 
 const TYPES: CaseType[] = ["child", "adult", "death", "orphans", "needs"];
@@ -13,10 +14,11 @@ export const MAX_PEOPLE = 25;
 
 // ---------- numbers ----------
 
-/** 19000 -> "19k", 17400 -> "17.4k", 950 -> "950". */
+/** 19000 -> "19k", 17400 -> "17.4k", 950 -> "950". An amount like 19,950 stays exact ("19,950"), never rounded up. */
 export function k(n: number): string {
-  if (n < 1000) return String(Math.round(n));
-  return `${Math.round(n / 100) / 10}k`;
+  const r = Math.round(n);
+  if (r < 1000 || r % 100 !== 0) return r.toLocaleString("en-US");
+  return `${r / 1000}k`;
 }
 export const money = (n: number) => Math.round(n).toLocaleString("en-US");
 export const peopleNeeded = (left: number, ask: number) => Math.ceil(left / ask);
@@ -74,11 +76,16 @@ const num = (v: unknown, max: number) => {
   return Number.isFinite(n) && n > 0 && n <= max ? Math.round(n) : undefined;
 };
 
+const rupees = (v: unknown, max: number) => {
+  const n = parseAmount(v);
+  return n && n <= max ? n : undefined;
+};
+
 /** Clean facts from the form. Anything odd is dropped, never invented. */
 export function cleanFacts(raw: Record<string, unknown>): Partial<CaseFacts> {
   const doctor = str(raw.doctorLine, 200).replace(/^(?:the\s+)?doctors?\s+(?:said|say|says|told us|have said)\s*(?:that\s*)?:?\s*/i, "").replace(/[.\s]+$/, "");
   const items = Array.isArray(raw.items)
-    ? (raw.items as Record<string, unknown>[]).map((i) => ({ item: str(i?.item, 40), period: str(i?.period, 30) || undefined, amount: num(i?.amount, 10_000_000) ?? 0 })).filter((i) => i.item && i.amount).slice(0, 8)
+    ? (raw.items as Record<string, unknown>[]).map((i) => ({ item: str(i?.item, 40), period: str(i?.period, 30) || undefined, amount: rupees(i?.amount, 10_000_000) ?? 0 })).filter((i) => i.item && i.amount).slice(0, 8)
     : [];
   return {
     type: TYPES.includes(raw.type as CaseType) ? (raw.type as CaseType) : "child",
@@ -93,8 +100,8 @@ export function cleanFacts(raw: Record<string, unknown>): Partial<CaseFacts> {
     riskWord: str(raw.riskWord, 20).replace(/[^A-Za-z]/g, "").toUpperCase() || undefined,
     doctorLine: doctor || undefined,
     proof: str(raw.proof, 140).replace(/\s+attached$/i, ""),
-    amountLeft: num(raw.amountLeft, 100_000_000) ?? 0,
-    askAmount: num(raw.askAmount, 1_000_000) ?? 0,
+    amountLeft: rupees(raw.amountLeft, 100_000_000) ?? 0,
+    askAmount: rupees(raw.askAmount, 1_000_000) ?? 0,
     deadline: str(raw.deadline, 60) || undefined,
     items: items.length ? items : undefined,
     familySaidPain: raw.familySaidPain === true,
@@ -104,9 +111,9 @@ export function cleanFacts(raw: Record<string, unknown>): Partial<CaseFacts> {
 /** All numbers written in the details: "26,000", "26k", "2000". Used to check the AI did not invent amounts. */
 export function numbersIn(text: string): number[] {
   const out: number[] = [];
-  for (const m of text.matchAll(/(\d[\d,]*(?:\.\d+)?)\s*(k\b|thousand|hazar|hazaar)?/gi)) {
+  for (const m of text.matchAll(/(\d[\d,]*(?:\.\d+)?)\s*(k\b|thousand|hazar|hazaar|lakhs?\b|lac\b)?/gi)) {
     const n = Number(m[1].replace(/,/g, ""));
-    if (Number.isFinite(n)) out.push(m[2] ? Math.round(n * 1000) : n);
+    if (Number.isFinite(n)) out.push(m[2] ? Math.round(n * (/^la/i.test(m[2]) ? 100_000 : 1000)) : n);
   }
   return out;
 }
@@ -343,7 +350,7 @@ const ORDER: ReminderKind[] = ["number", "people", "feeling", "proof", "tag", "u
 
 export function reminderText(c: CaseFile, kind: ReminderKind, tags: string[] = []): string {
   const f = c.facts;
-  const { him } = pron(f);
+  const him = f.type === "orphans" || f.type === "needs" ? f.name : pron(f).him;
   const a = fitAsk(f.amountLeft, f.askAmount);
   const left = k(f.amountLeft);
   const thisOne = f.type === "child" ? "this child" : f.name;
@@ -420,12 +427,13 @@ export function checkText(c: CaseFile, text: string, kind: CasePost["kind"]): Ch
   const out: Check[] = [];
   const add = (ok: boolean, label: string) => out.push({ ok, label });
   if (kind !== "closing") add(c.status === "open", "Case is open");
+  if (kind !== "closing") add(f.amountLeft > 0, "Amount left is more than 0 (else close the case)");
   for (const m of text.matchAll(/(\d+) (?:kind )?(?:people|person) (?:donating|at) ([\d,]+)|Just ([\d,]+) by (\d+) kind people/g)) {
     const n = Number(m[1] ?? m[4]);
     const ask = Number((m[2] ?? m[3]).replace(/,/g, ""));
     add(n * ask >= f.amountLeft && (n - 1) * ask < f.amountLeft, `${n} × ${money(ask)} covers Rs ${money(f.amountLeft)} exactly`);
   }
-  for (const m of text.matchAll(/([\d.]+k|\d+) (?:remaining|left|is left)/g)) add(m[1] === k(f.amountLeft), `Amount matches the latest (${k(f.amountLeft)})`);
+  for (const m of text.matchAll(/([\d.]+k|[\d,]+) (?:remaining|left|is left)/g)) add(m[1] === k(f.amountLeft), `Amount matches the latest (${k(f.amountLeft)})`);
   add(!!f.deadline || !DEADLINE_WORDS.test(text), "No deadline words (no real deadline)");
   add(!BANNED.test(text), "No begging words");
   const phones = text.match(/\b0\d{10}\b/g) ?? [];

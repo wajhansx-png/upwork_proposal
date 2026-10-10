@@ -4,6 +4,7 @@ import { getRole } from "@/lib/auth";
 import { newId, readDb, withDb } from "@/lib/db";
 import { openCase } from "@/lib/agent";
 import { caseView, checkText, cleanFacts, closingText, missingFacts, readDetails, writeLines } from "@/lib/case";
+import { parseAmount } from "@/lib/money";
 import type { CaseFacts, CasePost, Db } from "@/lib/types";
 
 /** Past donors to @tag in the group: named, biggest gifts first, max 4 (guide Part 6). */
@@ -31,7 +32,7 @@ const KINDS: CasePost["kind"][] = ["main", "dm", "number", "people", "feeling", 
  */
 export async function POST(req: NextRequest) {
   if ((await getRole(req)) !== "manager") return NextResponse.json({ error: "Managers only" }, { status: 403 });
-  const body = await readBody<{ action: string; details: string; facts: Record<string, unknown>; replace: boolean; amountLeft: number; kind: string; text: string; index: number }>(req);
+  const body = await readBody<{ action: string; details: string; facts: Record<string, unknown>; replace: boolean; amountLeft: number | string; kind: string; text: string; index: number }>(req);
   try {
     if (body.action === "read") {
       const details = String(body.details ?? "").trim();
@@ -65,8 +66,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ...view(await readDb()), dropped: lines.dropped });
     }
     if (body.action === "amount") {
-      const n = Number(body.amountLeft);
-      if (!Number.isFinite(n) || n < 0 || n > 100_000_000) return NextResponse.json({ error: "Write the amount left in rupees." }, { status: 400 });
+      // "19k", "19,000", "0" (fully funded) all work.
+      const n = /^\s*0+\s*$/.test(String(body.amountLeft)) ? 0 : parseAmount(body.amountLeft);
+      if (n === undefined || n > 100_000_000) return NextResponse.json({ error: "Write the amount left in rupees, like 19000 or 19k." }, { status: 400 });
       await withDb((d) => {
         const c = openCase(d);
         if (!c) throw new Error("There is no open case.");

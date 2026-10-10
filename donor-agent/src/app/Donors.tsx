@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Donor, DonorStatus } from "@/lib/types";
 import { api } from "./App";
+import { parseAmount } from "@/lib/money";
 import { Bot, oneOf, useBot } from "./Bot";
 
 type Row = Donor & { canUndo: boolean };
@@ -80,7 +81,8 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
     if (action === "donated") {
       const raw = prompt(`How much did ${label(d)} give? (Rs, leave empty if you don't know)`, "");
       if (raw === null) return;
-      amount = Number(raw.replace(/[^\d.]/g, "")) || undefined;
+      amount = parseAmount(raw);
+      if (raw.trim() && !amount) return setErr("Write the amount like 2000 or 2k.");
     }
     setBusy(d.id);
     try {

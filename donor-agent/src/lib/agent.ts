@@ -760,7 +760,7 @@ function donorHelp(t: Task, d: Db, now: number): string {
   const picks = todayPicks(d.donors ?? [], now, 3, openCase(d));
   if (!picks.length) return "";
   const names = picks.map((p) => donorLabel(d.donors.find((x) => x.id === p.id)!)).join(", ");
-  return `Open “Donors” at the top. Start with: ${names}.\nEach one has the message ready. Tap “Sent” after each one.`;
+  return `Open “Donors” at the top. Start with: ${names}.\nEach one has the message ready. Tap “Sent” after each one — it counts for you, so no need to tap + too.`;
 }
 
 /** The reply to her. Every message gets a real answer: facts from the app first, then one clear next step. */
@@ -1222,15 +1222,24 @@ export async function markDonor(role: Role, id: string, action: DonorAction, opt
     const task = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.kind === "dms");
     const open = openCase(d);
     const undo = donor.undo;
-    const delta = applyDonorAction(donor, action, iso(now), { amount: opts.amount, counts: role === "teammate" && !!task, caseId: open?.id });
-    // A gift lowers the open case's amount left; undo puts it back.
+    const wasStatus = donor.status;
+    // Her "Sent" counts only while her task still has room; a full count stays full.
+    const counts = role === "teammate" && !!task && (task.reportedDone ?? 0) < task.target;
+    let delta = applyDonorAction(donor, action, iso(now), { amount: opts.amount, counts, caseId: open?.id, taskId: task?.id });
+    // Undo takes 1 back only from the same task it was added to.
+    if (action === "undo" && delta < 0 && undo?.taskId !== task?.id) delta = 0;
+    // A gift lowers the open case's amount left; undo adds that gift back (a newer amount the manager typed is kept).
     let caseLine = "";
     if (open && action === "donated" && opts.amount && opts.amount > 0 && donor.undo) {
-      donor.undo.caseAmount = open.facts.amountLeft;
-      open.facts.amountLeft = Math.max(0, open.facts.amountLeft - Math.round(opts.amount));
+      const before = open.facts.amountLeft;
+      open.facts.amountLeft = Math.max(0, before - Math.round(opts.amount));
+      donor.undo.caseGift = before - open.facts.amountLeft;
       caseLine = open.facts.amountLeft > 0 ? ` ${open.facts.name}: Rs ${open.facts.amountLeft.toLocaleString("en-US")} left.` : ` ${open.facts.name}'s case is fully funded. Open “Case” to send the closing post.`;
     }
-    if (open && action === "undo" && undo?.caseAmount !== undefined) open.facts.amountLeft = undo.caseAmount;
+    if (action === "undo" && undo && wasStatus === "donated") {
+      if (open && undo.caseGift) open.facts.amountLeft += undo.caseGift;
+      say(d, "manager", `↩️ The gift from ${donorLabel(donor)} was a mistake and is removed.${open && undo.caseGift ? ` ${open.facts.name}: Rs ${open.facts.amountLeft.toLocaleString("en-US")} left.` : ""}`, "agent");
+    }
     if (action === "donated") {
       const name = d.settings.teammateName;
       const line = `🎉 ${donorLabel(donor)} gave${opts.amount && opts.amount > 0 ? ` Rs ${Math.round(opts.amount).toLocaleString("en-US")}` : ""}${role === "teammate" ? ` (marked by ${name})` : ""}.${caseLine}`;
@@ -1252,6 +1261,7 @@ export async function saveDonor(input: { id?: string; name?: string; phone?: str
     if (input.phone && !phone) throw new Error("That phone number does not look right. Use the country code, like +923001234567.");
     const old = input.id ? d.donors.find((x) => x.id === input.id) : undefined;
     if (input.id && !old) throw new Error("That donor is not in the list.");
+    if (phone && d.donors.some((x) => x.phone === phone && x.id !== old?.id)) throw new Error("A donor with this number is already in the list.");
     if (old) {
       if (name) old.name = name;
       if (input.phone !== undefined) old.phone = phone;
@@ -1260,7 +1270,6 @@ export async function saveDonor(input: { id?: string; name?: string; phone?: str
       return structuredClone(old);
     }
     if (!name && !phone) throw new Error("Write a name or a phone number.");
-    if (phone && d.donors.some((x) => x.phone === phone)) throw new Error("A donor with this number is already in the list.");
     const donor: Donor = { id: newId(), name, phone, group: groupOf(name, phone), status: "new", sends: 0, updatedAt: new Date().toISOString() };
     d.donors.push(donor);
     return structuredClone(donor);

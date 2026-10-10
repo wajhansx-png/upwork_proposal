@@ -129,7 +129,7 @@ export default function CasePage() {
   };
 
   const setLeft = () => run("amount", async () => {
-    setData(await api<Data>("/api/case", "POST", { action: "amount", amountLeft: Number(amount.replace(/[^\d]/g, "")) }));
+    setData(await api<Data>("/api/case", "POST", { action: "amount", amountLeft: amount.trim() }));
     setAmount("");
     setTab("reminder");
   });
