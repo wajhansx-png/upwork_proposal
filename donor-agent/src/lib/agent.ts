@@ -15,6 +15,8 @@ import { quietUntil } from "./quiet";
 export type Defer = (fn: () => Promise<void>) => void;
 
 const MIN = 60_000;
+const STALE_COUNT_MIN = 10;
+const PACE_REALERT_MIN = 45;
 const ms = (iso: string) => new Date(iso).getTime();
 
 // ---------- facts ----------
@@ -507,6 +509,7 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
           timerEnabled: true,
           lastReportAt: new Date(now).toISOString(),
         };
+        task.goal = makeGoal(task, now);
         d.tasks.push(task);
         d.agent.pendingAssignment = undefined;
         const when = fmtWhen(deadline, now, tz);
@@ -915,7 +918,7 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
           if (total > t.target) info.clampedFrom = total;
           const before = t.reportedDone ?? 0;
           t.reportedDone = Math.min(t.target, total);
-          if (t.reportedDone > before) d.agent.sendLog = logSends(d.agent.sendLog, now, t.reportedDone - before);
+          if (t.reportedDone > before) { d.agent.sendLog = logSends(d.agent.sendLog, now, t.reportedDone - before); t.lastCountAt = iso(now); }
           t.lastProgressAt = iso(now);
           t.lastReportAt = iso(now);
           t.startedAt ??= iso(now);
@@ -1024,7 +1027,7 @@ export async function setProgress(total: number | ((current: number) => number),
     if (next === (t.reportedDone ?? 0)) return;
     const prev = t.reportedDone ?? 0;
     t.reportedDone = next;
-    if (next > prev) d.agent.sendLog = logSends(d.agent.sendLog, now, next - prev);
+    if (next > prev) { d.agent.sendLog = logSends(d.agent.sendLog, now, next - prev); t.lastCountAt = iso(now); }
     else if (next < prev) d.agent.sendLog = unlogSends(d.agent.sendLog, prev - next);
     t.startedAt ??= iso(now);
     t.lastProgressAt = iso(now);
@@ -1113,9 +1116,46 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
       return { pushes, actions };
     }
 
-    // 2. She has not answered: push her every 4 minutes until she replies or the deadline. No limit.
-    //    The manager is not pushed. One "No update" line in his chat keeps the count.
-    if (task.unanswered >= 1 && taskPhase(task) !== "blocked") {
+    // 2. Behind pace: tell the manager at once, don't wait for the next check-in. Checked before the
+    //    nag logic below, so a long nagging streak can never crowd out this manager-facing alert.
+    // Only alert about pace once she has actually started and had time to make progress.
+    const paceCooldownOk = !task.paceWarnedAt || nowMs - ms(task.paceWarnedAt) >= PACE_REALERT_MIN * MIN;
+    if (task.kind === "dms" && paceCooldownOk && task.startedAt && (nowMs - ms(task.startedAt)) >= 20 * MIN && behindBy >= Math.max(5, Math.round(task.target * 0.2))) {
+      task.paceWarnedAt = nowIso;
+      const line = `${name} is behind pace. Expected about ${expected}/${task.target} by now, has ${confirmed}.`;
+      say(d, "manager", line, "agent", { kind: "update" });
+      actions.push("pace");
+    }
+
+    // 3. Her small goal ran out: one firm, specific push, then a smaller new goal. Checked before the
+    //    generic nag below, so a real goal or promise deadline always gets its own specific message.
+    if (task.kind === "dms" && task.goal && task.startedAt && nowMs >= ms(task.goal.by)) {
+      const done = task.reportedDone ?? 0;
+      const goal = task.goal;
+      if (done >= goal.count) {
+        task.goal = makeGoal(task, nowMs);
+      } else {
+        const short = goal.count - done;
+        task.goalMisses = (task.goalMisses ?? 0) + 1;
+        task.goal = makeGoal(task, nowMs);
+        const msg = `${name}, time check: the goal was ${goal.count} and you are at ${done}.${goal.fromHer ? " This was your own promise." : ""} Send the ${short} missing now and tap + after each one.${task.goal ? `\nNew goal: ${task.goal.count} by ${fmtWhen(ms(task.goal.by), nowMs, tz)}.` : ""}`;
+        say(d, "teammate", msg, "agent", { kind: "checkin" });
+        task.lastReminderAt = nowIso;
+        task.unanswered = Math.max(1, task.unanswered);
+        pushes.push({ role: "teammate", title: "Goal check", body: msg, persistent: true, tag: `check-${task.id}`, taskId: task.id });
+        actions.push("goal-missed");
+        return { pushes, actions };
+      }
+    }
+
+    // 4. She has not answered, OR she keeps replying ("ok", "thanks"...) but her count has not moved in
+    //    10 minutes and no goal is already handling it: push her every 4 minutes until a real count comes
+    //    in. A word is not work. While a goal is live and not yet due, the goal above already owns the
+    //    pace (every ~20-30 min with a specific target), so this hard floor stays out of its way.
+    const goalActive = task.kind === "dms" && !!task.goal && !!task.startedAt && ms(task.goal.by) > nowMs;
+    const countBaseline = task.kind === "dms" && !goalActive ? (task.lastCountAt ?? task.startedAt ?? task.createdAt) : undefined;
+    const countStale = !!countBaseline && nowMs - ms(countBaseline) >= STALE_COUNT_MIN * MIN;
+    if ((task.unanswered >= 1 || countStale) && taskPhase(task) !== "blocked") {
       const lastSent = ms(task.lastReminderAt ?? task.lastCheckAt ?? task.createdAt);
       if (nowMs < lastSent + 4 * MIN) return { pushes, actions };
       const n = task.unanswered + 1;
@@ -1128,7 +1168,10 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
       ];
       // The first reminder keeps the classic words. After that, a fresh opener from the pool, then the question.
       const fresh = n > 2 ? task.nudgePool?.shift() : undefined;
-      const lead = fresh ? `${fresh.replace("{name}", name)} ${ask}` : lines[(n - 2) % lines.length];
+      // n can start at 1 now (a stale count can trigger this before any earlier nudge set it to 1), and
+      // JS gives a negative index for a negative modulo, so wrap it into range by hand.
+      const lineIdx = (((n - 2) % lines.length) + lines.length) % lines.length;
+      const lead = fresh ? `${fresh.replace("{name}", name)} ${ask}` : lines[lineIdx];
       const retryText = `${lead} (asked ${n} times)`;
       if ((task.nudgePool?.length ?? 0) < 3 && (!task.nudgeRefillAt || nowMs - ms(task.nudgeRefillAt) > 30 * MIN)) {
         task.nudgeRefillAt = nowIso;
@@ -1154,36 +1197,7 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
       return { pushes, actions };
     }
 
-    // 2b. Her small goal ran out: one firm, specific push, then a smaller new goal.
-    if (task.kind === "dms" && task.goal && task.startedAt && nowMs >= ms(task.goal.by)) {
-      const done = task.reportedDone ?? 0;
-      const goal = task.goal;
-      if (done >= goal.count) {
-        task.goal = makeGoal(task, nowMs);
-      } else {
-        const short = goal.count - done;
-        task.goalMisses = (task.goalMisses ?? 0) + 1;
-        task.goal = makeGoal(task, nowMs);
-        const msg = `${name}, time check: the goal was ${goal.count} and you are at ${done}.${goal.fromHer ? " This was your own promise." : ""} Send the ${short} missing now and tap + after each one.${task.goal ? `\nNew goal: ${task.goal.count} by ${fmtWhen(ms(task.goal.by), nowMs, tz)}.` : ""}`;
-        say(d, "teammate", msg, "agent", { kind: "checkin" });
-        task.lastReminderAt = nowIso;
-        task.unanswered = Math.max(1, task.unanswered);
-        pushes.push({ role: "teammate", title: "Goal check", body: msg, persistent: true, tag: `check-${task.id}`, taskId: task.id });
-        actions.push("goal-missed");
-        return { pushes, actions };
-      }
-    }
-
-    // 3. Behind pace: tell the manager at once, don't wait for the next check-in. One alert per task.
-    // Only alert about pace once she has actually started and had time to make progress.
-    if (task.kind === "dms" && !task.paceWarned && task.startedAt && (nowMs - ms(task.startedAt)) >= 20 * MIN && behindBy >= Math.max(5, Math.round(task.target * 0.2))) {
-      task.paceWarned = true;
-      const line = `${name} is behind pace. Expected about ${expected}/${task.target} by now, has ${confirmed}.`;
-      say(d, "manager", line, "agent", { kind: "update" });
-      actions.push("pace");
-    }
-
-    // 4. Planned check-in: start, 1/3, 2/3, 30 min before deadline. Only 4 or 5 across the whole task.
+    // 5. Planned check-in: start, 1/3, 2/3, 30 min before deadline. Only 4 or 5 across the whole task.
     const nextAt = nextPlannedCheckin(task, task.lastCheckAt, nowMs);
     if (nextAt === null || nowMs < nextAt) return { pushes, actions };
     const minutesLeft = Math.round((ms(task.deadlineAt) - nowMs) / MIN);

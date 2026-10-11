@@ -163,6 +163,8 @@ export interface Task {
   goalMisses?: number;
   /** The manager was already told she is too slow to finish on time. */
   paceWarned?: boolean;
+  /** Last time this alert fired; lets it repeat if she is still behind later, instead of only once ever. */
+  paceWarnedAt?: string;
   midpointSent?: boolean;
   preDeadlineSent?: boolean;
   note?: string;
@@ -174,6 +176,8 @@ export interface Task {
   proofCount?: number;
   lastProofAt?: string;
   lastProgressAt?: string;
+  /** Last time her count actually went up. A real number resets this; "ok" or silence does not. */
+  lastCountAt?: string;
   blockedReason?: string;
   evidence?: {
     imageId: string;

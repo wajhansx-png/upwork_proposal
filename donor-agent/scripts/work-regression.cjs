@@ -33,7 +33,7 @@ Module._load = function (request, parent, ...rest) {
 const { quietUntil, hourLabel } = require('../src/lib/quiet.ts');
 const B = require('../src/lib/besttime.ts');
 const { cleanNudge, makeNudgeOpeners } = require('../src/lib/understand.ts');
-const { runAgent, setProgress, handleTeammateMessage } = require('../src/lib/agent.ts');
+const { runAgent, setProgress, handleTeammateMessage, handleManagerMessage } = require('../src/lib/agent.ts');
 
 const MIN = 60000, HOUR = 3600000;
 // Pakistan time is UTC+5 all year: 23:30 PKT = 18:30 UTC.
@@ -71,7 +71,7 @@ const S = (o = {}) => ({ timezone: 'Asia/Karachi', quietEnabled: true, quietStar
   r = await runAgent(pkt(11, 3, 0)); assert.equal(pushes.length, 0, 'still quiet at 3 am');
   r = await runAgent(pkt(11, 7, 59)); assert.equal(pushes.length, 0, 'still quiet at 7:59');
   r = await runAgent(pkt(11, 8, 0));
-  assert.deepEqual(r.actions, ['retry'], 'at 8 am the push is back at once');
+  assert.deepEqual(r.actions, ['pace', 'retry'], 'at 8 am the push is back at once (plus a one-time pace alert to the manager: she has been stuck since the night before)');
   assert.equal(pushes.filter((p) => p[0] === 'teammate').length, 1);
   assert.match(db.messages.filter((m) => m.owner === 'teammate').at(-1).text, /asked 2 times/);
   const n0 = pushes.length;
@@ -81,12 +81,12 @@ const S = (o = {}) => ({ timezone: 'Asia/Karachi', quietEnabled: true, quietStar
   // a task that ends inside the night is still pushed until its deadline
   fresh(task({ deadlineAt: new Date(pkt(11, 2)).toISOString(), lastReminderAt: new Date(pkt(10, 23, 20)).toISOString() }));
   r = await runAgent(pkt(10, 23, 30));
-  assert.deepEqual(r.actions, ['retry'], 'a task due at 2 am keeps getting pushed at night');
+  assert.deepEqual(r.actions, ['pace', 'retry'], 'a task due at 2 am keeps getting pushed at night');
   r = await runAgent(pkt(11, 2, 1)); assert.deepEqual(r.actions, ['deadline'], 'and its deadline is not muted');
 
   // switched off: pushes at night
   fresh(task(), S({ quietEnabled: false }));
-  r = await runAgent(pkt(11, 3)); assert.deepEqual(r.actions, ['retry']);
+  r = await runAgent(pkt(11, 3)); assert.deepEqual(r.actions, ['retry'], 'not far enough behind yet for a pace alert here');
 
   // a break that ends at night is announced in the morning
   fresh(task({ unanswered: 0, breakUntil: new Date(pkt(10, 23, 45)).toISOString() }));
@@ -196,6 +196,108 @@ const S = (o = {}) => ({ timezone: 'Asia/Karachi', quietEnabled: true, quietStar
   assert.equal(B.bestTime([NaN, 'x', now + 99 * HOUR, ...log], 'Asia/Karachi', now).total, 30, 'junk and future times are ignored');
   const morning = []; for (let d = 10; d <= 14; d++) for (let k = 0; k < 5; k++) morning.push(day(d, 9 + (k % 2)));
   assert.equal(B.bestTime(morning, 'Asia/Karachi', now).label, '9–11 am');
+
+  // 7. The "ok" loophole is closed: a bare reply with no real number no longer buys long silence.
+  // A clock that ticks every real minute (the loophole only showed up with a sloppy test clock that skips).
+  async function tickingSilenceTest(label, replyWord, startedAtOffsetMin) {
+    const t3h = { id: 't1', title: 'Send 100 DMs', kind: 'dms', target: 100, status: 'open', createdAt: new Date(now2).toISOString(), deadlineAt: new Date(now2 + 3 * HOUR).toISOString(), unanswered: 0, ...(startedAtOffsetMin !== null ? { startedAt: new Date(now2 + startedAtOffsetMin * MIN).toISOString() } : {}) };
+    db = { settings: S({ quietEnabled: false }), agent: {}, donors: [], cases: [], messages: [], subs: [{ role: 'teammate', sub: { endpoint: 'x', keys: { p256dh: 'a', auth: 'b' } } }], hashes: {}, tasks: [t3h] };
+    pushes.length = 0;
+    const pushTimes = [];
+    const rn = Date.now;
+    for (let i = 1; i <= 180; i++) {
+      const tt = now2 + i * MIN;
+      const before = pushes.filter((p) => p[0] === 'teammate').length;
+      await runAgent(tt);
+      if (pushes.filter((p) => p[0] === 'teammate').length > before) {
+        pushTimes.push(i);
+        Date.now = () => tt;
+        await handleTeammateMessage(replyWord);
+        Date.now = rn;
+      }
+    }
+    const gaps = pushTimes.map((v, i) => (i === 0 ? v : v - pushTimes[i - 1]));
+    const maxGap = gaps.length ? Math.max(...gaps) : Infinity;
+    return { pushTimes, maxGap, done: db.tasks[0].reportedDone ?? 0 };
+  }
+  const now2 = pkt(15, 9); // a plain daytime start, well clear of quiet hours
+  let res = await tickingSilenceTest('she only ever says "ok", already started', 'ok', 0);
+  assert.ok(res.pushTimes.length >= 15, `expected many pushes over 3 hours of "ok" only, got ${res.pushTimes.length}`);
+  assert.ok(res.maxGap <= 14, `no gap should exceed ~14 min (10 min stale + up to 4 min spacing), got ${res.maxGap}`);
+  assert.equal(res.done, 0, '"ok" never reports a count');
+
+  res = await tickingSilenceTest('she never confirms starting, only says "ok" to the start prompt', 'ok', null);
+  assert.ok(res.pushTimes.length >= 15, `expected many pushes even if she never says "I started", got ${res.pushTimes.length}`);
+  assert.ok(res.maxGap <= 14, `gap too long when she never confirms starting: ${res.maxGap}`);
+
+  // A real, growing count should NOT be nagged every ~10 minutes: the goal window (20-30 min) governs instead.
+  {
+    const t3h = { id: 't1', title: 'Send 100 DMs', kind: 'dms', target: 100, status: 'open', createdAt: new Date(now2).toISOString(), deadlineAt: new Date(now2 + 3 * HOUR).toISOString(), unanswered: 0, startedAt: new Date(now2).toISOString() };
+    db = { settings: S({ quietEnabled: false }), agent: {}, donors: [], cases: [], messages: [], subs: [{ role: 'teammate', sub: { endpoint: 'x', keys: { p256dh: 'a', auth: 'b' } } }], hashes: {}, tasks: [t3h] };
+    pushes.length = 0;
+    const rn = Date.now;
+    const pushTimes = [];
+    let done = 0;
+    let sawGenericNag = false;
+    for (let i = 1; i <= 180; i++) {
+      const tt = now2 + i * MIN;
+      const before = pushes.filter((p) => p[0] === 'teammate').length;
+      const r = await runAgent(tt);
+      if (r.actions.includes('retry')) sawGenericNag = true; // the stale/unanswered path specifically
+      if (pushes.filter((p) => p[0] === 'teammate').length > before) {
+        pushTimes.push(i);
+        done = Math.min(100, done + 4);
+        Date.now = () => tt;
+        await handleTeammateMessage('sent ' + done);
+        Date.now = rn;
+      }
+    }
+    assert.equal(sawGenericNag, false, 'a real, honest, growing count should never trigger the generic stale/unanswered nag — the goal system already owns the pace while she is responsive');
+    assert.ok(pushTimes.length < res.pushTimes.length / 2, `honest real progress should still mean far fewer check-ins than the "ok" case (${res.pushTimes.length}), got ${pushTimes.length}`);
+  }
+
+  // 8. The exact bug this change could have introduced: a stale-triggered first nudge (n=1) must not be "undefined".
+  {
+    const t = { id: 't1', title: 'Send 10 DMs', kind: 'dms', target: 10, status: 'open', createdAt: new Date(now2).toISOString(), deadlineAt: new Date(now2 + 3 * HOUR).toISOString(), unanswered: 0, startedAt: new Date(now2).toISOString(), reportedDone: 3, lastCountAt: new Date(now2).toISOString() };
+    db = { settings: S({ quietEnabled: false }), agent: {}, donors: [], cases: [], messages: [], subs: [{ role: 'teammate', sub: { endpoint: 'x', keys: { p256dh: 'a', auth: 'b' } } }], hashes: {}, tasks: [t] };
+    const r = await runAgent(now2 + 11 * MIN);
+    assert.deepEqual(r.actions, ['retry']);
+    const txt = db.messages.filter((m) => m.owner === 'teammate').at(-1).text;
+    assert.ok(!/undefined/.test(txt), `the first stale nudge must be real text, got: ${txt}`);
+    assert.match(txt, /\(asked 1 times\)$/);
+  }
+
+  // 9. The "you missed your own promise" message always wins over the generic stale nag when both are due.
+  {
+    const t = { id: 't1', title: 'Send 10 DMs', kind: 'dms', target: 10, status: 'open', createdAt: new Date(now2).toISOString(), deadlineAt: new Date(now2 + 3 * HOUR).toISOString(), unanswered: 0, startedAt: new Date(now2).toISOString(), reportedDone: 2, lastCountAt: new Date(now2).toISOString(), goal: { count: 7, by: new Date(now2 + 12 * MIN).toISOString(), fromHer: true } };
+    db = { settings: S({ quietEnabled: false }), agent: {}, donors: [], cases: [], messages: [], subs: [{ role: 'teammate', sub: { endpoint: 'x', keys: { p256dh: 'a', auth: 'b' } } }], hashes: {}, tasks: [t] };
+    const r = await runAgent(now2 + 15 * MIN); // past both the 12-min promise and the 10-min stale window
+    assert.deepEqual(r.actions, ['goal-missed']);
+    assert.match(db.messages.filter((m) => m.owner === 'teammate').at(-1).text, /goal was 7 and you are at 2\. This was your own promise/);
+  }
+
+  // 10. The pace alert can repeat, but not more than once per cooldown, and never crowds out the generic nag check.
+  {
+    const t = { id: 't1', title: 'Send 40 DMs', kind: 'dms', target: 40, status: 'open', createdAt: new Date(now2).toISOString(), deadlineAt: new Date(now2 + 8 * HOUR).toISOString(), unanswered: 0, startedAt: new Date(now2).toISOString(), reportedDone: 0 };
+    db = { settings: S({ quietEnabled: false }), agent: {}, donors: [], cases: [], messages: [], subs: [{ role: 'teammate', sub: { endpoint: 'x', keys: { p256dh: 'a', auth: 'b' } } }], hashes: {}, tasks: [t] };
+    const paceHits = [];
+    for (let i = 1; i <= 360; i++) {
+      const r = await runAgent(now2 + i * MIN);
+      if (r.actions.includes('pace')) paceHits.push(i);
+    }
+    assert.ok(paceHits.length >= 3, `pace alert should repeat over 6 hours stuck at 0, got ${paceHits.length} times`);
+    for (let i = 1; i < paceHits.length; i++) assert.ok(paceHits[i] - paceHits[i - 1] >= 45, 'pace alerts are at least 45 min apart');
+  }
+
+  // 11. A first goal exists the moment a task is assigned (not only after her first report).
+  {
+    db = { settings: S({ quietEnabled: false, dailyTarget: 15, workStartHour: 9 }), agent: {}, donors: [], cases: [], messages: [], subs: [], hashes: {}, tasks: [] };
+    const rn = Date.now;
+    Date.now = () => now2;
+    await handleManagerMessage('Areeba send 20 DMs by 9pm');
+    Date.now = rn;
+    assert.ok(db.tasks[0].goal && db.tasks[0].goal.count > 0, 'a goal must exist right after assignment');
+  }
 
   console.log('work regression: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });
