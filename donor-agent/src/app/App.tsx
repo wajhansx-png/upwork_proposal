@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { AgentState, ChatMessage, Role, Settings, Task } from "@/lib/types";
 import { Bot, oneOf, useBot, type Mood } from "./Bot";
+import { hourLabel } from "@/lib/quiet";
 
 interface State {
   role: Role;
@@ -12,6 +13,7 @@ interface State {
   agent?: AgentState;
   system?: { ai: "key" | "shared" | "off"; vision: boolean; push: boolean; persistent: boolean };
   counter?: { on: boolean; lastAt?: string; sentToday: number; token?: string; linked?: boolean };
+  bestTime?: { label: string; sends: number; total: number; days: number } | null;
   vapidPublicKey: string | null;
   now: string;
 }
@@ -521,6 +523,9 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
           <span className="status-main"><i />{label}</span>
           {task && open && <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} bare />}
         </p>
+        {!open && !chatOpen && s.bestTime && (
+          <p className="best-hint">⏰ {name} sends most DMs {s.bestTime.label} ({Math.round((s.bestTime.sends / s.bestTime.total) * 100)}% of her last {s.bestTime.total} DMs, {s.bestTime.days} days). Give her tasks just before that.</p>
+        )}
       </section>
 
       <button className={`chat-pill ${chatOpen ? "on" : ""}`} aria-expanded={chatOpen} onClick={() => setChatOpen(!chatOpen)}>
@@ -612,7 +617,51 @@ function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
         </button>
       </div>
       {aiTest && aiTest !== "…" ? <p className={aiTest.startsWith("✓") ? "hint" : "err"}>{aiTest}</p> : aiError ? <p className="err">Last AI error: {s.agent!.llmStatus}</p> : null}
+      <QuietPanel s={s} refresh={refresh} />
       <CounterPanel s={s} refresh={refresh} />
+    </div>
+  );
+}
+
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, h) => <option key={h} value={h}>{hourLabel(h)}</option>);
+
+/** Quiet hours: no pushes to her at night. Her tasks that end before the night ends are still pushed to the deadline. */
+function QuietPanel({ s, refresh }: { s: State; refresh: () => void }) {
+  const name = s.settings.teammateName;
+  const on = s.settings.quietEnabled !== false;
+  const from = s.settings.quietStartHour ?? 23;
+  const to = s.settings.quietEndHour ?? 8;
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const save = async (patch: { quietEnabled?: boolean; quietStartHour?: number; quietEndHour?: number }) => {
+    setBusy(true);
+    setErr("");
+    try {
+      await api("/api/settings", "POST", patch);
+      await refresh();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="counter-box">
+      <div className="set-row">
+        <span>Quiet hours</span>
+        <button className={on ? "" : "primary"} disabled={busy} onClick={() => save({ quietEnabled: !on })}>{on ? "On ✓" : "Turn on"}</button>
+      </div>
+      <p className="hint">No pushes to {name} at night. A task that ends before the night ends is still pushed until its deadline.</p>
+      {on && (
+        <div className="set-row">
+          <span>Quiet from / to</span>
+          <div className="row">
+            <select aria-label="Quiet from" value={from} disabled={busy} onChange={(e) => void save({ quietStartHour: Number(e.target.value) })}>{HOUR_OPTIONS}</select>
+            <select aria-label="Quiet until" value={to} disabled={busy} onChange={(e) => void save({ quietEndHour: Number(e.target.value) })}>{HOUR_OPTIONS}</select>
+          </div>
+        </div>
+      )}
+      {err && <p className="err">{err}</p>}
     </div>
   );
 }

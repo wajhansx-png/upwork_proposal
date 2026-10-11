@@ -2,12 +2,14 @@ import { newId, readDb, withDb } from "./db";
 import { notify } from "./push";
 import { extractCheckEvery, fmtDuration, fmtMinutes, fmtWhen, parseDeadline, parseTarget, zparts } from "./time";
 import { extractGap, extractInstructions, managerCommand, parseManager, type ManagerCommand } from "./nlp";
-import { simplifyTask, understandManager, understandTeammate, type Intent, type Understood } from "./understand";
+import { makeNudgeOpeners, simplifyTask, understandManager, understandTeammate, type Intent, type Understood } from "./understand";
 import type { TeammateFacts } from "./prompts";
 import type { CaseFile, ChatMessage, Db, Donor, PendingAssignment, Role, Task } from "./types";
 import { evidenceCount, nextDelayMin, nextPlannedCheckin, taskPhase } from "./task-state";
 import { applyDonorAction, cleanPhone, donorLabel, groupOf, todayPicks, type DonorAction } from "./donors";
 import { planCounter, type CounterEvent } from "./counter";
+import { logSends, unlogSends } from "./besttime";
+import { quietUntil } from "./quiet";
 
 /** Runs work after the reply has been sent. In a request this is Next's after(); elsewhere it runs inline. */
 export type Defer = (fn: () => Promise<void>) => void;
@@ -911,7 +913,9 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
         if (total === undefined && u.more !== undefined) total = (t.reportedDone ?? 0) + u.more;
         if (total !== undefined) {
           if (total > t.target) info.clampedFrom = total;
+          const before = t.reportedDone ?? 0;
           t.reportedDone = Math.min(t.target, total);
+          if (t.reportedDone > before) d.agent.sendLog = logSends(d.agent.sendLog, now, t.reportedDone - before);
           t.lastProgressAt = iso(now);
           t.lastReportAt = iso(now);
           t.startedAt ??= iso(now);
@@ -1020,6 +1024,8 @@ export async function setProgress(total: number | ((current: number) => number),
     if (next === (t.reportedDone ?? 0)) return;
     const prev = t.reportedDone ?? 0;
     t.reportedDone = next;
+    if (next > prev) d.agent.sendLog = logSends(d.agent.sendLog, now, next - prev);
+    else if (next < prev) d.agent.sendLog = unlogSends(d.agent.sendLog, prev - next);
     t.startedAt ??= iso(now);
     t.lastProgressAt = iso(now);
     t.lastReportAt = iso(now);
@@ -1050,7 +1056,9 @@ export interface RunResult {
 }
 
 export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<RunResult> {
+  let refill: string | null = null;
   const result = await withDb((d) => {
+    refill = null;
     const task = [...d.tasks].reverse().find(t => t.status === "open" && (!taskId || t.id === taskId));
     d.agent.lastRunAt = new Date(nowMs).toISOString();
     const pushes: Push[] = [];
@@ -1066,6 +1074,8 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
     const behindBy = Math.max(0, expected - confirmed);
 
     if (task.remindersEnabled === false) return { pushes, actions };
+    // Night: no pushes to her, unless her task ends before the night does (see quiet.ts).
+    if (quietUntil(d.settings, nowMs, ms(task.deadlineAt))) return { pushes, actions };
     if (task.breakUntil && nowMs >= ms(task.breakUntil)) {
       task.breakUntil = undefined;
       task.reminderPausedUntil = undefined;
@@ -1116,7 +1126,14 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
         `${name}, I am waiting. One line is enough.`,
         `${name}, your manager is waiting for your update. Reply now.`,
       ];
-      const retryText = `${lines[(n - 2) % lines.length]} (asked ${n} times)`;
+      // The first reminder keeps the classic words. After that, a fresh opener from the pool, then the question.
+      const fresh = n > 2 ? task.nudgePool?.shift() : undefined;
+      const lead = fresh ? `${fresh.replace("{name}", name)} ${ask}` : lines[(n - 2) % lines.length];
+      const retryText = `${lead} (asked ${n} times)`;
+      if ((task.nudgePool?.length ?? 0) < 3 && (!task.nudgeRefillAt || nowMs - ms(task.nudgeRefillAt) > 30 * MIN)) {
+        task.nudgeRefillAt = nowIso;
+        refill = task.id;
+      }
       say(d, "teammate", retryText, "agent", { kind: "checkin" });
       task.unanswered = n;
       task.lastReminderAt = nowIso;
@@ -1205,7 +1222,22 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
     return { pushes, actions };
   });
   await sendPushes(result.pushes);
+  if (refill) await refillNudges(refill, nowMs).catch(() => undefined);
   return { actions: result.actions };
+}
+
+/** Ask the AI for fresh push openers and keep the ones that pass the checks. Never blocks or changes a push. */
+async function refillNudges(taskId: string, nowMs: number): Promise<void> {
+  const db = await readDb();
+  const t = db.tasks.find((x) => x.id === taskId);
+  if (!t || t.status !== "open") return;
+  const openers = await makeNudgeOpeners(db.settings.teammateName, { started: !!t.startedAt }, t.nudgePool ?? []);
+  if (!openers.length) return;
+  await withDb((d) => {
+    const x = d.tasks.find((y) => y.id === taskId);
+    if (x) x.nudgePool = [...(x.nudgePool ?? []), ...openers].slice(0, 16);
+  });
+  void nowMs;
 }
 
 // ---------- donors page ----------

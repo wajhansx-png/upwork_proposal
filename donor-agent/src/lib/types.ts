@@ -150,6 +150,9 @@ export interface Task {
   /** An approved break ends here; she then gets a "break is over" push. */
   breakUntil?: string;
   silentSince?: string;
+  /** Fresh push openers written by the AI, used one per silent nudge. {name} is filled in when used. */
+  nudgePool?: string[];
+  nudgeRefillAt?: string;
   deadlineAlerted?: boolean;
   alertsProblemAt?: string;
   reminderCount?: number;
@@ -221,6 +224,10 @@ export interface Settings {
   requireProof: boolean;
   /** Changing this makes the old teammate link stop working. */
   teammateKeyVersion: number;
+  /** No pushes to her at night, unless her task ends before the night does. */
+  quietEnabled: boolean;
+  quietStartHour: number;
+  quietEndHour: number;
   template: string;
 }
 
@@ -243,6 +250,8 @@ export interface AgentState {
   pendingAssignment?: PendingAssignment;
   /** Manager text that may be an answer to her question; sent only after he confirms. */
   heldAnswer?: string;
+  /** When her DMs went out (ms), oldest first, capped. Used to find her best hours. */
+  sendLog?: number[];
   /** The WhatsApp counter add-on. */
   counter?: {
     /** Secret the add-on sends with each update. Empty until the manager turns it on. */

@@ -355,3 +355,6 @@ a.text-btn,a.bell-btn{display:inline-flex;align-items:center;text-decoration:non
 /* ===== WhatsApp counter ===== */
 .counter-box{margin-top:12px;padding-top:12px;border-top:1px solid var(--edge);display:grid;gap:6px}
 .counter-dl{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:8px 12px;border-radius:12px;background:var(--grad);color:#06120e;font-weight:700;text-decoration:none}
+/* ===== Quiet hours + best time ===== */
+.counter-box select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);min-height:40px}
+.best-hint{margin:0;max-width:34ch;text-align:center;font-size:.8rem;color:var(--mute)}

@@ -330,3 +330,57 @@ export async function simplifyTask(title: string, brief: string | undefined, sou
     : [];
   return { title: t, steps: brief ? (steps.length ? steps : fallback.steps) : [] };
 }
+
+// ---------- fresh push words ----------
+
+/** Words that would turn a firm reminder into a threat, a lie or a lecture. */
+const NUDGE_BANNED = /\b(?:kindly|request(?:ing)?|angry|upset|disappointed|fired?|punish\w*|warning|last chance|final chance|salary|lazy|useless|stupid|shame|worst|watching|monitoring|tracking|spying|report(?:ed|ing)? you|pay)\b/i;
+
+const nudgeWords = (s: string) => s.toLowerCase().replace(/[^a-z' ]/g, " ").split(/\s+/).filter(Boolean);
+const nudgeSimilar = (a: string, b: string) => {
+  const A = new Set(nudgeWords(a));
+  const B = new Set(nudgeWords(b));
+  let both = 0;
+  for (const w of A) if (B.has(w)) both++;
+  return A.size && B.size ? both / (A.size + B.size - both) : 0;
+};
+
+/** One push opener the AI wrote: short, easy, firm and kind, no numbers, no threats. Returns the clean line or null. */
+export function cleanNudge(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const line = raw.replace(/\s+/g, " ").trim();
+  if (!line.startsWith("{name}, ") || line.indexOf("{name}", 1) !== -1) return null;
+  const rest = line.slice("{name}, ".length);
+  const n = nudgeWords(rest).length;
+  if (n < 3 || n > 14 || line.length > 110) return null;
+  if (!/[.!]$/.test(line) || /[?{}\d@#/\\]/.test(rest)) return null;
+  if (/\p{Extended_Pictographic}/u.test(line) || NUDGE_BANNED.test(rest)) return null;
+  if ((rest.match(/\b[A-Z]{3,}\b/g) ?? []).length) return null;
+  return line;
+}
+
+/**
+ * Fresh push openers, so the silent-nudge words do not wear out. The push times and how firm they are do not change:
+ * the app still asks its real question after the opener. Every line is checked here; bad ones are thrown away.
+ */
+export async function makeNudgeOpeners(name: string, ctx: { started: boolean }, avoid: string[] = []): Promise<string[]> {
+  const r = await llm(
+    `You write the first words of a short push message for ${name}, a volunteer who must reply with a quick update. The app adds a real question after your words, so do not ask one.\n` +
+      "Write 8 different openers. Each is ONE short sentence of 4 to 12 words, in very easy English a child understands. Firm but kind and respectful: it asks for a reply now.\n" +
+      `Each starts with exactly "{name}, ". No numbers, no emoji, no question marks, no capital-letter words. Never threaten, never say anyone is angry, upset, watching or tracking her, never mention punishment or pay.${ctx.started ? "" : " She has not started yet, so do not thank her for work."}\n` +
+      "Vary the style: a friendly nudge, a direct ask, a tiny-step push, a 'one line is enough' push, a team push, a calm push.\n" +
+      'Return ONLY JSON: {"openers":["{name}, ...", ...]}',
+    JSON.stringify({ name, do_not_repeat: avoid.slice(0, 8) }),
+    { json: true },
+  );
+  const list = parseJson<{ openers?: unknown }>(r.text)?.openers;
+  if (!Array.isArray(list)) return [];
+  const out: string[] = [];
+  for (const item of list) {
+    const line = cleanNudge(item);
+    if (!line || [...avoid, ...out].some((x) => nudgeSimilar(x, line) >= 0.7)) continue;
+    out.push(line);
+    if (out.length >= 8) break;
+  }
+  return out;
+}
