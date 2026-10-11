@@ -54,10 +54,12 @@ export function matchDonor(donors: Donor[], ev: Pick<CounterEvent, "phone" | "na
  * Rules that keep it accurate:
  *  - An event id seen before is ignored (no double counting on a retry).
  *  - "sent" counts a donor only on first contact (status "new"), so 2 messages in one chat are still 1 DM.
+ *    On an "old donors" task it counts a donor once per task whatever their status (except "no").
  *  - "replied" counts only a donor she already messaged.
  */
-export function planCounter(events: CounterEvent[], donors: Donor[], seenList: string[]): CounterPlan {
+export function planCounter(events: CounterEvent[], donors: Donor[], seenList: string[], opts: { oldDonors?: boolean; counted?: string[] } = {}): CounterPlan {
   const seen = new Set(seenList);
+  const already = new Set(opts.counted ?? []);
   const sent = new Set<string>();
   const replied = new Set<string>();
   const fresh: string[] = [];
@@ -79,8 +81,9 @@ export function planCounter(events: CounterEvent[], donors: Donor[], seenList: s
       continue;
     }
     if (ev.dir === "out") {
-      // First contact only. Already-sent/replied/donated donors are not re-counted.
-      if (donor.status === "new" && !sent.has(donor.id)) sent.add(donor.id);
+      // Normal task: first contact only. "Old donors" task: any donor who did not say no, once per task.
+      const countable = opts.oldDonors ? donor.status !== "no" && !already.has(donor.id) : donor.status === "new";
+      if (countable && !sent.has(donor.id)) sent.add(donor.id);
     } else if (ev.dir === "in") {
       if ((donor.status === "sent" || sent.has(donor.id)) && donor.status !== "donated") replied.add(donor.id);
     }

@@ -358,3 +358,10 @@ a.text-btn,a.bell-btn{display:inline-flex;align-items:center;text-decoration:non
 /* ===== Quiet hours + best time ===== */
 .counter-box select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);min-height:40px}
 .best-hint{margin:0;max-width:34ch;text-align:center;font-size:.8rem;color:var(--mute)}
+
+/* ===== Old donors switch ===== */
+.old-switch{display:inline-flex;align-items:center;gap:10px;min-height:40px;padding:6px 14px;border-radius:999px;border:1px solid var(--edge);background:transparent;color:var(--mute);font:inherit;font-size:.9rem;font-weight:600}
+.old-switch b{padding:2px 10px;border-radius:999px;background:var(--line);color:var(--ink);font-size:.78rem;letter-spacing:.06em}
+.old-switch.on{border-color:var(--brand);color:var(--ink)}
+.old-switch.on b{background:var(--grad);color:#06120e}
+.old-switch:disabled{opacity:.6}

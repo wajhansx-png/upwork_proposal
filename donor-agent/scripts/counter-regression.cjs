@@ -19,7 +19,8 @@ Module._load = function (request, parent, ...rest) {
   return load.call(this, request, parent, ...rest);
 };
 const C = require('../src/lib/counter.ts');
-const { recordCounterEvents, setCounter } = require('../src/lib/agent.ts');
+const { recordCounterEvents, setCounter, setOldDonors, markDonor, handleManagerMessage } = require('../src/lib/agent.ts');
+const { wantsOldDonors } = require('../src/lib/nlp.ts');
 const { seedDonors } = require('../src/lib/donors.ts');
 const { makeZip } = require('../src/lib/zip.ts');
 const { extensionFiles } = require('../src/lib/extension-files.ts');
@@ -155,6 +156,147 @@ const ev = (id, phone, dir = 'out', at = now) => ({ id, phone, dir, at });
   }
   assert.ok(db.donors.every((d) => d.sends <= 1), 'no donor got more than one counted DM');
   assert.ok(db.donors.every((d) => d.status !== 'new' || d.sends === 0), 'status and send count agree');
+
+  // 9. "Old donors" task switch: a donor who was messaged before counts too, once per task.
+  {
+    const oldTask = () => ({ ...task(), target: 6, oldDonors: true });
+    const mk = (status, i) => ({ ...C.matchDonor ? {} : {}, id: 'od' + i, name: 'Donor ' + i, phone: '+92300000000' + i, group: 'Others', status, sends: status === 'new' ? 0 : 1, updatedAt: iso(now) });
+    const set = (statuses) => statuses.map(mk);
+    const dn = set(['new', 'sent', 'replied', 'donated', 'no']);
+    // 9a. planCounter: normal rule counts only the new one, old rule counts all but "no".
+    let pl = C.planCounter(dn.map((d, i) => ev('o' + i, d.phone.slice(1))), dn, []);
+    assert.deepEqual(pl.sent, ['od0'], 'normal task: only the new donor counts');
+    pl = C.planCounter(dn.map((d, i) => ev('o' + i, d.phone.slice(1))), dn, [], { oldDonors: true });
+    assert.deepEqual(pl.sent.sort(), ['od0', 'od1', 'od2', 'od3'], 'old donors task: everyone except "no" counts');
+    pl = C.planCounter([ev('q1', dn[1].phone.slice(1)), ev('q2', dn[1].phone.slice(1))], dn, [], { oldDonors: true });
+    assert.deepEqual(pl.sent, ['od1'], 'two messages to one old donor are one DM');
+    pl = C.planCounter([ev('q3', dn[1].phone.slice(1))], dn, [], { oldDonors: true, counted: ['od1'] });
+    assert.equal(pl.sent.length, 0, 'a donor already counted on this task never counts again');
+
+    // 9b. the add-on on a real old-donors task.
+    db = freshDb([oldTask()]);
+    db.donors = set(['new', 'sent', 'replied', 'donated', 'no']);
+    let rr = await recordCounterEvents('tok', 'teammate', dn.map((d, i) => ev('a' + i, d.phone.slice(1))));
+    assert.equal(rr.counted, 4);
+    assert.equal(db.tasks[0].reportedDone, 4, 'four old/new donors = 4 on her task');
+    assert.equal(db.donors.find((d) => d.id === 'od4').status, 'no', 'a donor who said no is left alone');
+    assert.equal(db.donors.find((d) => d.id === 'od4').sends, 1);
+    assert.deepEqual([...db.tasks[0].countedDonors].sort(), ['od0', 'od1', 'od2', 'od3']);
+    const sendsBefore = db.donors.map((d) => d.sends);
+    rr = await recordCounterEvents('tok', 'teammate', [ev('b1', dn[1].phone.slice(1)), ev('b2', dn[3].phone.slice(1))]);
+    assert.equal(rr.counted, 0, 'a second message to the same old donor does not count');
+    assert.equal(db.tasks[0].reportedDone, 4);
+    assert.deepEqual(db.donors.map((d) => d.sends), sendsBefore, 'and does not change the donor');
+
+    // 9c. his own add-on keeps the normal rule on her task: it never moves her count.
+    db = freshDb([oldTask()]);
+    db.donors = set(['sent', 'sent']);
+    rr = await recordCounterEvents('tok', 'manager', [ev('m1', db.donors[0].phone.slice(1))]);
+    assert.equal(rr.counted, 0, 'his DM to an old donor is not a first contact');
+    assert.equal(db.tasks[0].reportedDone, 0);
+
+    // 9d. her "Sent" tap and the add-on never count the same donor twice.
+    db = freshDb([oldTask()]);
+    db.donors = set(['sent', 'donated']);
+    await markDonor('teammate', 'od0', 'sent');
+    assert.equal(db.tasks[0].reportedDone, 1, 'her tap on an old donor counts');
+    assert.deepEqual(db.tasks[0].countedDonors, ['od0']);
+    rr = await recordCounterEvents('tok', 'teammate', [ev('t1', db.donors[0].phone.slice(1)), ev('t2', db.donors[1].phone.slice(1))]);
+    assert.equal(rr.counted, 1, 'the add-on counts only the donor she did not tap');
+    assert.equal(db.tasks[0].reportedDone, 2, 'no double count');
+    await markDonor('teammate', 'od1', 'undo');
+    assert.equal(db.tasks[0].reportedDone, 1, 'undo takes it back');
+    assert.deepEqual(db.tasks[0].countedDonors, ['od0'], 'and frees that donor to count again');
+    rr = await recordCounterEvents('tok', 'teammate', [ev('t3', db.donors[1].phone.slice(1))]);
+    assert.equal(db.tasks[0].reportedDone, 2, 'a real DM after the undo counts');
+
+    // 9e. past the target: the count stops, and a donor is still marked only once.
+    db = freshDb([{ ...oldTask(), target: 1 }]);
+    db.donors = set(['sent', 'sent', 'sent']);
+    await recordCounterEvents('tok', 'teammate', db.donors.map((d, i) => ev('f' + i, d.phone.slice(1))));
+    assert.equal(db.tasks[0].reportedDone, 1, 'the count stops at the target');
+    const sends1 = db.donors.map((d) => d.sends);
+    await recordCounterEvents('tok', 'teammate', db.donors.map((d, i) => ev('g' + i, d.phone.slice(1))));
+    assert.deepEqual(db.donors.map((d) => d.sends), sends1, 'more messages to the same donors change nothing');
+
+    // 9f. a normal task is untouched by all this.
+    db = freshDb([task()]);
+    db.donors = set(['new', 'sent']);
+    rr = await recordCounterEvents('tok', 'teammate', db.donors.map((d, i) => ev('n' + i, d.phone.slice(1))));
+    assert.equal(rr.counted, 1, 'without the switch only the new donor counts');
+
+    // 9g. the switch itself.
+    db = freshDb([task()]);
+    db.donors = set(['sent']);
+    let sw = await setOldDonors(true);
+    assert.deepEqual(sw, { ok: true, on: true });
+    assert.equal(db.tasks[0].oldDonors, true);
+    assert.ok(db.messages.some((m) => m.owner === 'teammate' && /old donors/i.test(m.text)), 'she is told');
+    const nMsg = db.messages.length;
+    await setOldDonors(true);
+    assert.equal(db.messages.length, nMsg, 'switching to the same value says nothing');
+    rr = await recordCounterEvents('tok', 'teammate', [ev('s1', db.donors[0].phone.slice(1))]);
+    assert.equal(rr.counted, 1, 'the switch changes the counting right away');
+    sw = await setOldDonors(false);
+    assert.equal(sw.on, false);
+    assert.equal(db.tasks[0].oldDonors, undefined);
+    db = freshDb([{ ...task(), status: 'done' }]);
+    sw = await setOldDonors(true);
+    assert.equal(sw.ok, false, 'no running DM task: nothing to switch');
+    db = freshDb([{ ...task(), kind: 'general' }]);
+    assert.equal((await setOldDonors(true)).ok, false, 'only a DM task has the switch');
+
+    // 9h. words that turn it on at assignment ("avoid old donors" means the opposite).
+    for (const t of ['old donors', 'Message 30 previous donors only', 'purane donors ko', 'past donors', 'contact the donors we already messaged', 'donors we messaged before'.replace('before', '')]) assert.equal(wantsOldDonors(t), true, t);
+    for (const t of ['send 30 DMs by 6pm', 'avoid old donors', "don't message previous donors", 'skip past donors', 'new donors only', 'old people', '']) assert.equal(wantsOldDonors(t), false, t);
+    db = freshDb();
+    db.settings.dailyTarget = 20;
+    db.tasks = [];
+    await handleManagerMessage('Areeba send 20 DMs to previous donors in 2 hours');
+    assert.equal(db.tasks.at(-1)?.oldDonors, true, 'saying "previous donors" in the task turns it on');
+    assert.ok(db.messages.some((m) => m.owner === 'teammate' && /Old donors count/.test(m.text)), 'her task message says so');
+    db = freshDb();
+    db.tasks = [];
+    await handleManagerMessage('Areeba send 20 DMs in 2 hours');
+    assert.equal(db.tasks.at(-1)?.oldDonors, undefined, 'a plain task has the switch off');
+    db = freshDb();
+    db.tasks = [];
+    await handleManagerMessage('Areeba send 20 DMs in 2 hours, avoid old donors');
+    assert.equal(db.tasks.at(-1)?.oldDonors, undefined, '"avoid old donors" keeps it off');
+    db = freshDb();
+    db.tasks = [];
+    await handleManagerMessage('Areeba send DMs to previous donors');
+    assert.ok(db.agent.pendingAssignment, 'a draft first (no number, no time)');
+    await handleManagerMessage('30 in 3 hours');
+    assert.equal(db.tasks.at(-1)?.oldDonors, true, 'the draft remembers old donors');
+    assert.equal(db.tasks.at(-1)?.target, 30);
+
+    // 9i. stress: random batches on an old-donors task. Rules checked after every batch.
+    seedN = Number(process.env.SEED || 7) + 99;
+    db = freshDb([{ ...oldTask(), target: 12 }]);
+    const stat = ['new', 'sent', 'replied', 'donated', 'no'];
+    db.donors = Array.from({ length: 20 }, (_, i) => mk(stat[i % 5], i < 10 ? i : 10 + i).id && { ...mk(stat[i % 5], i), phone: '+92311000' + String(1000 + i) });
+    const startSends = Object.fromEntries(db.donors.map((d) => [d.id, d.sends]));
+    const startStatus = Object.fromEntries(db.donors.map((d) => [d.id, d.status]));
+    let lastD = 0;
+    for (let i = 0; i < 1500; i++) {
+      const batch = [];
+      for (let j = 0, n = Math.floor(rnd() * 5); j < n; j++) {
+        const d = db.donors[Math.floor(rnd() * db.donors.length)];
+        batch.push(ev(`x${i}_${j}`, d.phone.slice(1), rnd() < 0.8 ? 'out' : 'in'));
+      }
+      await recordCounterEvents('tok', 'teammate', batch);
+      const t = db.tasks[0];
+      assert.ok(t.reportedDone >= lastD && t.reportedDone <= t.target, 'count only goes up and stops at the target');
+      assert.equal(new Set(t.countedDonors ?? []).size, (t.countedDonors ?? []).length, 'no donor is listed twice');
+      lastD = t.reportedDone;
+    }
+    for (const d of db.donors) {
+      if (startStatus[d.id] === 'no') assert.equal(d.sends, startSends[d.id], 'a donor who said no is never touched');
+      assert.ok(d.sends <= startSends[d.id] + 1, 'one counted DM per donor per task');
+    }
+    assert.equal(db.tasks[0].reportedDone, Math.min(12, db.donors.filter((d) => startStatus[d.id] !== 'no' && d.sends > startSends[d.id]).length), 'her count equals the donors really messaged');
+  }
 
   console.log('counter regression: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

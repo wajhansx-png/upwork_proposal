@@ -443,6 +443,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [optimistic, setOptimistic] = useState<ChatMessage | null>(null);
+  const [switching, setSwitching] = useState(false);
   const lastAgentAtSend = useRef<string | undefined>(undefined);
   const thread = useRef<HTMLDivElement>(null);
   const conversation = s.messages.slice(-40);
@@ -480,6 +481,20 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
     setText("");
     void post(t);
   };
+  const flipOldDonors = async () => {
+    if (switching || !task) return;
+    setSwitching(true);
+    setError("");
+    try {
+      await api("/api/task-switch", "POST", { oldDonors: !task.oldDonors });
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSwitching(false);
+    }
+  };
+  const canSwitch = !!task && task.kind === "dms" && (task.status === "open" || task.status === "missed");
   const sent = task?.kind === "dms" ? task.reportedDone ?? 0 : task && (task.status === "review" || task.status === "done") ? 1 : 0;
   const target = task?.kind === "dms" ? task.target : task ? 1 : 0;
   const open = task?.status === "open";
@@ -523,6 +538,15 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
           <span className="status-main"><i />{label}</span>
           {task && open && <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} bare />}
         </p>
+        {canSwitch && !chatOpen && (
+          <>
+            <button className={`old-switch ${task!.oldDonors ? "on" : ""}`} role="switch" aria-checked={!!task!.oldDonors} disabled={switching} onClick={() => void flipOldDonors()}>
+              <span>Old donors</span><b>{task!.oldDonors ? "ON" : "OFF"}</b>
+            </button>
+            <p className="best-hint">{task!.oldDonors ? `ON: each old donor ${name} messages counts once.` : `OFF: only new donors count. Turn on for a task of old donors.`}</p>
+          </>
+        )}
+        {error && !chatOpen && <p role="alert" className="err">{error}</p>}
         {!open && !chatOpen && s.bestTime && (
           <p className="best-hint">⏰ {name} sends most DMs {s.bestTime.label} ({Math.round((s.bestTime.sends / s.bestTime.total) * 100)}% of her last {s.bestTime.total} DMs, {s.bestTime.days} days). Give her tasks just before that.</p>
         )}

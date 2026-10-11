@@ -1,7 +1,7 @@
 import { newId, readDb, withDb } from "./db";
 import { notify } from "./push";
 import { extractCheckEvery, fmtDuration, fmtMinutes, fmtWhen, parseDeadline, parseTarget, zparts } from "./time";
-import { extractGap, extractInstructions, managerCommand, parseManager, type ManagerCommand } from "./nlp";
+import { extractGap, extractInstructions, managerCommand, parseManager, wantsOldDonors, type ManagerCommand } from "./nlp";
 import { makeNudgeOpeners, simplifyTask, understandManager, understandTeammate, type Intent, type Understood } from "./understand";
 import type { TeammateFacts } from "./prompts";
 import type { CaseFile, ChatMessage, Db, Donor, PendingAssignment, Role, Task } from "./types";
@@ -489,6 +489,8 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
           say(d, "teammate", `Your manager replaced the previous task: ${active.title}. Please use the new task below.`);
         }
         const target = intent.taskKind === "dms" ? intent.target! : 1;
+        // "old donors" / "previous donors" in what he said (or in the draft he is finishing) turns the switch on.
+        const oldDonors = intent.taskKind === "dms" && wantsOldDonors([draftNow && !fullNewTask ? draftNow.request : "", text, intent.brief ?? ""].join(" "));
         const title = simple?.title || intent.title || `Send ${target} DMs`;
         const steps = simple?.steps ?? [];
         const task: Task = {
@@ -505,6 +507,7 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
           ...(intent.brief ? { brief: steps.length ? steps.join("; ") : intent.brief } : {}),
           ...(intent.checkEvery ? { checkEvery: intent.checkEvery } : {}),
           ...(intent.gapMinutes ? { gapMinutes: intent.gapMinutes } : {}),
+          ...(oldDonors ? { oldDonors: true } : {}),
           remindersEnabled: true,
           timerEnabled: true,
           lastReportAt: new Date(now).toISOString(),
@@ -513,7 +516,7 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
         d.tasks.push(task);
         d.agent.pendingAssignment = undefined;
         const when = fmtWhen(deadline, now, tz);
-        const bullets = [...steps, ...(intent.gapMinutes ? [`Wait ${fmtMinutes(intent.gapMinutes)} between DMs`] : [])].map((x) => `• ${x}`).join("\n");
+        const bullets = [...steps, ...(intent.gapMinutes ? [`Wait ${fmtMinutes(intent.gapMinutes)} between DMs`] : []), ...(oldDonors ? [OLD_DONORS_LINE] : [])].map((x) => `• ${x}`).join("\n");
         say(
           d,
           "teammate",
@@ -1275,6 +1278,9 @@ export async function markDonor(role: Role, id: string, action: DonorAction, opt
     let delta = applyDonorAction(donor, action, iso(now), { amount: opts.amount, counts, caseId: open?.id, taskId: task?.id });
     // Undo takes 1 back only from the same task it was added to.
     if (action === "undo" && delta < 0 && undo?.taskId !== task?.id) delta = 0;
+    // Remember which donors counted for this task (the add-on's "old donors" rule counts each one once).
+    if (task && action === "sent" && delta > 0 && !(task.countedDonors ?? []).includes(donor.id)) (task.countedDonors ??= []).push(donor.id);
+    if (task && action === "undo" && delta < 0) task.countedDonors = (task.countedDonors ?? []).filter((x) => x !== donor.id);
     // A gift lowers the open case's amount left; undo adds that gift back (a newer amount the manager typed is kept).
     let caseLine = "";
     if (open && action === "donated" && opts.amount && opts.amount > 0 && donor.undo) {
@@ -1323,6 +1329,27 @@ export async function saveDonor(input: { id?: string; name?: string; phone?: str
   });
 }
 
+// ---------- old donors switch ----------
+
+const OLD_DONORS_LINE = "Old donors count: each old donor you message counts once";
+
+/** Manager only: turn "old donors" on or off for the running DM task. Donors already counted stay counted. */
+export async function setOldDonors(on: boolean, opts: { defer?: Defer } = {}): Promise<{ ok: boolean; on: boolean; error?: string }> {
+  const pushes: Push[] = [];
+  const result = await withDb((d) => {
+    const t = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.kind === "dms");
+    if (!t) return { ok: false, on: false, error: "There is no running DM task." };
+    if (!!t.oldDonors === on) return { ok: true, on };
+    t.oldDonors = on || undefined;
+    const msg = on ? `Your manager says this task is for old donors. ${OLD_DONORS_LINE}.` : "Your manager turned off old donors. Only new donors count now.";
+    say(d, "teammate", msg, "agent", { kind: "update" });
+    pushes.push({ role: "teammate", title: "Task updated", body: msg, persistent: true, tag: `mgr-${t.id}`, taskId: t.id });
+    return { ok: true, on };
+  });
+  await sendPushes(pushes, opts.defer);
+  return result;
+}
+
 // ---------- WhatsApp counter add-on ----------
 
 const randToken = () => `gc_${crypto.randomUUID().replace(/-/g, "")}${crypto.randomUUID().replace(/-/g, "").slice(0, 8)}`;
@@ -1356,11 +1383,13 @@ export async function recordCounterEvents(token: string, from: Role, events: Cou
     const c = d.agent.counter;
     // The token is the add-on's key. A wrong token, or the switch off, means do nothing.
     if (!c?.token || token !== c.token || !c.on) return { delta: 0, result: { ok: false, on: !!c?.on, counted: 0, replied: 0, unknown: 0 } };
-    const plan = planCounter(clean, d.donors, c.seen ?? []);
+    const task = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.kind === "dms");
+    // Only HER add-on follows the old-donors rule; his own DMs keep the normal first-contact rule.
+    const oldRule = !!task?.oldDonors && from === "teammate";
+    const plan = planCounter(clean, d.donors, c.seen ?? [], { oldDonors: oldRule, counted: task?.countedDonors });
     c.seen = plan.seen;
     c.lastAt = iso(now);
     c.lastFrom = from;
-    const task = [...d.tasks].reverse().find((x) => (x.status === "open" || x.status === "missed") && x.kind === "dms");
     // Only HER add-on moves HER task count. His own DMs mark donors sent but never touch her count.
     const room = task && from === "teammate" ? Math.max(0, task.target - (task.reportedDone ?? 0)) : 0;
     const open = openCase(d);
@@ -1369,7 +1398,10 @@ export async function recordCounterEvents(token: string, from: Role, events: Cou
       const donor = d.donors.find((x) => x.id === id);
       if (!donor) continue;
       const counts = delta < room;
-      delta += applyDonorAction(donor, "sent", iso(now), { counts, caseId: open?.id, taskId: task?.id });
+      const add = applyDonorAction(donor, "sent", iso(now), { counts, caseId: open?.id, taskId: task?.id });
+      delta += add;
+      // On an old-donors task every donor she touched is remembered, even past the target, so one donor is never marked twice.
+      if ((add > 0 || oldRule) && task && !(task.countedDonors ?? []).includes(id)) (task.countedDonors ??= []).push(id);
     }
     for (const id of plan.replied) {
       const donor = d.donors.find((x) => x.id === id);

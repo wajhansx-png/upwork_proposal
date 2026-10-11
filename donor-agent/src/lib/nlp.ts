@@ -405,3 +405,14 @@ export function overlap(claimed: string, source: string) {
   if (!w.length) return 1;
   return w.filter((x) => src.has(x)).length / w.length;
 }
+
+/** The manager means donors who were messaged before: "old donors", "previous donors", "purane donors". "Avoid old donors" means the opposite. */
+export function wantsOldDonors(text: string): boolean {
+  const re = /\b(?:old|older|previous|past|purane|puranay|repeat|returning|existing)\s+(?:donors?|donars?|contacts?)\b|\b(?:donors?|contacts?)\s+(?:we|i|you)\s+(?:already\s+)?(?:messaged|contacted|texted)\b|\balready\s+(?:messaged|contacted|texted)\s+(?:donors?|contacts?)\b/gi;
+  for (const m of text.matchAll(re)) {
+    const before = text.slice(Math.max(0, (m.index ?? 0) - 30), m.index ?? 0);
+    if (/\b(?:avoid|skip|exclude|except|without|not|no|never|don'?t|do not|nahi)\b[^.;\n]*$/i.test(before)) continue;
+    return true;
+  }
+  return false;
+}
