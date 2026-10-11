@@ -1,13 +1,11 @@
-// Checks the real server: logins, roles, broken input. Start the app first (npm run build && npm start), then:
-//   MANAGER_LINK_CODE=... node scripts/api-check.cjs
+// Checks the real server: roles, broken input. Start the app first (npm run build && npm start), then:
+//   node scripts/api-check.cjs
 const assert = require('node:assert/strict');
 const B = process.env.BASE ?? 'http://localhost:43118';
-const CODE = process.env.MANAGER_LINK_CODE ?? 'testcode123';
-let cookie = '';
 const call = async (path, { method = 'GET', as, body, raw, headers = {} } = {}) => {
   const res = await fetch(B + path, {
     method,
-    headers: { ...(as ? { 'x-as': as } : {}), ...(cookie && as !== 'teammate-nocookie' ? { cookie } : {}), ...(body !== undefined || raw !== undefined ? { 'content-type': 'application/json' } : {}), ...headers },
+    headers: { ...(as ? { 'x-as': as } : {}), ...(body !== undefined || raw !== undefined ? { 'content-type': 'application/json' } : {}), ...headers },
     body: raw ?? (body !== undefined ? JSON.stringify(body) : undefined),
   });
   const text = await res.text();
@@ -18,18 +16,11 @@ const call = async (path, { method = 'GET', as, body, raw, headers = {} } = {}) 
 (async () => {
   // Pages load.
   for (const p of ['/', '/areeba', '/manager']) assert.ok([200, 307, 308].includes((await fetch(B + p, { redirect: 'manual' })).status), `page ${p}`);
-  // Manager is locked without the link code; the teammate page is open.
-  assert.equal((await call('/api/state', { as: 'manager' })).status, 401);
-  assert.equal((await call('/api/state', { as: 'teammate' })).status, 200);
-  for (const bad of [{}, { code: 'wrong' }, { code: 123 }]) assert.equal((await call('/api/login', { method: 'POST', body: bad })).status, 401, `bad login ${JSON.stringify(bad)}`);
-  assert.equal((await call('/api/login', { method: 'POST', raw: '{not json' })).status, 401, 'broken JSON login');
-  // Five wrong codes lock the login for a while (stops guessing).
-  const locked = await call('/api/login', { method: 'POST', body: { code: CODE } });
-  assert.ok([200, 429].includes(locked.status), 'after 6 wrong codes the right one may be locked');
-  if (locked.status === 429) { console.log('note: login locked for 15 min after wrong tries (expected); restart with a fresh data folder to finish'); return; }
-  cookie = (await fetch(B + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: CODE }) })).headers.get('set-cookie')?.split(';')[0] ?? '';
-  assert.ok(cookie.startsWith('dd_m='), 'manager cookie set');
-  assert.equal((await call('/api/state', { as: 'manager' })).status, 200);
+  // Both pages are public links: the x-as header picks the role, and a missing header means the teammate.
+  assert.equal((await call('/api/state', { as: 'manager' })).json.role, 'manager');
+  assert.equal((await call('/api/state', { as: 'teammate' })).json.role, 'teammate');
+  assert.equal((await call('/api/state')).json.role, 'teammate', 'no header = teammate');
+  assert.equal((await call('/api/login', { method: 'POST', body: { code: 'x' } })).status, 404, 'the sign-in route is gone');
   // Teammate cannot act as manager, even with the manager's cookie in the same browser but x-as teammate.
   assert.equal((await call('/api/ai-test', { method: 'POST', as: 'teammate' })).status, 403);
   assert.equal((await call('/api/progress', { method: 'POST', as: 'manager', body: { total: 5 } })).status, 401, 'manager cannot press her + button');
@@ -55,5 +46,5 @@ const call = async (path, { method = 'GET', as, body, raw, headers = {} } = {}) 
   // Manifest and clock.
   assert.equal((await call('/api/manifest?for=manager')).status, 200);
   assert.ok((await call('/api/agent/run', { method: 'POST', as: 'teammate' })).status < 500);
-  console.log('PASS: API locks the manager page, rejects wrong roles, survives broken/huge input, protects push ownership and image paths.');
+  console.log('PASS: API roles follow the page header, wrong roles are rejected, survives broken/huge input, protects push ownership and image paths.');
 })().catch((e) => { console.error(e); process.exitCode = 1; });

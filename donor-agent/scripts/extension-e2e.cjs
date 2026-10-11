@@ -7,8 +7,7 @@ const APP = 'http://localhost:43118';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 (async () => {
   // 1. manager: log in, turn the counter on, make a task for Areeba
-  const mj = await (await fetch(APP + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json', 'x-as': 'manager' }, body: JSON.stringify({ code: 'localtest' }) })).headers.get('set-cookie');
-  const cookie = mj.split(';')[0];
+  const cookie = '';
   const mgr = (url, body) => fetch(APP + url, { method: 'POST', headers: { 'content-type': 'application/json', 'x-as': 'manager', cookie }, body: JSON.stringify(body) }).then((r) => r.json());
   const { token } = await mgr('/api/counter/pair', { action: 'on' });
   await mgr('/api/messages', { text: 'Areeba send 10 DMs by 11:30pm' });

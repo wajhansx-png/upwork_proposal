@@ -63,8 +63,8 @@ export default function App({ entry }: { entry: "manager" | "teammate" }) {
     try {
       setState(await api<State>("/api/state"));
       setProblem("");
-    } catch (e) {
-      if ((e as { status?: number }).status === 401) setProblem("not-signed-in");
+    } catch {
+      // A short network drop: keep showing the last screen; the next refresh fixes it.
     }
   }, []);
 
@@ -75,17 +75,8 @@ export default function App({ entry }: { entry: "manager" | "teammate" }) {
       link.href = `/api/manifest?for=${entry === "manager" ? "manager" : "areeba"}`;
       document.head.appendChild(link);
       if (entry === "manager") {
-        const code = new URLSearchParams(location.search).get("k");
-        if (code) {
-          try {
-            await api("/api/login", "POST", { code });
-          } catch (e) {
-            setProblem((e as Error).message);
-            return;
-          } finally {
-            history.replaceState(null, "", "/manager");
-          }
-        }
+        // Old private links (/manager?k=...) still open: just tidy the address.
+        if (location.search) history.replaceState(null, "", "/manager");
         void reclaimAlerts();
       }
       await refresh();
@@ -109,7 +100,7 @@ export default function App({ entry }: { entry: "manager" | "teammate" }) {
     return (
       <main className="login card">
         <h1>Donor Desk</h1>
-        <p>{problem === "not-signed-in" ? "Please open your private manager link once on this phone." : problem}</p>
+        <p>{problem}</p>
       </main>
     );
   if (!state) return <main><p className="hint">Loading…</p></main>;
