@@ -34,7 +34,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await ctx.route('https://web.whatsapp.com/**', (route) => route.fulfill({ contentType: 'text/html', body: '<body><div id="app"></div></body>' }));
   const wa = await ctx.newPage();
   await wa.goto('https://web.whatsapp.com/');
-  await sleep(3500);
+  await sleep(9000); // the add-on treats WhatsApp's first seconds as loading
   console.log('badge on the page:', await wa.locator('text=GiveLife Counter ON').count());
   const add = (id) => wa.evaluate((i) => { const el = document.createElement('div'); el.setAttribute('data-id', i); el.innerHTML = '<span>private text</span>'; document.getElementById('app').appendChild(el); }, id);
 

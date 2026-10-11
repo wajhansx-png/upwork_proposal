@@ -24,7 +24,7 @@ const toHer = async (m) => { const n = db.messages.length; await A.handleTeammat
 const toMgr = async (m) => { const n = db.messages.length; await A.handleManagerMessage(m); return { me: db.messages.slice(n).filter((x) => x.owner === 'manager' && x.from === 'agent').map((x) => x.text).join('\n'), her: db.messages.slice(n).filter((x) => x.owner === 'teammate').map((x) => x.text).join('\n') }; };
 
 (async () => {
-  await toMgr('Areeba send 100 DMs by 11:59pm');
+  await toMgr('Areeba send 100 DMs in 6 hours');
   // Her questions are answered from facts, not passed on.
   assert.match(await toHer('hi'), /Hi Areeba!.*\n.*start now/s);
   assert.match(await toHer('ok'), /start now/, 'an ok before starting is pushed to start');
