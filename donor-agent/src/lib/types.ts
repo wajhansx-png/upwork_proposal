@@ -244,6 +244,8 @@ export interface AgentState {
   heldAnswer?: string;
   /** When her DMs went out (ms), oldest first, capped. Used to find her best hours. */
   sendLog?: number[];
+  /** The count the manager's screen last showed him, and when. Areeba sees "Manager saw your progress" only while it matches her count. */
+  managerSeen?: { at: string; taskId: string; done: number };
   /** The WhatsApp counter add-on. */
   counter?: {
     /** Secret the add-on sends with each update. Empty until the manager turns it on. */

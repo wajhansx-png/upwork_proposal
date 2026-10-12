@@ -4,6 +4,7 @@ import { readDb, usingPersistentStore, withDb } from "@/lib/db";
 import { aiKind, visionEnabled } from "@/lib/llm";
 import { pushEnabled } from "@/lib/push";
 import { bestTime } from "@/lib/besttime";
+import { managerSeenAt, noteManagerSeen } from "@/lib/seen";
 
 export async function GET(req: NextRequest) {
   const role = await getRole(req);
@@ -20,6 +21,8 @@ export async function GET(req: NextRequest) {
       });
     }
   }
+
+  if (role === "manager") db = await noteManagerSeen(db, Date.now());
 
   const manager = role === "manager";
   return NextResponse.json({
@@ -40,6 +43,8 @@ export async function GET(req: NextRequest) {
       const base = { on: !!c?.on, lastAt: c?.lastAt, sentToday: c?.sentToday ?? 0 };
       return manager ? { ...base, token: c?.token ?? "", linked: !!c?.lastAt } : base;
     })(),
+    // Only for her: when he last saw the count she sees now. Null if he has not seen her latest number.
+    managerSeenAt: manager ? undefined : managerSeenAt(db),
     now: new Date().toISOString(),
     vapidPublicKey: pushEnabled() ? process.env.VAPID_PUBLIC_KEY : null,
   });

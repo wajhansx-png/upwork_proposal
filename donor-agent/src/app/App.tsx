@@ -14,6 +14,7 @@ interface State {
   system?: { ai: "key" | "shared" | "off"; vision: boolean; push: boolean; persistent: boolean };
   counter?: { on: boolean; lastAt?: string; sentToday: number; token?: string; linked?: boolean };
   bestTime?: { label: string; sends: number; total: number; days: number } | null;
+  managerSeenAt?: string | null;
   vapidPublicKey: string | null;
   now: string;
 }
@@ -762,7 +763,7 @@ function CounterPanel({ s, refresh }: { s: State; refresh: () => void }) {
 // ---------- Areeba ----------
 
 /** The teddy on her screen: it only reacts to real things (her count, a new task, the deadline, her silence on screen). */
-function useHerBot(task: Task | undefined, value: number, busy: boolean, nowMs: number) {
+function useHerBot(task: Task | undefined, value: number, busy: boolean, nowMs: number, seenAt?: string | null) {
   const bot = useBot();
   const { fire } = bot;
   const [combo, setCombo] = useState(0);
@@ -797,6 +798,15 @@ function useHerBot(task: Task | undefined, value: number, busy: boolean, nowMs: 
     if (goal && goal > value && goal - value <= 3) return fire("jump", `${goal - value} more to your goal!`);
     fire("jump", oneOf(["Yay! +1 💕", "Nice one!", "Keep going!", "So fast! ⚡", "One more smile 🙂", "Love it! 💖"]));
   }, [value, taskId, target, goal, fire]);
+
+  // The manager just opened his screen on her latest count: say so. Not on first load, and not for an old sighting.
+  const seenPrev = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const p = seenPrev.current;
+    seenPrev.current = seenAt ?? null;
+    if (p === undefined || p || !seenAt || nowMs - new Date(seenAt).getTime() > 45_000) return;
+    fire("hello", "Manager just saw your progress 👀");
+  }, [seenAt, nowMs, fire]);
 
   // If she stops touching the screen for a while during a task, the teddy peeks and taps the glass.
   useEffect(() => {
@@ -910,7 +920,8 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
     }, 1000);
   };
   const tone: Tone = !task ? "idle" : task.status === "missed" ? "bad" : "good";
-  const teddy = useHerBot(task, value, busy, new Date(s.now).getTime());
+  const seenAt = local === null && canCount ? s.managerSeenAt : null;
+  const teddy = useHerBot(task, value, busy, new Date(s.now).getTime(), seenAt);
   return (
     <main className={`p-shell her ${typing ? "is-typing" : ""}`}>
       <header className="her-top">
@@ -946,6 +957,7 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
           ) : (
             <p className="hint">Tell {AGENT} when it is done.</p>
           )}
+          {canCount && <SeenLine at={seenAt} nowMs={new Date(s.now).getTime()} />}
         </section>
       ))}
 
@@ -964,6 +976,15 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
       </section>
     </main>
   );
+}
+
+/** "Manager saw your progress · 2 min ago". Shown only when it is true: he really opened his screen after her latest count. */
+function SeenLine({ at, nowMs }: { at?: string | null; nowMs: number }) {
+  const sec = at ? Math.max(0, Math.round((nowMs - new Date(at).getTime()) / 1000)) : Infinity;
+  // Nothing to say: keep the space, so the screen does not jump when the line comes and goes.
+  if (!at || sec > 12 * 3600) return <p className="seen-line empty" aria-hidden>&nbsp;</p>;
+  const ago = sec < 60 ? "just now" : sec < 3600 ? `${Math.floor(sec / 60)} min ago` : `${Math.floor(sec / 3600)} hr ago`;
+  return <p className="seen-line"><i aria-hidden />Manager saw your progress · {ago}</p>;
 }
 
 function Composer({ onSend, busy, placeholder, onFocusChange }: { onSend: (text: string, image?: string) => Promise<void>; busy: boolean; placeholder: string; onFocusChange?: (on: boolean) => void }) {
