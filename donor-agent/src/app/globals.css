@@ -391,3 +391,10 @@ span.bell-btn{display:inline-flex;align-items:center}
 .her-top h1{white-space:nowrap}
 @media (max-width:400px){.her-top{gap:6px}.her-hi{gap:6px}.her-top h1{font-size:1.02rem}.her-top .top-btns{gap:4px}.her-top .bell-btn{padding:5px 9px;font-size:.78rem}}
 .her-top h1{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* ===== Notifications banner on her screen ===== */
+.alert-banner{flex:none;display:grid;gap:10px;padding:12px 14px;border-radius:18px;background:var(--glass),var(--brand-soft);border:1px solid var(--brand)}
+.alert-banner p{margin:0;display:grid;gap:2px}
+.alert-banner b{font-size:1rem}
+.alert-banner span{font-size:.85rem;color:var(--mute);line-height:1.35}
+.alert-cta{min-height:48px;border-radius:14px;border:0;background:var(--grad);color:#06120e;font:inherit;font-size:1rem;font-weight:800;box-shadow:var(--glow)}

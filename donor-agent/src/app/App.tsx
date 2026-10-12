@@ -132,7 +132,7 @@ function useAlerts(s: State) {
           (e: Error & { status?: number }) => {
             if (e.status === 409) {
               setOwner("manager");
-              setNote(`This phone gets the manager's alerts. ${s.settings.teammateName} must open this page on her own phone and tap 🔔 Turn on.`);
+              setNote(`This phone gets the manager's alerts. ${s.settings.teammateName} must open this page on her own phone and tap Turn on notifications.`);
             }
           },
         );
@@ -985,12 +985,17 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
           <h1>Hi {name}</h1>
         </div>
         <div className="top-btns">
-          {alerts.subscribed === false && <button className="bell-btn off" onClick={alerts.enable} aria-label="Turn on alerts">🔔 Turn on</button>}
           {alerts.subscribed && alerts.owner === "me" && <span className="bell-btn on">🔔 On ✓</span>}
           {alerts.subscribed && alerts.owner === "manager" && <span className="bell-btn warn">🔔 Manager</span>}
           <a className="bell-btn" href="/areeba/donors">Donors</a>
         </div>
       </header>
+      {alerts.subscribed === false && !typing && (
+        <section className="alert-banner" aria-label="Notifications">
+          <p><b>Notifications are off</b><span>Turn them on, so your manager&apos;s messages reach you even when the app is closed.</span></p>
+          <button className="alert-cta" onClick={alerts.enable}>🔔 Turn on notifications</button>
+        </section>
+      )}
       {alerts.note && <p className="hint">{alerts.note}</p>}
 
       {task && (typing ? (
