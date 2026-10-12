@@ -15,8 +15,8 @@ export function GET(req: NextRequest) {
       start_url: start,
       scope: "/",
       display: "standalone",
-      background_color: "#f3f5f3",
-      theme_color: "#1f6f5c",
+      background_color: "#080d0c",
+      theme_color: "#080d0c",
       icons: [
         { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
         { src: "/icon-512.png", sizes: "512x512", type: "image/png" },

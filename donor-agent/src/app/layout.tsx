@@ -5,10 +5,10 @@ export const metadata: Metadata = {
   title: "Donor Desk",
   description: "Donor outreach tracker with an agent that checks in for you.",
   icons: { icon: "/icon.svg", apple: "/apple-touch-icon.png" },
-  appleWebApp: { capable: true, title: "Donor Desk", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Donor Desk", statusBarStyle: "black" },
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#1f6f5c" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#080d0c", colorScheme: "dark" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
