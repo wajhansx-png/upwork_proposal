@@ -112,6 +112,9 @@ async function reclaimAlerts() {
 function useAlerts(s: State) {
   const [note, setNote] = useState("");
   const [subscribed, setSubscribed] = useState<boolean | null>(null);
+  // On her page: who gets this phone's alerts. One phone belongs to one person, and the server refuses to give the manager's phone to her.
+  const [owner, setOwner] = useState<"me" | "manager" | null>(null);
+  const role = s.role;
   useEffect(() => {
     const granted = "Notification" in window && Notification.permission === "granted";
     if (!granted || !("serviceWorker" in navigator)) {
@@ -119,8 +122,23 @@ function useAlerts(s: State) {
       setSubscribed(false);
       return;
     }
-    void navigator.serviceWorker.getRegistration("/").then(async (reg) => setSubscribed(!!(reg && (await reg.pushManager.getSubscription())))).catch(() => setSubscribed(false));
-  }, []);
+    void navigator.serviceWorker.getRegistration("/").then(async (reg) => {
+      const sub = reg ? await reg.pushManager.getSubscription() : null;
+      setSubscribed(!!sub);
+      if (sub && role === "teammate") {
+        // Also repairs a phone the server forgot. A 409 means this phone is the manager's.
+        await api("/api/push", "POST", sub.toJSON()).then(
+          () => setOwner("me"),
+          (e: Error & { status?: number }) => {
+            if (e.status === 409) {
+              setOwner("manager");
+              setNote(`This phone gets the manager's alerts. ${s.settings.teammateName} must open this page on her own phone and tap 🔔 Turn on.`);
+            }
+          },
+        );
+      }
+    }).catch(() => setSubscribed(false));
+  }, [role, s.settings.teammateName]);
   const enable = async () => {
     try {
       if (!("Notification" in window) || !("serviceWorker" in navigator))
@@ -135,9 +153,12 @@ function useAlerts(s: State) {
         (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(s.vapidPublicKey) }));
       await api("/api/push", "POST", sub.toJSON());
       setSubscribed(true);
+      setOwner("me");
       setNote("Alerts are on. They work even when Chrome is closed.");
     } catch (e) {
-      setSubscribed(false);
+      const manager = (e as { status?: number }).status === 409;
+      setSubscribed(manager);
+      if (manager) setOwner("manager");
       setNote((e as Error).message);
     }
   };
@@ -148,7 +169,7 @@ function useAlerts(s: State) {
         (e: Error) => e.message,
       ),
     );
-  return { subscribed, note, enable, test };
+  return { subscribed, owner, note, enable, test };
 }
 
 // ---------- shared pieces ----------
@@ -964,7 +985,9 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
           <h1>Hi {name}</h1>
         </div>
         <div className="top-btns">
-          {alerts.subscribed === false && <button className="bell-btn" onClick={alerts.enable} aria-label="Turn on alerts">🔔 Alerts</button>}
+          {alerts.subscribed === false && <button className="bell-btn off" onClick={alerts.enable} aria-label="Turn on alerts">🔔 Turn on</button>}
+          {alerts.subscribed && alerts.owner === "me" && <span className="bell-btn on">🔔 On ✓</span>}
+          {alerts.subscribed && alerts.owner === "manager" && <span className="bell-btn warn">🔔 Manager</span>}
           <a className="bell-btn" href="/areeba/donors">Donors</a>
         </div>
       </header>
