@@ -365,3 +365,5 @@ a.text-btn,a.bell-btn{display:inline-flex;align-items:center;text-decoration:non
 .old-switch.on{border-color:var(--brand);color:var(--ink)}
 .old-switch.on b{background:var(--grad);color:#06120e}
 .old-switch:disabled{opacity:.6}
+
+.danger-btn{background:var(--danger)!important;color:#fff!important;border-color:var(--danger)!important}

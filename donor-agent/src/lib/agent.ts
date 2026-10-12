@@ -1329,6 +1329,20 @@ export async function saveDonor(input: { id?: string; name?: string; phone?: str
   });
 }
 
+// ---------- clear chats and tasks ----------
+
+/** Manager only: delete every chat message and every task, and any unfinished draft. Donors, cases, settings and the add-on pairing stay. */
+export async function clearChatsAndTasks(): Promise<{ messages: number; tasks: number }> {
+  return withDb((d) => {
+    const out = { messages: d.messages.length, tasks: d.tasks.length };
+    d.messages = [];
+    d.tasks = [];
+    d.agent.pendingAssignment = undefined;
+    d.agent.heldAnswer = undefined;
+    return out;
+  });
+}
+
 // ---------- old donors switch ----------
 
 const OLD_DONORS_LINE = "Old donors count: each old donor you message counts once";

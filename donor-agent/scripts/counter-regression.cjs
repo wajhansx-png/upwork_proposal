@@ -19,7 +19,7 @@ Module._load = function (request, parent, ...rest) {
   return load.call(this, request, parent, ...rest);
 };
 const C = require('../src/lib/counter.ts');
-const { recordCounterEvents, setCounter, setOldDonors, markDonor, handleManagerMessage } = require('../src/lib/agent.ts');
+const { recordCounterEvents, setCounter, setOldDonors, markDonor, handleManagerMessage, clearChatsAndTasks } = require('../src/lib/agent.ts');
 const { wantsOldDonors } = require('../src/lib/nlp.ts');
 const { seedDonors } = require('../src/lib/donors.ts');
 const { makeZip } = require('../src/lib/zip.ts');
@@ -296,6 +296,28 @@ const ev = (id, phone, dir = 'out', at = now) => ({ id, phone, dir, at });
       assert.ok(d.sends <= startSends[d.id] + 1, 'one counted DM per donor per task');
     }
     assert.equal(db.tasks[0].reportedDone, Math.min(12, db.donors.filter((d) => startStatus[d.id] !== 'no' && d.sends > startSends[d.id]).length), 'her count equals the donors really messaged');
+  }
+
+  // 10. Clear all chats and tasks: those go, everything else stays.
+  {
+    db = freshDb([task(), { ...task(), id: 't2', status: 'done' }]);
+    db.messages = [{ id: 'm1', owner: 'manager', from: 'user', text: 'hi', at: iso(now) }, { id: 'm2', owner: 'teammate', from: 'agent', text: 'yo', at: iso(now) }];
+    db.agent.pendingAssignment = { kind: 'dms', request: 'x', createdAt: iso(now) };
+    db.agent.heldAnswer = 'held';
+    const donorsBefore = JSON.stringify(db.donors);
+    const out = await clearChatsAndTasks();
+    assert.deepEqual(out, { messages: 2, tasks: 2 });
+    assert.equal(db.messages.length, 0);
+    assert.equal(db.tasks.length, 0);
+    assert.equal(db.agent.pendingAssignment, undefined, 'an unfinished draft goes too');
+    assert.equal(db.agent.heldAnswer, undefined);
+    assert.equal(JSON.stringify(db.donors), donorsBefore, 'donors are untouched');
+    assert.equal(db.agent.counter.token, 'tok', 'the add-on pairing is untouched');
+    // the app still works afterwards: a new task, and the add-on with no task
+    const rr = await recordCounterEvents('tok', 'teammate', [ev('c1', db.donors.find((d) => d.phone).phone.slice(1))]);
+    assert.equal(rr.ok, true, 'the add-on still works with no task');
+    await handleManagerMessage('Areeba send 5 DMs in 2 hours');
+    assert.equal(db.tasks.length, 1, 'a new task can be made after a clear');
   }
 
   console.log('counter regression: all passed');

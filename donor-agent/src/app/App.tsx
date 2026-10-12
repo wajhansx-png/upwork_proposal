@@ -643,6 +643,39 @@ function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
       {aiTest && aiTest !== "…" ? <p className={aiTest.startsWith("✓") ? "hint" : "err"}>{aiTest}</p> : aiError ? <p className="err">Last AI error: {s.agent!.llmStatus}</p> : null}
       <QuietPanel s={s} refresh={refresh} />
       <CounterPanel s={s} refresh={refresh} />
+      <ClearPanel name={name} refresh={refresh} />
+    </div>
+  );
+}
+
+/** Deletes all chats and tasks. Two taps, so it cannot happen by accident. Donors, cases and settings stay. */
+function ClearPanel({ name, refresh }: { name: string; refresh: () => void }) {
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState("");
+  const clear = async () => {
+    setBusy(true);
+    setNote("");
+    try {
+      const r = await api<{ messages: number; tasks: number }>("/api/reset", "POST", { confirm: "CLEAR" });
+      setNote(`Cleared ${r.messages} messages and ${r.tasks} tasks.`);
+      setAsk(false);
+      await refresh();
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="counter-box">
+      <div className="set-row">
+        <span>Clear all chats and tasks</span>
+        {ask ? <button className="danger-btn" disabled={busy} onClick={() => void clear()}>{busy ? "Clearing…" : "Yes, clear all"}</button> : <button onClick={() => setAsk(true)}>Clear</button>}
+      </div>
+      <p className="hint">{ask ? `This deletes every chat (yours and ${name}'s) and every task. Donors, cases and settings stay. It cannot be undone.` : "Starts fresh. Donors, cases and settings stay."}</p>
+      {ask && <button className="text-btn" disabled={busy} onClick={() => setAsk(false)}>Cancel</button>}
+      {note && <p className="hint">{note}</p>}
     </div>
   );
 }
