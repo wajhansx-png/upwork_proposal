@@ -1,5 +1,4 @@
 export type Role = "manager" | "teammate";
-export type Channel = "whatsapp" | "email" | "instagram" | "linkedin" | "other";
 export type DonorStatus = "new" | "sent" | "replied" | "donated" | "no";
 
 export interface Donor {
@@ -135,15 +134,10 @@ export interface Task {
   checkEvery?: number;
   /** Minimum minutes between DMs, if the manager set one. */
   gapMinutes?: number;
-  /** Areeba can mute these, but the task remains active and the manager is told. */
-  remindersEnabled?: boolean;
-  timerEnabled?: boolean;
   lastReportAt?: string;
   lastReminderAt?: string;
-  lastTimerAt?: string;
   reminderPausedUntil?: string;
   lastMilestone?: number;
-  lastSilentAlertAt?: string;
   noUpdateMsgId?: string;
   /** Her question that waits for the manager's answer. */
   pendingAsk?: { kind: string; text: string; at: string };
@@ -161,12 +155,8 @@ export interface Task {
   goal?: { count: number; by: string; fromHer?: boolean };
   /** Small goals missed in a row. */
   goalMisses?: number;
-  /** The manager was already told she is too slow to finish on time. */
-  paceWarned?: boolean;
-  /** Last time this alert fired; lets it repeat if she is still behind later, instead of only once ever. */
+  /** Last time the manager was told she is too slow to finish on time. The alert can repeat after a cooldown. */
   paceWarnedAt?: string;
-  midpointSent?: boolean;
-  preDeadlineSent?: boolean;
   note?: string;
   /** Progress reported by the teammate for work completed outside this app (for example, WhatsApp DMs). */
   reportedDone?: number;
@@ -201,10 +191,10 @@ export interface Task {
   evaluation?: TaskEvaluation;
   evaluatingAt?: string;
   nextCheckAt?: string;
+  /** The background follow-up that runs the clock for this task, and when it was started. */
   workflowRunId?: string;
-  workflowError?: string;
+  workflowStartedAt?: string;
   lastWorkerAt?: string;
-  escalationSent?: boolean;
 }
 
 export interface TaskEvaluation {
@@ -224,19 +214,13 @@ export interface Settings {
   /** Default size of a DM task when the manager gives no number. */
   dailyTarget: number;
   timezone: string;
-  workStartHour: number;
   workEndHour: number;
   /** Minutes between check-ins while a task is open. */
   checkinMinutes: number;
-  /** Mark sent needs a screenshot. */
-  requireProof: boolean;
-  /** Changing this makes the old teammate link stop working. */
-  teammateKeyVersion: number;
   /** No pushes to her at night, unless her task ends before the night does. */
   quietEnabled: boolean;
   quietStartHour: number;
   quietEndHour: number;
-  template: string;
 }
 
 export interface PushSub {

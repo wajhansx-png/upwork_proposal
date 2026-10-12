@@ -4,7 +4,6 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Donor Desk",
   description: "Donor outreach tracker with an agent that checks in for you.",
-  icons: { icon: "/icon.svg", apple: "/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "Donor Desk", statusBarStyle: "black" },
 };
 

@@ -42,7 +42,7 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
       setData(await api<Data>("/api/donors"));
       setErr("");
     } catch (e) {
-      setErr((e as { status?: number }).status === 401 ? "Please open your private link first." : (e as Error).message);
+      setErr((e as Error).message);
     }
   }, []);
 

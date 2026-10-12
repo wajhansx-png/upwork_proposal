@@ -15,26 +15,17 @@ const BLOB_DB = "donor-desk/state.json";
 const BLOB_IMG = "donor-desk/proof";
 const versions = new WeakMap<Db, string>();
 
-export const DEFAULT_TEMPLATE =
-  "Hi {name}, this is {teammate} from our foundation. Thank you for supporting our work. " +
-  "I wanted to share a short update and say how much your help means to us. " +
-  "Would you be open to a quick chat this week?";
-
 function fresh(): Db {
   return {
     settings: {
       teammateName: "Areeba",
       dailyTarget: 15,
       timezone: "Asia/Karachi",
-      workStartHour: 9,
       workEndHour: 18,
       checkinMinutes: 20,
-      requireProof: true,
-      teammateKeyVersion: 1,
       quietEnabled: true,
       quietStartHour: 23,
       quietEndHour: 8,
-      template: DEFAULT_TEMPLATE,
     },
     hashes: {},
     donors: seedDonors(),

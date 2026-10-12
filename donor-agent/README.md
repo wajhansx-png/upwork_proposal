@@ -5,9 +5,9 @@ and tells you what is real. You do not chase her.
 
 ## Two pages
 
-- **You:** `https://YOUR-APP/manager`. Enter your password once per phone. Five wrong tries lock it for 15 minutes.
-- **Areeba:** her own private link (Settings -> "View Areeba's screen", or the link in the manager page). It opens only her task and chat.
-  The server refuses all manager data and actions to her.
+- **You:** `https://YOUR-APP/manager`. A public link, no sign-in. Add it to your Home Screen.
+- **Areeba:** `https://YOUR-APP/areeba`. It shows only her task and chat. The server refuses all manager actions to her.
+- Each page has its own icon, so the two apps are easy to tell apart on a phone.
 
 ## What you can say to the agent
 
@@ -69,8 +69,8 @@ These checks catch careless or lazy faking. They are not proof. For important do
 
 ## Run on your computer
 ```bash
-npm install && npm run dev      # http://localhost:43118/manager (password from .env.local)
-npm test                        # 5 test suites, no internet or AI key needed
+npm install && npm run dev      # http://localhost:43118/manager
+npm test                        # 12 test suites, no internet or AI key needed
 ```
 
 ## AI use and cost

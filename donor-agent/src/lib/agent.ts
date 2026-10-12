@@ -508,8 +508,6 @@ export async function handleManagerMessage(text: string, opts: { defer?: Defer }
           ...(intent.checkEvery ? { checkEvery: intent.checkEvery } : {}),
           ...(intent.gapMinutes ? { gapMinutes: intent.gapMinutes } : {}),
           ...(oldDonors ? { oldDonors: true } : {}),
-          remindersEnabled: true,
-          timerEnabled: true,
           lastReportAt: new Date(now).toISOString(),
         };
         task.goal = makeGoal(task, now);
@@ -899,7 +897,6 @@ export async function handleTeammateMessage(text: string, image?: ChatImage | nu
     if (t) {
       // Any message from her means she is answering, so she is not "silent".
       t.unanswered = 0;
-      t.escalationSent = false;
       if (u.blocked) {
         t.blockedReason = (u.blocker ?? text).slice(0, 300);
         t.reminderPausedUntil = iso(now + 10 * MIN);
@@ -1079,7 +1076,6 @@ export async function runAgent(nowMs = Date.now(), taskId?: string): Promise<Run
     const expected = task.kind === "dms" ? Math.min(task.target, Math.floor((elapsed / span) * task.target)) : 0;
     const behindBy = Math.max(0, expected - confirmed);
 
-    if (task.remindersEnabled === false) return { pushes, actions };
     // Night: no pushes to her, unless her task ends before the night does (see quiet.ts).
     if (quietUntil(d.settings, nowMs, ms(task.deadlineAt))) return { pushes, actions };
     if (task.breakUntil && nowMs >= ms(task.breakUntil)) {

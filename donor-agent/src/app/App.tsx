@@ -59,12 +59,10 @@ const currentTask = (s: State) => [...s.tasks].reverse().find((t) => t.status ==
 
 export default function App({ entry }: { entry: "manager" | "teammate" }) {
   const [state, setState] = useState<State | null>(null);
-  const [problem, setProblem] = useState("");
 
   const refresh = useCallback(async () => {
     try {
       setState(await api<State>("/api/state"));
-      setProblem("");
     } catch {
       // A short network drop: keep showing the last screen; the next refresh fixes it.
     }
@@ -98,13 +96,6 @@ export default function App({ entry }: { entry: "manager" | "teammate" }) {
     };
   }, [refresh, entry]);
 
-  if (problem)
-    return (
-      <main className="login card">
-        <h1>Donor Desk</h1>
-        <p>{problem}</p>
-      </main>
-    );
   if (!state) return <main><p className="hint">Loading…</p></main>;
   return entry === "manager" ? <Manager s={state} refresh={refresh} /> : <Teammate s={state} refresh={refresh} />;
 }

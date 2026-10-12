@@ -27,7 +27,7 @@ export async function notify(role: Role, title: string, body: string, options: {
         // High urgency wakes a sleeping phone. TTL keeps the alert for a day if the phone is off.
         await webpush.sendNotification(
           s.sub,
-          JSON.stringify({ title, body, requireInteraction: !!options.persistent, tag: options.tag, url: options.url, receiptId: options.receiptId, taskId: options.taskId }),
+          JSON.stringify({ title, body, icon: role === "manager" ? "/icon-manager-192.png" : "/icon-areeba-192.png", requireInteraction: !!options.persistent, tag: options.tag, url: options.url ?? (role === "manager" ? "/manager" : "/areeba"), receiptId: options.receiptId, taskId: options.taskId }),
           { TTL: 86_400, urgency: "high" },
         );
         accepted++;

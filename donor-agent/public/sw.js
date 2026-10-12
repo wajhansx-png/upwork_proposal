@@ -10,12 +10,12 @@ self.addEventListener("push", (event) => {
     : Promise.resolve();
   event.waitUntil(Promise.all([receipt, self.registration.showNotification(data.title, {
     body: data.body,
-    icon: "/icon-192.png",
-    badge: "/icon-192.png",
+    icon: data.icon || "/icon-areeba-192.png",
+    badge: data.icon || "/icon-areeba-192.png",
     requireInteraction: !!data.requireInteraction,
     tag: data.tag || undefined,
     renotify: !!data.tag,
-    data: { url: data.url || "/", receiptId: data.receiptId, taskId: data.taskId },
+    data: { url: data.url || "/areeba", receiptId: data.receiptId, taskId: data.taskId },
   })]));
 });
 self.addEventListener("notificationclick", (event) => {
@@ -24,6 +24,6 @@ self.addEventListener("notificationclick", (event) => {
     ? fetch("/api/push/receipt", { method: "POST", headers: { "content-type": "application/json", "x-as": "teammate" }, credentials: "include", body: JSON.stringify({ kind: "opened", receiptId: event.notification.data.receiptId, taskId: event.notification.data.taskId }) }).catch(() => undefined)
     : Promise.resolve();
   event.waitUntil(
-    Promise.all([receipt, self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => (list.length ? list[0].focus() : self.clients.openWindow(event.notification.data?.url || "/")))]),
+    Promise.all([receipt, self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => { const url = event.notification.data?.url || "/areeba"; const mine = list.find((c) => new URL(c.url).pathname.startsWith(url)); return mine ? mine.focus() : self.clients.openWindow(url); })]),
   );
 });
