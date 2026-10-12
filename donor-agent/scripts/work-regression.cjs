@@ -33,7 +33,8 @@ Module._load = function (request, parent, ...rest) {
 const { quietUntil, hourLabel } = require('../src/lib/quiet.ts');
 const B = require('../src/lib/besttime.ts');
 const { cleanNudge, makeNudgeOpeners } = require('../src/lib/understand.ts');
-const { runAgent, setProgress, handleTeammateMessage, handleManagerMessage } = require('../src/lib/agent.ts');
+const { runAgent, setProgress, handleTeammateMessage, handleManagerMessage, askForUpdate } = require('../src/lib/agent.ts');
+const { pickAsk } = require('../src/lib/ask.ts');
 
 const MIN = 60000, HOUR = 3600000;
 // Pakistan time is UTC+5 all year: 23:30 PKT = 18:30 UTC.
@@ -297,6 +298,98 @@ const S = (o = {}) => ({ timezone: 'Asia/Karachi', quietEnabled: true, quietStar
     await handleManagerMessage('Areeba send 20 DMs by 9pm');
     Date.now = rn;
     assert.ok(db.tasks[0].goal && db.tasks[0].goal.count > 0, 'a goal must exist right after assignment');
+  }
+
+  // 12. "Ask for update": a message + phone alert, different every time, never spam.
+  {
+    const base = pkt(15, 14);
+    const mk = (o = {}) => ({ id: 't1', title: 'Send 40 DMs', kind: 'dms', target: 40, status: 'open', createdAt: new Date(base - HOUR).toISOString(), deadlineAt: new Date(base + 3 * HOUR).toISOString(), unanswered: 0, reportedDone: 12, startedAt: new Date(base - 30 * MIN).toISOString(), ...o });
+    const mkdb = (t, settings = {}) => ({ settings: S({ quietEnabled: false, ...settings }), agent: {}, donors: [], cases: [], messages: [], subs: [{ role: 'teammate', sub: { endpoint: 'x', keys: { p256dh: 'a', auth: 'b' } } }], hashes: {}, tasks: t ? [t] : [] });
+    const rn = Date.now;
+    const at = async (tt, fn) => { Date.now = () => tt; try { return await fn(); } finally { Date.now = rn; } };
+
+    db = mkdb(null);
+    let r = await at(base, () => askForUpdate());
+    assert.equal(r.ok, false, 'no task: nothing to ask');
+    db = mkdb(mk({ status: 'review' }));
+    assert.equal((await at(base, () => askForUpdate())).ok, false, 'a finished task is not asked');
+
+    // One click: a message in her chat that counts as a check-in, and one loud phone alert.
+    db = mkdb(mk());
+    pushes.length = 0;
+    r = await at(base, () => askForUpdate());
+    assert.equal(r.ok, true);
+    const msg = db.messages.filter((m) => m.owner === 'teammate').at(-1);
+    assert.equal(msg.kind, 'checkin', 'it is a check-in, so her reply is read as the answer');
+    assert.equal(msg.text, r.text);
+    assert.match(msg.text, /Areeba/);
+    const alert = pushes.filter((p) => p[0] === 'teammate');
+    assert.equal(alert.length, 1, 'exactly one phone alert');
+    assert.equal(alert[0][1], 'Update please');
+    assert.equal(alert[0][2], msg.text, 'the alert says the same thing as the message');
+    assert.equal(alert[0][3].persistent, true, 'it stays on her screen until she answers');
+    assert.equal(db.tasks[0].unanswered, 1);
+    assert.equal(db.tasks[0].lastCheckAt, new Date(base).toISOString(), 'it counts as a check-in');
+    assert.ok(db.tasks[0].pushReceipts.length === 1, 'delivery is tracked like any check-in');
+
+    // Not twice in a row.
+    const n = db.messages.length;
+    pushes.length = 0;
+    r = await at(base + 20000, () => askForUpdate());
+    assert.equal(r.ok, false);
+    assert.ok(r.waitSeconds > 0 && r.waitSeconds <= 40, 'it says how long to wait');
+    assert.equal(db.messages.length, n, 'a click inside a minute sends nothing');
+    assert.equal(pushes.length, 0);
+
+    // Every click is different: 15 clicks, one minute apart, all different; the very next click never repeats the last one.
+    db = mkdb(mk({ deadlineAt: new Date(base + 6 * HOUR).toISOString() }));
+    const seen = [];
+    for (let i = 0; i < 15; i++) {
+      r = await at(base + i * 61000, () => askForUpdate());
+      assert.equal(r.ok, true);
+      seen.push(r.text);
+    }
+    assert.equal(new Set(seen).size, 15, `15 clicks gave 15 different messages, got ${new Set(seen).size}`);
+    for (const t of seen) {
+      assert.match(t, /how many|count|number|where are you at|still to go/i, `it asks for her count: ${t}`);
+      assert.doesNotMatch(t, /undefined|NaN|null|\{|\}/, `no broken text: ${t}`);
+    }
+    for (let i = 15; i < 60; i++) {
+      r = await at(base + i * 61000, () => askForUpdate());
+      assert.notEqual(r.text, db.messages.filter((m) => m.owner === 'teammate' && m.kind === 'checkin').at(-2)?.text, 'never the same as the one before');
+    }
+
+    // Numbers in the messages are real, and lines about time never show when time is up.
+    const ctx = { name: 'Areeba', done: 12, target: 40, minsLeft: 150, timeLeft: '2h 30m', title: 'x' };
+    const all = new Set();
+    for (let i = 0; i < 400; i++) all.add(pickAsk({ kind: 'dms' }, ctx, [], Math.random).text);
+    assert.ok([...all].some((t) => /12 of 40/.test(t)) && [...all].some((t) => /28 still to go/.test(t)) && [...all].some((t) => /2h 30m left/.test(t)), 'the real count and time are used');
+    assert.ok([...all].every((t) => !/\d+ of \d+/.test(t) || /12 of 40/.test(t)), 'no other numbers are made up');
+    const late = new Set();
+    for (let i = 0; i < 400; i++) late.add(pickAsk({ kind: 'dms' }, { ...ctx, minsLeft: -5, timeLeft: '0m', done: 40 }, [], Math.random).text);
+    assert.ok([...late].every((t) => !/ left/.test(t) && !/still to go/.test(t)), 'after the deadline or when all are done, no "time left" or "still to go"');
+    assert.ok(late.size >= 8, 'still plenty to choose from');
+
+    // A task with no count is asked about the task, not about DMs.
+    db = mkdb(mk({ kind: 'general', title: 'Call the Reed family', target: 1, reportedDone: 0 }));
+    r = await at(base, () => askForUpdate());
+    assert.equal(r.ok, true);
+    assert.match(r.text, /Call the Reed family/);
+    assert.doesNotMatch(r.text, /DMs/);
+
+    // Quiet hours do not stop it (he chose to ask), and it does not silence the clock: no answer means the usual push again.
+    const night = pkt(15, 23, 30);
+    db = mkdb(mk({ createdAt: new Date(night - HOUR).toISOString(), deadlineAt: new Date(night + 5 * HOUR).toISOString(), startedAt: new Date(night - 30 * MIN).toISOString() }), { quietEnabled: true });
+    pushes.length = 0;
+    r = await at(night, () => askForUpdate());
+    assert.equal(r.ok, true, 'he asked: it is sent even in quiet hours');
+    assert.equal(pushes.filter((p) => p[0] === 'teammate').length, 1);
+    db = mkdb(mk());
+    await at(base, () => askForUpdate());
+    pushes.length = 0;
+    let again = false;
+    for (let i = 1; i <= 12 && !again; i++) { await runAgent(base + i * MIN); again = pushes.some((p) => p[0] === 'teammate'); }
+    assert.ok(again, 'if she does not answer, the usual pushes follow within 12 minutes');
   }
 
   console.log('work regression: all passed');

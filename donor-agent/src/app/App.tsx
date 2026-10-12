@@ -436,6 +436,9 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
   const [error, setError] = useState("");
   const [optimistic, setOptimistic] = useState<ChatMessage | null>(null);
   const [switching, setSwitching] = useState(false);
+  const [askedAt, setAskedAt] = useState(0);
+  const [askBusy, setAskBusy] = useState(false);
+  const [clock, setClock] = useState(() => Date.now());
   const lastAgentAtSend = useRef<string | undefined>(undefined);
   const thread = useRef<HTMLDivElement>(null);
   const conversation = s.messages.slice(-40);
@@ -487,6 +490,32 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
     }
   };
   const canSwitch = !!task && task.kind === "dms" && (task.status === "open" || task.status === "missed");
+  const canAsk = !!task && (task.status === "open" || task.status === "missed");
+  // The button rests for a minute after a tap (the server enforces it too). Never more than 60 s, so a wrong phone clock cannot lock it.
+  const lastAsk = Math.max(askedAt, task?.lastAskAt ? new Date(task.lastAskAt).getTime() : 0);
+  const askWait = Math.min(60, Math.max(0, Math.ceil((lastAsk + 60_000 - clock) / 1000)));
+  const resting = askWait > 0;
+  useEffect(() => {
+    if (!resting) return;
+    const id = setInterval(() => setClock(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [resting]);
+  const askForUpdate = async () => {
+    if (askBusy || askWait) return;
+    setAskBusy(true);
+    setError("");
+    try {
+      await api("/api/ask-update", "POST");
+      const t = Date.now();
+      setClock(t);
+      setAskedAt(t);
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setAskBusy(false);
+    }
+  };
   const sent = task?.kind === "dms" ? task.reportedDone ?? 0 : task && (task.status === "review" || task.status === "done") ? 1 : 0;
   const target = task?.kind === "dms" ? task.target : task ? 1 : 0;
   const open = task?.status === "open";
@@ -530,14 +559,19 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
           <span className="status-main"><i />{label}</span>
           {task && open && <DueLine deadlineAt={task.deadlineAt} tz={s.settings.timezone} bare />}
         </p>
-        {canSwitch && !chatOpen && (
-          <>
-            <button className={`old-switch ${task!.oldDonors ? "on" : ""}`} role="switch" aria-checked={!!task!.oldDonors} disabled={switching} onClick={() => void flipOldDonors()}>
-              <span>Old donors</span><b>{task!.oldDonors ? "ON" : "OFF"}</b>
+        {canAsk && !chatOpen && (
+          <div className="hero-actions">
+            <button className={`ask-btn ${askWait ? "rest" : ""}`} disabled={askBusy || askWait > 0} onClick={() => void askForUpdate()}>
+              {askBusy ? "Asking…" : askWait ? `Asked ✓ · again in ${askWait}s` : `Ask ${name} for update`}
             </button>
-            <p className="best-hint">{task!.oldDonors ? `ON: each old donor ${name} messages counts once.` : `OFF: only new donors count. Turn on for a task of old donors.`}</p>
-          </>
+            {canSwitch && (
+              <button className={`old-switch ${task!.oldDonors ? "on" : ""}`} role="switch" aria-checked={!!task!.oldDonors} disabled={switching} onClick={() => void flipOldDonors()}>
+                <span>Old donors</span><b>{task!.oldDonors ? "ON" : "OFF"}</b>
+              </button>
+            )}
+          </div>
         )}
+        {canSwitch && !chatOpen && <p className="best-hint">{task!.oldDonors ? `Old donors ON: each old donor ${name} messages counts once.` : `Old donors OFF: only new donors count. Turn on for a task of old donors.`}</p>}
         {error && !chatOpen && <p role="alert" className="err">{error}</p>}
         {!open && !chatOpen && s.bestTime && (
           <p className="best-hint">⏰ {name} sends most DMs {s.bestTime.label} ({Math.round((s.bestTime.sends / s.bestTime.total) * 100)}% of her last {s.bestTime.total} DMs, {s.bestTime.days} days). Give her tasks just before that.</p>

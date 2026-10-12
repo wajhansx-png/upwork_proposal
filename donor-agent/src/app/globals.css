@@ -202,7 +202,7 @@ button,a,input{-webkit-tap-highlight-color:transparent}
 .status-main{display:inline-flex;align-items:center;gap:8px}
 .status-line .due-bare{font-size:.85rem;font-weight:600}
 /* Chat wallpaper: soft paws, hearts and sparkles */
-.p-chat{background:url(/chat-bg.svg) 0 0/140px 140px repeat,radial-gradient(120% 80% at 50% 0%,rgba(85,209,172,.07),transparent 60%),var(--card)}
+.p-chat{background:radial-gradient(120% 80% at 50% 0%,rgba(85,209,172,.07),transparent 60%),var(--card)}
 /* Chat open: the count shrinks to one small row so the chat gets the screen */
 .p-hero.compact{flex-direction:row;justify-content:center;gap:12px}
 .p-hero.compact .ring-num{font-size:1.25rem}
@@ -376,3 +376,8 @@ a.text-btn,a.bell-btn{display:inline-flex;align-items:center;text-decoration:non
 .seen-line{display:inline-flex;align-items:center;gap:8px;align-self:center;margin:0;font-size:.8rem;font-weight:600;color:var(--mute);animation:rise .4s ease-out}
 .seen-line i{width:7px;height:7px;border-radius:50%;background:var(--brand);box-shadow:0 0 8px var(--brand);animation:pulse 2s ease-in-out infinite}
 .seen-line.empty{visibility:hidden;animation:none}
+
+/* ===== Ask for update ===== */
+.hero-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.ask-btn{min-height:40px;padding:6px 18px;border-radius:999px;border:0;background:var(--grad);color:#06120e;font:inherit;font-size:.9rem;font-weight:700;box-shadow:var(--glow)}
+.ask-btn.rest,.ask-btn:disabled{background:rgba(255,255,255,.06);color:var(--mute);box-shadow:none;border:1px solid var(--edge)}

@@ -168,6 +168,9 @@ export interface Task {
   lastProgressAt?: string;
   /** Last time her count actually went up. A real number resets this; "ok" or silence does not. */
   lastCountAt?: string;
+  /** When the manager last tapped "Ask for update", and which of the different messages were used (so none repeats soon). */
+  lastAskAt?: string;
+  askUsed?: number[];
   /** An "old donors" task: a DM to a donor who was messaged before counts too, once per donor. */
   oldDonors?: boolean;
   /** Donors already counted for this task (by the add-on or her "Sent" tap), so none counts twice. */

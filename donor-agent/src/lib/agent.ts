@@ -10,6 +10,7 @@ import { applyDonorAction, cleanPhone, donorLabel, groupOf, todayPicks, type Don
 import { planCounter, type CounterEvent } from "./counter";
 import { logSends, unlogSends } from "./besttime";
 import { quietUntil } from "./quiet";
+import { pickAsk } from "./ask";
 
 /** Runs work after the reply has been sent. In a request this is Next's after(); elsewhere it runs inline. */
 export type Defer = (fn: () => Promise<void>) => void;
@@ -685,7 +686,7 @@ interface ReplyInfo {
 const AGENT_NAME = "Wajdan";
 
 /** Where she stands, in one or two short lines: count, what is left, time left, and the pace she needs. */
-function statusLine(t: Task, now: number, tz: string, withTime = true): string {
+function statusLine(t: Task, now: number, tz: string, withTime = true, withCount = true): string {
   const left = ms(t.deadlineAt) - now;
   const due = fmtWhen(ms(t.deadlineAt), now, tz);
   if (t.kind !== "dms") return left > 0 ? `Due ${due} (${fmtDuration(left)} left).` : `The deadline passed ${fmtDuration(-left)} ago.`;
@@ -696,8 +697,11 @@ function statusLine(t: Task, now: number, tz: string, withTime = true): string {
   const hours = left / 3_600_000;
   const perHour = Math.ceil(remaining / Math.max(hours, 1 / 60));
   const pace = hours >= 1 ? ` You need about ${perHour} per hour.` : ` That is about ${Math.ceil(remaining / Math.max(1, Math.round(left / MIN)))} per minute.`;
-  return `${done} of ${t.target} done, ${remaining} to go.${withTime ? ` ${fmtDuration(left)} left.` : ""}${pace}`;
+  return `${withCount ? `${done} of ${t.target} done, ${remaining} to go.` : ""}${withTime ? ` ${fmtDuration(left)} left.` : ""}${pace}`.trim();
 }
+
+/** Only the pace she needs. Used right after she acts, because her screen already shows the count and the time left. */
+const paceLine = (t: Task, now: number, tz: string) => statusLine(t, now, tz, false, false);
 
 /** A small, doable next goal: the share of what is left that fits the next half hour (or 20 min when late). */
 function makeGoal(t: Task, now: number): { count: number; by: string } | undefined {
@@ -808,7 +812,7 @@ function buildReply(u: Understood, t: Task | undefined, d: Db, now: number, info
   if (u.delay && open && !u.blocked)
     return `Starting is the hardest part. Send just 1 DM now and tap +, then decide.\n${t.kind === "dms" ? `${Math.max(0, t.target - (t.reportedDone ?? 0))} are still left` : "This task is still open"} and the deadline is ${due}${left > 0 ? ` (${fmtDuration(left)} left)` : ""}. If something is really stopping you, tell me what it is.`;
   if (info.promised && t.goal) return `Deal: ${t.goal.count - (t.reportedDone ?? 0)} more by ${fmtWhen(ms(t.goal.by), now, tz)}. I will check then. You can do this!`;
-  if (info.resuming && !info.reportedNow && !u.question && !u.blocked) return `Good, keep going.\n${statusLine(t, now, tz)}`;
+  if (info.resuming && !info.reportedNow && !u.question && !u.blocked) return `Good, keep going.\n${paceLine(t, now, tz)}`;
   if (u.mood && !u.blocked) {
     const small = t.kind === "dms" ? Math.min(3, Math.max(1, t.target - (t.reportedDone ?? 0))) : 0;
     return `I hear you, it is a lot. Let's make it small: ${small ? `just ${small} more DM${small === 1 ? "" : "s"}, then` : "finish one small part, then"} take 5 minutes for yourself. You have already done ${t.reportedDone ?? 0}, that counts.`;
@@ -820,13 +824,12 @@ function buildReply(u: Understood, t: Task | undefined, d: Db, now: number, info
     if (info.coach?.length) {
       const praise = info.coach.find((l) => l.startsWith("Goal reached"));
       if (praise) parts[0] = praise;
-      parts.push(`${t.reportedDone ?? 0} of ${t.target} done, ${Math.max(0, t.target - (t.reportedDone ?? 0))} to go.`);
       parts.push(...info.coach.filter((l) => l !== praise));
-    } else parts.push(statusLine(t, now, tz));
+    } else parts.push(paceLine(t, now, tz));
   }
   if (info.imageRejectedNow) parts.push(info.imageRejectedNow);
   else if (u.blocked) parts.push(nextStep(t));
-  else if (u.start === "started") parts.push(`${statusLine(t, now, tz)} Tap + for each DM.`);
+  else if (u.start === "started") parts.push(t.kind === "dms" ? `${paceLine(t, now, tz)} Tap + for each DM.` : statusLine(t, now, tz));
   else if (info.reportedNow) {
     /* the status line already says it */
   } else if (notStarted) parts.push(startAsk);
@@ -1337,6 +1340,43 @@ export async function clearChatsAndTasks(): Promise<{ messages: number; tasks: n
     d.agent.heldAnswer = undefined;
     return out;
   });
+}
+
+// ---------- ask for update ----------
+
+const ASK_COOLDOWN_MS = 60_000;
+
+/**
+ * Manager only: the "Ask for update" button. Sends Areeba a message and a phone alert asking for her count,
+ * worded differently every time. It counts as a check-in: her reply is read as the answer, and if she does not
+ * answer the usual 4-minute pushes follow. Quiet hours do not stop it: he chose to ask.
+ */
+export async function askForUpdate(opts: { defer?: Defer } = {}): Promise<{ ok: boolean; text?: string; error?: string; waitSeconds?: number }> {
+  const now = Date.now();
+  const nowIso = iso(now);
+  const pushes: Push[] = [];
+  const result = await withDb((d) => {
+    const t = [...d.tasks].reverse().find((x) => x.status === "open" || x.status === "missed");
+    if (!t) return { ok: false, error: "There is no running task to ask about." };
+    const wait = t.lastAskAt ? Math.ceil((ASK_COOLDOWN_MS - (now - ms(t.lastAskAt))) / 1000) : 0;
+    if (wait > 0) return { ok: false, error: `You just asked. Wait ${wait} seconds.`, waitSeconds: wait };
+    const name = d.settings.teammateName;
+    const { text, index } = pickAsk(t, { name, done: t.reportedDone ?? 0, target: t.target, minsLeft: Math.round((ms(t.deadlineAt) - now) / MIN), timeLeft: fmtDuration(ms(t.deadlineAt) - now), title: t.title }, t.askUsed);
+    t.askUsed = [...(t.askUsed ?? []), index].slice(-20);
+    t.lastAskAt = nowIso;
+    say(d, "teammate", text, "agent", { kind: "checkin" });
+    t.lastCheckAt = nowIso;
+    t.lastReminderAt = nowIso;
+    t.reminderPausedUntil = undefined;
+    t.unanswered = Math.max(1, t.unanswered);
+    t.reminderCount = (t.reminderCount ?? 0) + 1;
+    const receiptId = newId();
+    t.pushReceipts = [...(t.pushReceipts ?? []), { id: receiptId, label: `manager ask ${t.reminderCount}`, issuedAt: nowIso }].slice(-80);
+    pushes.push({ role: "teammate", title: "Update please", body: text, persistent: true, tag: `check-${t.id}`, receiptId, taskId: t.id });
+    return { ok: true, text };
+  });
+  await sendPushes(pushes, opts.defer);
+  return result;
 }
 
 // ---------- old donors switch ----------
