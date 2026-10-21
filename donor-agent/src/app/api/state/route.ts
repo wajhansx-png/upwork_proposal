@@ -5,6 +5,7 @@ import { aiKind, visionEnabled } from "@/lib/llm";
 import { pushEnabled } from "@/lib/push";
 import { bestTime } from "@/lib/besttime";
 import { managerSeenAt, noteManagerSeen } from "@/lib/seen";
+import { openCaseOf } from "@/lib/groups";
 
 export async function GET(req: NextRequest) {
   const role = await getRole(req);
@@ -45,6 +46,8 @@ export async function GET(req: NextRequest) {
     })(),
     // Only for her: when he last saw the count she sees now. Null if he has not seen her latest number.
     managerSeenAt: manager ? undefined : managerSeenAt(db),
+    // Group messages that reached her and are not posted yet (her screen shows a banner).
+    groupWaiting: (openCaseOf(db)?.plan ?? []).filter((p) => p.sentAt && !p.doneAt).length,
     now: new Date().toISOString(),
     vapidPublicKey: pushEnabled() ? process.env.VAPID_PUBLIC_KEY : null,
   });

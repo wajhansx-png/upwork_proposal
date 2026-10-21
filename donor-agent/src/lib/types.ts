@@ -67,6 +67,25 @@ export interface CasePost {
   amountLeft: number;
 }
 
+/** One message in the group plan: the manager picks the text and the time; Areeba gets it at that time and posts it in all groups. */
+export interface GroupPost {
+  id: string;
+  /** "case" is the full case post (its text is made fresh when it goes out, so the amount is current). "line" is a short emotional text. */
+  kind: "case" | "line";
+  text: string;
+  /** When Areeba gets it. */
+  at: string;
+  /** When it went out to her, and the exact text she got. */
+  sentAt?: string;
+  shownText?: string;
+  /** She tapped "I posted it in all groups". */
+  doneAt?: string;
+  lastNudgeAt?: string;
+  nudges?: number;
+  /** The manager was told she is late (once). */
+  lateToldAt?: string;
+}
+
 export interface CaseFile {
   id: string;
   facts: CaseFacts;
@@ -82,6 +101,12 @@ export interface CaseFile {
   options?: { hook: string; story: string }[];
   /** Texts the manager copied, newest last. Used so reminders never repeat. */
   posts: CasePost[];
+  /** The group plan: what Areeba posts in the groups, and when. */
+  plan?: GroupPost[];
+  /** The one-minute clock of the plan (a Vercel Workflow), like a task's. */
+  planRunId?: string;
+  planStartedAt?: string;
+  planWorkerAt?: string;
 }
 
 /** Each person has one private thread with the agent. */

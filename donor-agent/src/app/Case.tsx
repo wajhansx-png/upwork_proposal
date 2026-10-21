@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CaseFacts, CaseFile, CasePost, CaseType } from "@/lib/types";
 import { api } from "./App";
+import GroupPlan from "./GroupPlan";
 
 interface Check { ok: boolean; label: string }
 interface Out { text: string; checks: Check[] }
@@ -57,7 +58,7 @@ export default function CasePage() {
   const [details, setDetails] = useState("");
   const [form, setForm] = useState<Form>(toForm({}));
   const [notes, setNotes] = useState<string[]>([]);
-  const [tab, setTab] = useState<"main" | "dm" | "reminder" | "close">("main");
+  const [tab, setTab] = useState<"main" | "groups" | "dm" | "reminder" | "close">("main");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
@@ -253,8 +254,8 @@ export default function CasePage() {
               </form>
             )}
             <div className="d-tabs c-tabs" role="tablist">
-              {(["main", "dm", "reminder", "close"] as const).map((t) => (
-                <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t === "main" ? "Group post" : t === "dm" ? "DM" : t === "reminder" ? "Reminder" : "Close"}</button>
+              {(["main", "groups", "dm", "reminder", "close"] as const).map((t) => (
+                <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t === "main" ? "Group post" : t === "groups" ? "Plan" : t === "dm" ? "DM" : t === "reminder" ? "Reminder" : "Close"}</button>
               ))}
             </div>
             {tab === "main" && isOpen && (c.options?.length ?? 0) > 1 && (
@@ -269,6 +270,7 @@ export default function CasePage() {
               </section>
             )}
             {tab === "main" && (isOpen ? out(v.main, "main") : <p className="p-empty">This case is closed.</p>)}
+            {tab === "groups" && (isOpen ? <GroupPlan name="Areeba" /> : <p className="p-empty">This case is closed. The plan stopped.</p>)}
             {tab === "dm" && isOpen && (
               <>
                 <p className="hint">Areeba sends this to each donor from the Donors page, with their own name. Send the poster first, then this text. One DM per person.</p>

@@ -15,6 +15,7 @@ interface State {
   counter?: { on: boolean; lastAt?: string; sentToday: number; token?: string; linked?: boolean };
   bestTime?: { label: string; sends: number; total: number; days: number } | null;
   managerSeenAt?: string | null;
+  groupWaiting?: number;
   vapidPublicKey: string | null;
   now: string;
 }
@@ -1015,9 +1016,17 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
         <div className="top-btns">
           {alerts.subscribed && alerts.owner === "me" && <span className="bell-btn on">🔔 On ✓</span>}
           {alerts.subscribed && alerts.owner === "manager" && <span className="bell-btn warn">🔔 Manager</span>}
+          <a className="bell-btn" href="/areeba/posts">Groups</a>
           <a className="bell-btn" href="/areeba/donors">Donors</a>
         </div>
       </header>
+      {!!s.groupWaiting && !typing && (
+        <a className="group-banner" href="/areeba/posts">
+          <span>📢</span>
+          <p><b>{s.groupWaiting === 1 ? "1 group message to post" : `${s.groupWaiting} group messages to post`}</b><small>Tap to open, copy, and post in all groups.</small></p>
+          <i aria-hidden>›</i>
+        </a>
+      )}
       {alerts.subscribed === false && !typing && (
         <section className="alert-banner" aria-label="Notifications">
           <p><b>Notifications are off</b><span>Turn them on, so your manager&apos;s messages reach you even when the app is closed.</span></p>
