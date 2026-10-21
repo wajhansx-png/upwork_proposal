@@ -39,6 +39,28 @@ export async function POST(req: NextRequest) {
       if (details.length < 10) return NextResponse.json({ error: "Write the case details first." }, { status: 400 });
       return NextResponse.json(await readDetails(details));
     }
+    if (body.action === "own") {
+      // His own finished case text: kept exactly. The AI only reads the facts out of it (name, amount) for reminders and the group plan.
+      const own = String(body.details ?? "").replace(/\r/g, "").trim().slice(0, 5000);
+      if (own.length < 20) return NextResponse.json({ error: "Paste your full case text first." }, { status: 400 });
+      const open = openCase(await readDb());
+      if (open && !body.replace) return NextResponse.json({ error: `${open.facts.name}'s case is still open.`, needsReplace: true }, { status: 409 });
+      const r = await readDetails(own);
+      const named = /\b(?:[Ll]ittle|[Hh]elpless|[Bb]aby|[Bb]rother|[Ss]ister|[Mm]other|[Ff]ather)\s+([A-Z][a-z]+)/.exec(own)?.[1];
+      const facts = { ...r.facts, name: r.facts.name || named || "this case", problem: r.facts.problem || own.split("\n")[0].slice(0, 300), proof: r.facts.proof || "", askAmount: r.facts.askAmount || 2000 } as CaseFacts;
+      const now = new Date().toISOString();
+      await withDb((d) => {
+        const cur = openCase(d);
+        if (cur) Object.assign(cur, { status: "closed", closedAt: now });
+        d.cases.push({ id: newId(), facts, status: "open", createdAt: now, hook: own.split("\n")[0].slice(0, 200), story: "", verse: 0, by: r.by, posts: [], ownText: own });
+        d.cases = d.cases.slice(-30);
+      });
+      const notes = [
+        `Saved exactly as you wrote it. I read: name ${facts.name}, amount left ${facts.amountLeft ? `Rs ${facts.amountLeft.toLocaleString("en-US")}` : "not found"}.`,
+        ...(facts.amountLeft ? [] : ["Type the amount left in the box below, so reminders and the plan show the right amount."]),
+      ];
+      return NextResponse.json({ ...view(await readDb()), dropped: notes });
+    }
     if (body.action === "write") {
       const facts = cleanFacts(body.facts && typeof body.facts === "object" ? body.facts : {});
       const missing = missingFacts(facts);

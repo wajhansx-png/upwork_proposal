@@ -20,10 +20,10 @@ const iso = (t: number) => new Date(t).toISOString();
 export const openCaseOf = (d: Pick<Db, "cases">): CaseFile | null => [...(d.cases ?? [])].reverse().find((c) => c.status === "open") ?? null;
 
 /** The last line of every emotional text: the amount left and how to pay. Made fresh, so the amount is current. */
-export const payLine = (c: CaseFile) => `${k(c.facts.amountLeft)} left — ${PAY_SHORT} @all`;
+export const payLine = (c: CaseFile) => `${c.facts.amountLeft > 0 ? `${k(c.facts.amountLeft)} left — ` : ""}${PAY_SHORT} @all`;
 
 /** What she should post for this item right now. */
-export const postText = (c: CaseFile, p: GroupPost) => (p.kind === "case" ? caseText(c) : p.text.includes(PAY_SHORT) ? p.text : `${p.text.trim()}\n\n${payLine(c)}`);
+export const postText = (c: CaseFile, p: GroupPost) => (p.kind === "case" ? p.text.trim() || c.ownText || caseText(c) : p.text.includes(PAY_SHORT) ? p.text : `${p.text.trim()}\n\n${payLine(c)}`);
 
 /** Is the plan still waiting on anything? (A text not sent yet, or sent but not posted.) */
 export const planPending = (c: CaseFile | null) => !!c && c.status === "open" && (c.plan ?? []).some((p) => !p.doneAt);
@@ -38,7 +38,7 @@ const factsText = (f: CaseFacts) =>
 const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9' ]/g, " ").split(/\s+/).filter(Boolean);
 
 /** Problems with one emotional text, or [] when it is fine. Same honesty rules as the case post. */
-export function emotionalProblems(text: string, f: CaseFacts, others: string[] = []): string[] {
+export function emotionalProblems(text: string, f: CaseFacts, others: string[] = [], extraFacts = ""): string[] {
   const p: string[] = [];
   const t = text.trim();
   if (!t) return ["empty"];
@@ -47,7 +47,7 @@ export function emotionalProblems(text: string, f: CaseFacts, others: string[] =
   if (words(t).length > 50) p.push("too long");
   if (BANNED.test(t)) p.push("begging word");
   if (!f.deadline && DEADLINE_WORDS.test(t)) p.push("deadline word with no real deadline");
-  const known = factsText(f);
+  const known = `${factsText(f)} ${extraFacts.toLowerCase()}`;
   // "Help today" is a call to act, not a claim about the case.
   for (const m of t.matchAll(CLAIM_WORDS)) if (m[0].toLowerCase() !== "today" && !known.includes(m[0].toLowerCase().replace(/s$/, ""))) p.push(`new claim “${m[0]}”`);
   const a = fitAsk(f.amountLeft, f.askAmount);
@@ -70,11 +70,12 @@ export function fallbackLines(c: CaseFile): string[] {
     `${f.name} is still waiting.\nEvery moment matters for ${f.gender === "f" ? "her" : "him"} and the family.\nYour small part can end this wait.`,
     `Think of your own family for one second.\nNow think of ${f.name}'s family right now.\nAllah has put this chance in front of you.`,
     `Many have seen this case.\nVery few have helped.\nBe one of the few today.`,
-    reminderText(c, "people").replace(/[*_]/g, "").replace(/\s*@all\s*$/, ""),
+    // "N people × amount": only for the app's own case text. His own text has his own numbers, and this must never contradict them.
+    ...(c.ownText ? [] : [reminderText(c, "people").replace(/[*_]/g, "").replace(/\s*@all\s*$/, "")]),
     ...(f.familySaidPain ? [reminderText(c, "feeling")] : []),
     `As Muslims, we should unite for ${f.name}.\nGive whatever you can, brothers and sisters.`,
   ];
-  return out.filter((x) => !emotionalProblems(x, f).length).slice(0, 5);
+  return out.filter((x) => !emotionalProblems(x, f, [], c.ownText).length).slice(0, 5);
 }
 
 /**
@@ -84,6 +85,7 @@ export function fallbackLines(c: CaseFile): string[] {
 export async function emotionalLines(c: CaseFile): Promise<{ lines: string[]; by: "ai" | "rules"; dropped: string[] }> {
   const f = c.facts;
   const used = (c.plan ?? []).filter((p) => p.kind === "line").map((p) => p.text);
+  const ownCase = (c.plan ?? []).find((p) => p.kind === "case" && p.text.trim())?.text ?? c.ownText;
   const r = await llm(
     "You write short follow-up texts for WhatsApp groups for GiveLife Foundation (Pakistan), run by Wajdan Khan. The full case was already posted; donations are slow. " +
       "Each text must make a busy reader stop, feel it in the heart, and give NOW.\n" +
@@ -99,7 +101,7 @@ export async function emotionalLines(c: CaseFile): Promise<{ lines: string[]; by
       "Never use: kindly, request, generous, contribution, needy. No * or _ marks. Do NOT write the payment number or the amount; the app adds that line.\n" +
       "The style examples are from OLD cases: learn the style, NEVER copy them. Do not repeat the texts already used.\n" +
       'Return ONLY JSON: {"texts":["line 1\\nline 2", ...]}',
-    JSON.stringify({ facts: f, case_type: TYPE_LABEL[f.type], style_examples_do_not_copy: REFERENCE[f.type], already_used_do_not_repeat: used }),
+    JSON.stringify({ facts: f, ...(ownCase ? { case_post_already_sent_use_only_these_facts: ownCase } : {}), case_type: TYPE_LABEL[f.type], style_examples_do_not_copy: REFERENCE[f.type], already_used_do_not_repeat: used }),
     { json: true },
   );
   const j = parseJson<{ texts?: unknown }>(r.text);
@@ -108,7 +110,7 @@ export async function emotionalLines(c: CaseFile): Promise<{ lines: string[]; by
   const dropped: string[] = [];
   for (const x of raw.slice(0, 8)) {
     const t = typeof x === "string" ? x.replace(/\r/g, "").split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n") : "";
-    const p = emotionalProblems(t, f, [...good, ...used]);
+    const p = emotionalProblems(t, f, [...good, ...used], ownCase);
     if (p.length) dropped.push(`Dropped: “${t.slice(0, 50)}” (${p.join(", ")})`);
     else good.push(t);
   }
@@ -138,10 +140,11 @@ export function changePlan(d: Db, ch: PlanChange, now: number): string | null {
     const at = ms(ch.at);
     if (!at || Number.isNaN(at)) return "Pick a time.";
     if (ch.kind === "case" && c.plan.some((p) => p.kind === "case" && !p.doneAt)) return "The case post is already in the plan.";
-    const text = ch.kind === "case" ? "" : String(ch.text ?? "").trim().slice(0, 1500);
+    // A case post can be the manager's own text, kept exactly as he wrote it. Empty = the app's case text.
+    const text = String(ch.text ?? "").trim().slice(0, ch.kind === "case" ? 5000 : 1500);
     if (ch.kind === "line") {
       if (!text) return "Write the text first.";
-      const bad = emotionalProblems(text.replace(PAY_SHORT, ""), c.facts).filter((x) => !x.startsWith("too close"));
+      const bad = emotionalProblems(text.replace(PAY_SHORT, ""), c.facts, [], c.ownText).filter((x) => !x.startsWith("too close"));
       if (bad.some((x) => x.startsWith("new claim") || x.startsWith("deadline") || x === "begging word")) return `This text breaks a rule: ${bad[0]}.`;
     }
     c.plan.push({ id: ch.id, kind: ch.kind, text, at: iso(Math.max(at, now)) });
@@ -155,9 +158,9 @@ export function changePlan(d: Db, ch: PlanChange, now: number): string | null {
       if (p.sentAt) return "Areeba already got this one. It cannot change now.";
       if (ch.action === "now") p.at = iso(now);
       else {
-        if (ch.text !== undefined && p.kind === "line") {
-          const text = ch.text.trim().slice(0, 1500);
-          if (!text) return "The text is empty.";
+        if (ch.text !== undefined) {
+          const text = ch.text.trim().slice(0, p.kind === "case" ? 5000 : 1500);
+          if (!text && p.kind === "line") return "The text is empty.";
           p.text = text;
         }
         if (ch.at !== undefined) {

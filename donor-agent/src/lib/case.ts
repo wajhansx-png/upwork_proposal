@@ -385,7 +385,7 @@ export function nextReminder(c: CaseFile, tags: string[]): { kind: ReminderKind;
       : kind === "number" || kind === "unity" ? !numberPosted
         : kind === "feeling" ? !!f.familySaidPain
           : kind === "tag" ? tags.length > 0
-            : kind === "people" ? !a.any
+            : kind === "people" ? !a.any && !c.ownText
               : true;
   const fits = (kind: ReminderKind) => {
     if (!allowed(kind) || last?.kind === kind) return null;
@@ -452,7 +452,33 @@ export function checkText(c: CaseFile, text: string, kind: CasePost["kind"]): Ch
 }
 
 /** Everything the case page shows. */
+/** The manager's own text, one donor at a time: his greeting first, no @all. */
+export const ownDm = (own: string, greet: string) => `${greet}\n\n${own.replace(/\s*@all\b/g, "").trim()}`;
+
+/** His own text is his: only the payment number is checked, never blocked for style. */
+function ownChecks(text: string): Check[] {
+  const phones = text.match(/\b0\d{10}\b/g) ?? [];
+  return [
+    { ok: true, label: "Your own text, kept exactly as you wrote it" },
+    { ok: phones.every((p) => p === PAY_NUMBER), label: phones.length ? `Payment number is ${PAY_NUMBER}` : "No payment number in the text (add it if you want)" },
+  ];
+}
+
 export function caseView(c: CaseFile, tags: string[]) {
+  if (c.ownText) {
+    const dm = ownDm(c.ownText, dmGreeting("Ali", false));
+    const a = fitAsk(c.facts.amountLeft, c.facts.askAmount);
+    const next = nextReminder(c, tags);
+    return {
+      case: c,
+      ask: a,
+      main: { text: c.ownText, checks: ownChecks(c.ownText) },
+      dm: { text: dm, checks: ownChecks(dm) },
+      reminder: next ? { ...next, checks: checkText(c, next.text, next.kind) } : null,
+      closing: c.status === "closed" || c.facts.amountLeft <= 0 ? { text: closingText(c) } : null,
+      tags,
+    };
+  }
   const main = caseText(c);
   const sampleDm = caseText(c, { greet: dmGreeting("Ali", false) });
   const next = nextReminder(c, tags);

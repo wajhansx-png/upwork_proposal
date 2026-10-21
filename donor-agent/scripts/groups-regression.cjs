@@ -150,5 +150,27 @@ const add = (db, kind, at, text) => G.changePlan(db, { action: 'add', kind, at: 
     assert.ok(G.emotionalProblems('30k left for Affan.', c.facts).some((x) => x.startsWith('number')), 'a wrong amount is not');
   }
 
+  // 6. His own case text: sent exactly as written; never blocked for style; AI lines may use facts from his text.
+  {
+    const own = "Little Yousuf is only 2 years old & fluid is filling inside his brain.💔\n\nHis both kidneys are badly swollen because urine goes back into them.\n\n🚨 Rs. 70,000 needed.\n\n- 🤲 Just 35 kind people donating Rs. 2,000 can save Yousaf.\n\n📲 03097458815 — Easypaisa / JazzCash\n👤 Wajdan Khan — GiveLife Foundation";
+    const db = freshDb();
+    const c = db.cases[0];
+    c.ownText = own;
+    c.facts = { type: 'child', name: 'Yousuf', gender: 'm', age: 2, problem: 'fluid is filling inside his brain', proof: '', amountLeft: 70000, askAmount: 2000 };
+    G.changePlan(db, { action: 'add', kind: 'case', at: iso(T0), id: 'own1' }, T0);
+    G.runPlan(db, T0);
+    assert.equal(G.planView(db, 'teammate', T0).items[0].text, own, 'his text, every word, nothing added');
+    const { caseView } = require('../src/lib/case.ts');
+    const v = caseView(c, []);
+    assert.equal(v.main.text, own);
+    assert.ok(v.main.checks.every((x) => x.ok), 'his own style is never blocked');
+    assert.ok(v.dm.text.startsWith('Ali Bhai,') && v.dm.text.includes('Little Yousuf'), 'DM = greeting + his text');
+    assert.deepEqual(G.emotionalProblems('Yousuf has fluid in his brain.\nHis kidneys are swollen.', c.facts, [], own), [], 'facts from his text are allowed');
+    assert.ok(G.emotionalProblems('Yousuf has cancer.', c.facts, [], own).some((x) => x.startsWith('new claim')), 'but nothing new');
+    assert.ok(!G.fallbackLines(c).some((l) => /kind people/.test(l)), 'never an N-people line that could contradict his numbers');
+    c.facts.amountLeft = 0;
+    assert.ok(!G.payLine(c).includes('0 left'), 'no "0 left" when the amount is unknown');
+  }
+
   console.log('groups regression: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

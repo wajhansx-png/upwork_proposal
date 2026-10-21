@@ -102,6 +102,20 @@ export default function CasePage() {
     setMode("form");
   });
 
+  const saveOwn = (replace = false): Promise<void> => run("own", async (): Promise<void> => {
+    try {
+      const d = await api<Data>("/api/case", "POST", { action: "own", details, replace });
+      setData(d);
+      setNotes(d.dropped ?? []);
+      setMode("view");
+      setTab("groups");
+    } catch (e) {
+      const open = data?.current?.case;
+      if ((e as { status?: number }).status === 409 && open && confirm(`${open.facts.name}'s case is still open. Close it and start this new case?`)) return saveOwn(true);
+      throw e;
+    }
+  });
+
   const write = (replace = false): Promise<void> => run("write", async (): Promise<void> => {
     const facts = { ...form, items: parseItems(String(form.items)), familySaidPain: !!form.familySaidPain };
     try {
@@ -181,10 +195,11 @@ export default function CasePage() {
         {mode === "details" && (
           <section className="d-ideas c-form">
             <b>Paste the case details</b>
-            <p className="hint">Any language. Name, problem, what doctors said, proof, amount left. I will not guess anything.</p>
+            <p className="hint">Any language. Name, problem, what doctors said, proof, amount left. I will not guess anything. Already wrote the full post yourself? Paste it and tap “Use my text exactly”: the app keeps every word.</p>
             <textarea value={details} onChange={(e) => setDetails(e.target.value)} placeholder="Affan, 7, Peshawar. Hemophilia. Bleeding inside, knee and hand. Doctor said delay can put them at risk of removal. Aga Khan lab report. 26k left." />
             <div className="d-actions">
               <button className="d-btn hot" disabled={busy === "read" || details.trim().length < 10} onClick={read}>{busy === "read" ? "Reading…" : "Read details"}</button>
+              <button className="d-btn" disabled={busy === "own" || details.trim().length < 20} onClick={() => saveOwn()}>{busy === "own" ? "Saving…" : "Use my text exactly"}</button>
               <button className="d-btn" onClick={() => { setForm(toForm({})); setNotes([]); setMode("form"); }}>Fill in myself</button>
             </div>
             {c && <button className="text-btn" onClick={() => setMode("view")}>Back to {c.facts.name}</button>}
@@ -242,10 +257,10 @@ export default function CasePage() {
           <>
             <section className="d-stats c-stats">
               <div><b>{rs(c.facts.amountLeft)}</b><span>left</span></div>
-              <div><b>{v.ask.any ? "Any" : v.ask.n}</b><span>{v.ask.any ? "amount" : `people × ${v.ask.ask.toLocaleString("en-US")}`}</span></div>
+              {c.ownText ? <div><b>Yours</b><span>text, exact</span></div> : <div><b>{v.ask.any ? "Any" : v.ask.n}</b><span>{v.ask.any ? "amount" : `people × ${v.ask.ask.toLocaleString("en-US")}`}</span></div>}
               <div><b>{c.posts.length}</b><span>posted</span></div>
             </section>
-            {v.ask.raised && <p className="hint">The ask is {rs(v.ask.ask)} so no more than 25 people are needed.</p>}
+            {v.ask.raised && !c.ownText && <p className="hint">The ask is {rs(v.ask.ask)} so no more than 25 people are needed.</p>}
             {notes.length > 0 && <ul className="c-notes">{notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
             {isOpen && (
               <form className="d-phone" onSubmit={(e) => { e.preventDefault(); void setLeft(); }}>
@@ -258,7 +273,7 @@ export default function CasePage() {
                 <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t === "main" ? "Group post" : t === "groups" ? "Plan" : t === "dm" ? "DM" : t === "reminder" ? "Reminder" : "Close"}</button>
               ))}
             </div>
-            {tab === "main" && isOpen && (c.options?.length ?? 0) > 1 && (
+            {tab === "main" && isOpen && !c.ownText && (c.options?.length ?? 0) > 1 && (
               <section className="c-openings">
                 <b>Pick the opening</b>
                 {c.options!.map((o, i) => (
@@ -303,9 +318,9 @@ export default function CasePage() {
               )
             )}
             <div className="d-more c-more">
-              {isOpen && <button onClick={() => { setForm(toForm(c.facts)); setNotes([]); setMode("form"); }}>Edit facts</button>}
+              {isOpen && !c.ownText && <button onClick={() => { setForm(toForm(c.facts)); setNotes([]); setMode("form"); }}>Edit facts</button>}
               <button onClick={() => { setDetails(""); setMode("details"); }}>New case</button>
-              <span className="hint">{c.by === "ai" ? "Lines written by AI, checked by the app." : "Lines from the guide's formula."}</span>
+              <span className="hint">{c.ownText ? "Your own text, kept exactly." : c.by === "ai" ? "Lines written by AI, checked by the app." : "Lines from the guide's formula."}</span>
             </div>
           </>
         )}

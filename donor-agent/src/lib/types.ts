@@ -101,6 +101,8 @@ export interface CaseFile {
   options?: { hook: string; story: string }[];
   /** Texts the manager copied, newest last. Used so reminders never repeat. */
   posts: CasePost[];
+  /** The manager's own case text, used exactly as he wrote it (instead of the app's text). */
+  ownText?: string;
   /** The group plan: what Areeba posts in the groups, and when. */
   plan?: GroupPost[];
   /** The one-minute clock of the plan (a Vercel Workflow), like a task's. */
