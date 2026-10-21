@@ -67,23 +67,14 @@ export interface CasePost {
   amountLeft: number;
 }
 
-/** One message in the group plan: the manager picks the text and the time; Areeba gets it at that time and posts it in all groups. */
-export interface GroupPost {
+/** A ready text the manager saved. Areeba sees the list and copies or shares it in the groups. */
+export interface SavedMessage {
   id: string;
-  /** "case" is the full case post (its text is made fresh when it goes out, so the amount is current). "line" is a short emotional text. */
-  kind: "case" | "line";
   text: string;
-  /** When Areeba gets it. */
   at: string;
-  /** When it went out to her, and the exact text she got. */
-  sentAt?: string;
-  shownText?: string;
-  /** She tapped "I posted it in all groups". */
-  doneAt?: string;
-  lastNudgeAt?: string;
-  nudges?: number;
-  /** The manager was told she is late (once). */
-  lateToldAt?: string;
+  /** Last time Areeba tapped Copy or Share, and how many times. */
+  usedAt?: string;
+  uses?: number;
 }
 
 export interface CaseFile {
@@ -103,12 +94,6 @@ export interface CaseFile {
   posts: CasePost[];
   /** The manager's own case text, used exactly as he wrote it (instead of the app's text). */
   ownText?: string;
-  /** The group plan: what Areeba posts in the groups, and when. */
-  plan?: GroupPost[];
-  /** The one-minute clock of the plan (a Vercel Workflow), like a task's. */
-  planRunId?: string;
-  planStartedAt?: string;
-  planWorkerAt?: string;
 }
 
 /** Each person has one private thread with the agent. */
@@ -299,6 +284,8 @@ export interface Db {
   settings: Settings;
   donors: Donor[];
   cases: CaseFile[];
+  /** Saved messages for the groups (newest first). */
+  saved?: SavedMessage[];
   tasks: Task[];
   messages: ChatMessage[];
   subs: PushSub[];

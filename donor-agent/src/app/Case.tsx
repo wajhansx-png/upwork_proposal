@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CaseFacts, CaseFile, CasePost, CaseType } from "@/lib/types";
 import { api } from "./App";
-import GroupPlan from "./GroupPlan";
 
 interface Check { ok: boolean; label: string }
 interface Out { text: string; checks: Check[] }
@@ -58,7 +57,7 @@ export default function CasePage() {
   const [details, setDetails] = useState("");
   const [form, setForm] = useState<Form>(toForm({}));
   const [notes, setNotes] = useState<string[]>([]);
-  const [tab, setTab] = useState<"main" | "groups" | "dm" | "reminder" | "close">("main");
+  const [tab, setTab] = useState<"main" | "dm" | "reminder" | "close">("main");
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
@@ -108,7 +107,7 @@ export default function CasePage() {
       setData(d);
       setNotes(d.dropped ?? []);
       setMode("view");
-      setTab("groups");
+      setTab("main");
     } catch (e) {
       const open = data?.current?.case;
       if ((e as { status?: number }).status === 409 && open && confirm(`${open.facts.name}'s case is still open. Close it and start this new case?`)) return saveOwn(true);
@@ -185,7 +184,7 @@ export default function CasePage() {
           <h1 className="p-title">{mode === "view" && c ? `${c.facts.name}${isOpen ? "" : " · closed"}` : "New case"}</h1>
         </div>
         <div className="top-btns">
-          <a className="text-btn" href="/manager/donors">Donors</a>
+          <a className="text-btn" href="/manager/messages">Messages</a>
           <a className="text-btn" href="/manager">← Chat</a>
         </div>
       </header>
@@ -275,8 +274,8 @@ export default function CasePage() {
               </form>
             )}
             <div className="d-tabs c-tabs" role="tablist">
-              {(["main", "groups", "dm", "reminder", "close"] as const).map((t) => (
-                <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t === "main" ? "Post" : t === "groups" ? "Schedule" : t === "dm" ? "DM" : t === "reminder" ? "Reminder" : "Finish"}</button>
+              {(["main", "dm", "reminder", "close"] as const).map((t) => (
+                <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t === "main" ? "Post" : t === "dm" ? "DM" : t === "reminder" ? "Reminder" : "Finish"}</button>
               ))}
             </div>
             {tab === "main" && isOpen && !c.ownText && (c.options?.length ?? 0) > 1 && (
@@ -291,7 +290,6 @@ export default function CasePage() {
               </section>
             )}
             {tab === "main" && (isOpen ? out(v.main, "main") : <p className="p-empty">This case is closed.</p>)}
-            {tab === "groups" && (isOpen ? <GroupPlan name="Areeba" /> : <p className="p-empty">This case is closed. The plan stopped.</p>)}
             {tab === "dm" && isOpen && (
               <>
                 <p className="hint">Areeba sends this to each donor from the Donors page, with their own name. Send the poster first, then this text. One DM per person.</p>

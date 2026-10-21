@@ -403,9 +403,169 @@ span.bell-btn{display:inline-flex;align-items:center}
 .clean-row{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:10px}
 .clean-btn{opacity:.8}.clean-btn:hover{opacity:1;border-color:var(--danger);color:var(--ink)}
 
-/* Areeba: group posts, WhatsApp-like (dark) */
-.group-banner{display:flex;align-items:center;gap:12px;margin:10px 0;padding:12px 14px;border-radius:16px;background:linear-gradient(135deg,#0b3b30,#0e2a24);border:1px solid rgba(79,209,172,.45);color:var(--ink);text-decoration:none;box-shadow:0 0 24px rgba(79,209,172,.18)}
-.group-banner>span{font-size:24px}.group-banner p{margin:0;flex:1;display:flex;flex-direction:column;gap:2px}.group-banner small{color:var(--mute);font-size:13px}.group-banner i{font-style:normal;font-size:26px;color:var(--brand)}
+/* Saved messages, WhatsApp-like (dark) */
+.wa{background:#25d366;color:#06120e;border:0}
+.d-btn.hot{background:var(--grad);color:#06120e;border:0}
+.d-more{display:flex;gap:6px;flex-wrap:wrap}
+.d-more button{min-height:32px;padding:4px 10px;border-radius:999px;font-size:.78rem;background:transparent;border:1px solid var(--edge);color:var(--mute)}
+.d-search{flex:none}
+.d-filters{display:flex;gap:6px;overflow-x:auto;flex:none;padding-bottom:2px}
+.d-filters button{flex:none;min-height:32px;padding:4px 12px;border-radius:999px;font-size:.78rem;background:transparent;border:1px solid var(--edge);color:var(--mute);white-space:nowrap}
+.d-filters button.on{color:#55d1ac;border-color:#55d1ac}
+.d-row{border-radius:14px;background:var(--glass),var(--card);border:1px solid var(--edge)}
+.d-row-top{display:flex;width:100%;justify-content:space-between;align-items:center;gap:8px;background:transparent;border:0;padding:10px 12px;min-height:48px;text-align:left}
+.d-name{display:flex;flex-direction:column;min-width:0;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.d-name small{font-size:.72rem;color:var(--mute);font-weight:400}
+.d-pill{flex:none;font-size:.72rem;font-weight:650;padding:3px 9px;border-radius:999px;border:1px solid var(--edge);color:var(--mute)}
+.d-pill.sent{color:var(--amber)}.d-pill.replied{color:#55d1ac}.d-pill.donated{color:#06120e;background:#55d1ac;border:0}.d-pill.no{opacity:.6}
+.d-row-body{padding:0 12px 12px;display:grid;gap:8px}
+.d-phone,.d-add{display:flex;gap:6px;flex-wrap:wrap}
+.d-phone input{flex:1 1 180px;padding:8px 10px}
+.d-phone button{min-height:38px;padding:6px 12px}
+.d-add{flex-direction:column;padding:12px 14px;border-radius:16px;border:1px dashed var(--edge)}
+.d-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom));width:min(528px,calc(100% - 32px));display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-radius:14px;background:var(--card);border:1px solid var(--edge);box-shadow:0 10px 30px rgba(0,0,0,.35);font-size:.88rem;z-index:20}
+.d-toast button{min-height:34px;padding:4px 12px;border-radius:999px;color:#55d1ac;border-color:#55d1ac;background:transparent;font-weight:650}
+/* ===== Case writer ===== */
+.d-case{display:grid;gap:2px;padding:10px 14px;border-radius:16px;border:1px solid rgba(85,209,172,.45);background:var(--glass),var(--card);font-size:.82rem;color:var(--mute)}
+.d-case b{color:var(--ink);font-size:.95rem}.d-case a{color:#55d1ac;font-weight:650;text-decoration:none}
+.c-form{display:grid;gap:4px}.c-form textarea{min-height:70px}
+.c-form select,.case-page select{font:inherit;width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink)}
+.c-two{display:grid;grid-template-columns:1fr 1fr;gap:8px}.c-two>div{min-width:0}
+.c-check{display:flex;gap:8px;align-items:center;color:var(--ink);font-size:.88rem;margin:10px 0}.c-check input{width:auto}
+.c-notes{margin:0 0 6px;padding:8px 12px 8px 26px;border-radius:12px;background:var(--amber-soft);color:var(--ink);font-size:.82rem;display:grid;gap:3px}
+.c-stats{grid-template-columns:repeat(3,1fr)}
+.c-tabs button{font-size:.8rem;padding:6px 4px}
+.c-text{margin:0;white-space:pre-wrap;word-break:break-word;font:inherit;font-size:.86rem;line-height:1.45;padding:12px 14px;border-radius:14px;background:var(--glass),var(--card);border:1px solid var(--edge);user-select:text}
+.c-checks{list-style:none;margin:0;padding:0;display:grid;gap:2px;font-size:.76rem}
+.c-checks .ok{color:#55d1ac}.c-checks .bad{color:var(--danger);font-weight:650}
+.c-more{align-items:center}
+.c-openings{display:grid;gap:6px}
+.c-openings>b{font-size:.85rem}
+.c-openings button{display:grid;gap:2px;text-align:left;padding:10px 12px;border-radius:14px;background:var(--glass),var(--card);border:1px solid var(--edge);min-height:0}
+.c-openings button span{font-weight:650;font-size:.88rem}.c-openings button small{color:var(--mute);font-size:.76rem}
+.c-openings button.on{border-color:#55d1ac}
+/* ===== Teddy bot ===== */
+.bot-wrap{position:relative;flex:none}
+.bot{all:unset;cursor:pointer;display:block;position:relative;-webkit-tap-highlight-color:transparent;transform-origin:50% 90%}
+.bot svg{display:block;overflow:visible;filter:drop-shadow(0 4px 10px rgba(255,143,177,.25))}
+.bot .bot-body{transform-origin:60px 100px}
+.bot .bot-eyes{transform-origin:60px 62px;animation:bot-blink 4.6s infinite}
+.eyes-look{transform:translate(-4px,3px)}.eyes-up{transform:translate(4px,-4px)}
+.mood-idle,.mood-happy{animation:bot-breathe 3.2s ease-in-out infinite}
+.mood-sleep{animation:bot-breathe 5s ease-in-out infinite;opacity:.85}
+.mood-worried .bot-body{animation:bot-shiver 1.6s ease-in-out infinite}
+.mood-think .bot-body{animation:bot-tilt 2.4s ease-in-out infinite}
+.ev-jump{animation:bot-jump .8s cubic-bezier(.3,1.6,.5,1)}
+.ev-cheer{animation:bot-cheer 1.4s ease-in-out}
+.ev-star{animation:bot-spin 1.1s cubic-bezier(.4,1.4,.5,1)}
+.ev-party{animation:bot-cheer 1.1s ease-in-out 2}
+.ev-wave{animation:bot-pop 1.2s ease-out}
+.ev-hello .bot-body{animation:bot-peek 1.7s ease-in-out}
+.ev-tickle{animation:bot-wiggle .6s ease-in-out}
+.bot-paw{transform-origin:104px 100px;animation:bot-wave .45s ease-in-out infinite alternate}
+.ev-hello .bot-paw{animation:bot-tap .35s ease-in-out 4 alternate}
+.bot-sweat{animation:bot-sweat 2s ease-in infinite}
+.bot-zzz{position:absolute;right:-10px;top:-10px;font-weight:800;color:var(--mute);font-size:.7rem;pointer-events:none}
+.bot-zzz,.bot-zzz i,.bot-zzz b{animation:bot-float 2.6s ease-out infinite}
+.bot-zzz i{font-style:normal;font-size:.85rem;animation-delay:.5s;display:inline-block}.bot-zzz b{font-size:1rem;animation-delay:1s;display:inline-block}
+.bot-dots{position:absolute;right:-14px;top:-4px;display:flex;gap:3px;pointer-events:none}
+.bot-dots i{width:5px;height:5px;border-radius:50%;background:#55d1ac;animation:bot-dot 1.2s infinite}
+.bot-dots i:nth-child(2){animation-delay:.2s}.bot-dots i:nth-child(3){animation-delay:.4s}
+.bot-hearts{position:absolute;inset:0;pointer-events:none}
+.bot-hearts i{position:absolute;left:50%;top:10%;color:#ff5c93;font-style:normal;font-size:.9rem;animation:bot-heart .9s ease-out forwards}
+.bot-hearts i:nth-child(1){--dx:-22px}.bot-hearts i:nth-child(2){--dx:4px;animation-delay:.08s;font-size:1.1rem}.bot-hearts i:nth-child(3){--dx:24px;animation-delay:.16s}
+.bot-star{position:absolute;right:-12px;top:-14px;color:#ffd166;font-size:1.3rem;pointer-events:none;animation:bot-starpop 1.2s ease-out forwards;text-shadow:0 0 10px rgba(255,209,102,.8)}
+.bot-combo{position:absolute;left:70%;bottom:-6px;font-size:.66rem;font-weight:800;padding:1px 5px;border-radius:999px;background:#2a1a10;color:#ffb067;border:1px solid rgba(255,176,103,.5);white-space:nowrap;animation:bot-pop .5s ease-out;pointer-events:none}
+.bot-bubble{position:absolute;top:calc(100% + 6px);z-index:30;width:max-content;max-width:min(240px,70vw);padding:7px 11px;border-radius:14px;background:#fff;color:#1d1410;font-size:.8rem;font-weight:650;line-height:1.3;box-shadow:0 8px 24px rgba(0,0,0,.35);animation:bot-bubble .25s cubic-bezier(.3,1.5,.5,1);pointer-events:none}
+.bot-bubble.right{left:2px}.bot-bubble.left{right:2px}
+.bot-bubble::before{content:"";position:absolute;top:-5px;width:10px;height:10px;background:#fff;transform:rotate(45deg)}
+.bot-bubble.right::before{left:16px}.bot-bubble.left::before{right:16px}
+.bot-confetti{position:fixed;left:0;right:0;top:0;height:60vh;pointer-events:none;z-index:40;overflow:hidden}
+.bot-confetti i{position:absolute;top:-12px;width:8px;height:12px;border-radius:2px;animation:bot-confetti 1.9s ease-in forwards}
+.her-hi{display:flex;align-items:center;gap:10px;min-width:0}
+.gift-teddy{position:fixed;right:16px;bottom:calc(90px + env(safe-area-inset-bottom));z-index:35;animation:bot-pop .4s ease-out}
+.gift-teddy .bot-bubble{top:auto;bottom:calc(100% + 8px)}.gift-teddy .bot-bubble::before{top:auto;bottom:-5px}
+@keyframes bot-blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@keyframes bot-breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-2px) scale(1.02)}}
+@keyframes bot-shiver{0%,100%{transform:rotate(0)}25%{transform:rotate(-3deg)}75%{transform:rotate(3deg)}}
+@keyframes bot-tilt{0%,100%{transform:rotate(0)}50%{transform:rotate(-8deg)}}
+@keyframes bot-jump{0%{transform:translateY(0) scale(1,1)}20%{transform:translateY(0) scale(1.15,.85)}50%{transform:translateY(-16px) scale(.92,1.1)}80%{transform:translateY(0) scale(1.08,.92)}100%{transform:none}}
+@keyframes bot-cheer{0%,100%{transform:none}20%{transform:translateY(-12px) rotate(-10deg)}40%{transform:translateY(0) rotate(0)}60%{transform:translateY(-12px) rotate(10deg)}80%{transform:translateY(0)}}
+@keyframes bot-spin{0%{transform:scale(1) rotate(0)}50%{transform:scale(1.25) rotate(200deg)}100%{transform:scale(1) rotate(360deg)}}
+@keyframes bot-pop{0%{transform:scale(.4);opacity:0}60%{transform:scale(1.15);opacity:1}100%{transform:scale(1)}}
+@keyframes bot-peek{0%,100%{transform:rotate(0)}30%,70%{transform:rotate(-12deg) translateX(-3px)}}
+@keyframes bot-wiggle{0%,100%{transform:rotate(0)}20%{transform:rotate(-12deg)}40%{transform:rotate(12deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(6deg)}}
+@keyframes bot-wave{from{transform:rotate(-25deg)}to{transform:rotate(20deg)}}
+@keyframes bot-tap{from{transform:translateX(0)}to{transform:translateX(-8px) translateY(4px)}}
+@keyframes bot-sweat{0%{transform:translateY(0);opacity:0}20%{opacity:1}100%{transform:translateY(16px);opacity:0}}
+@keyframes bot-float{0%{transform:translateY(4px);opacity:0}30%{opacity:1}100%{transform:translateY(-10px);opacity:0}}
+@keyframes bot-dot{0%,100%{opacity:.25;transform:translateY(0)}50%{opacity:1;transform:translateY(-3px)}}
+@keyframes bot-heart{0%{transform:translate(-50%,0) scale(.4);opacity:0}30%{opacity:1}100%{transform:translate(calc(-50% + var(--dx)),-34px) scale(1.1);opacity:0}}
+@keyframes bot-starpop{0%{transform:scale(0) rotate(-90deg);opacity:0}40%{transform:scale(1.4) rotate(20deg);opacity:1}100%{transform:scale(1) rotate(0);opacity:0}}
+@keyframes bot-bubble{from{transform:scale(.6) translateY(-6px);opacity:0}to{transform:none;opacity:1}}
+@keyframes bot-confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(60vh) rotate(540deg);opacity:0}}
+@media (prefers-reduced-motion:reduce){.bot,.bot *,.bot-confetti i,.bot-bubble{animation:none!important}}
+.bot-combo{left:50%;bottom:-12px;transform:translateX(-50%);animation:none}
+.bot-bubble{top:calc(100% + 16px)}
+/* ===== WhatsApp counter ===== */
+.counter-box{margin-top:12px;padding-top:12px;border-top:1px solid var(--edge);display:grid;gap:6px}
+.counter-dl{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:8px 12px;border-radius:12px;background:var(--grad);color:#06120e;font-weight:700;text-decoration:none}
+/* ===== Quiet hours + best time ===== */
+.counter-box select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);min-height:40px}
+.best-hint{margin:0;max-width:34ch;text-align:center;font-size:.8rem;color:var(--mute)}
+
+/* ===== Old donors switch ===== */
+.old-switch{display:inline-flex;align-items:center;gap:10px;min-height:40px;padding:6px 14px;border-radius:999px;border:1px solid var(--edge);background:transparent;color:var(--mute);font:inherit;font-size:.9rem;font-weight:600}
+.old-switch b{padding:2px 10px;border-radius:999px;background:var(--line);color:var(--ink);font-size:.78rem;letter-spacing:.06em}
+.old-switch.on{border-color:var(--brand);color:var(--ink)}
+.old-switch.on b{background:var(--grad);color:#06120e}
+.old-switch:disabled{opacity:.6}
+
+.danger-btn{background:var(--danger)!important;color:#fff!important;border-color:var(--danger)!important}
+
+/* ===== Dark by default: calm, soft, one accent ===== */
+.p-hero:not(.compact) .ring-num{background:linear-gradient(180deg,#ffffff 20%,#8fe9cf);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.ring.good{--ringglow:rgba(79,209,172,.45)}.ring.warn{--ringglow:rgba(232,197,99,.38)}.ring.bad{--ringglow:rgba(255,112,112,.38)}
+.ring-track{stroke:rgba(255,255,255,.08)}
+.p-title{letter-spacing:-.02em}
+.text-btn{background:rgba(255,255,255,.04);backdrop-filter:blur(6px)}
+.text-btn:hover{border-color:var(--brand);color:var(--ink)}
+.status-line{backdrop-filter:blur(8px)}
+.modal-backdrop{background:rgba(2,6,5,.66);backdrop-filter:blur(4px)}
+::selection{background:rgba(79,209,172,.35)}
+
+/* ===== "Manager saw your progress" ===== */
+.seen-line{display:inline-flex;align-items:center;gap:8px;align-self:center;margin:0;font-size:.8rem;font-weight:600;color:var(--mute);animation:rise .4s ease-out}
+.seen-line i{width:7px;height:7px;border-radius:50%;background:var(--brand);box-shadow:0 0 8px var(--brand);animation:pulse 2s ease-in-out infinite}
+.seen-line.empty{visibility:hidden;animation:none}
+
+/* ===== Ask for update ===== */
+.hero-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:10px}
+.ask-btn{min-height:40px;padding:6px 18px;border-radius:999px;border:0;background:var(--grad);color:#06120e;font:inherit;font-size:.9rem;font-weight:700;box-shadow:var(--glow)}
+.ask-btn.rest,.ask-btn:disabled{background:rgba(255,255,255,.06);color:var(--mute);box-shadow:none;border:1px solid var(--edge)}
+
+/* ===== Alerts status in her header ===== */
+.bell-btn.off{border-color:var(--brand);color:var(--ink);background:var(--brand-soft)}
+.bell-btn.on{color:var(--brand)}
+.bell-btn.warn{color:var(--amber);border-color:var(--amber)}
+span.bell-btn{display:inline-flex;align-items:center}
+/* Narrow phones: keep "Hi Areeba" on one line next to the two header buttons */
+.her-top h1{white-space:nowrap}
+@media (max-width:400px){.her-top{gap:6px}.her-hi{gap:6px}.her-top h1{font-size:1.02rem}.her-top .top-btns{gap:4px}.her-top .bell-btn{padding:5px 9px;font-size:.78rem}}
+.her-top h1{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* ===== Notifications banner on her screen ===== */
+.alert-banner{flex:none;display:grid;gap:10px;padding:12px 14px;border-radius:18px;background:var(--glass),var(--brand-soft);border:1px solid var(--brand)}
+.alert-banner p{margin:0;display:grid;gap:2px}
+.alert-banner b{font-size:1rem}
+.alert-banner span{font-size:.85rem;color:var(--mute);line-height:1.35}
+.alert-cta{min-height:48px;border-radius:14px;border:0;background:var(--grad);color:#06120e;font:inherit;font-size:1rem;font-weight:800;box-shadow:var(--glow)}
+
+/* Clean task: small, quiet, two taps */
+.clean-row{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:10px}
+.clean-btn{opacity:.8}.clean-btn:hover{opacity:1;border-color:var(--danger);color:var(--ink)}
+
+/* Saved messages, WhatsApp-like (dark) */
 .wa{min-height:100dvh;display:flex;flex-direction:column;background:#0b141a;color:#e9edef;max-width:720px;margin:0 auto}
 .wa-top{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:12px;padding:10px 14px;background:#202c33}
 .wa-top>a{color:#e9edef;text-decoration:none;font-size:22px;padding:4px 6px}
@@ -423,34 +583,19 @@ span.bell-btn{display:inline-flex;align-items:center}
 .wa-ok{margin:6px 0 0;color:#53bdeb;font-size:13px;font-weight:600}
 .wa-actions{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 .wa-actions>*{flex:1;min-width:80px;text-align:center;padding:10px 8px;border-radius:20px;border:1px solid #2a3942;background:#111b21;color:#e9edef;font:inherit;font-size:14px;text-decoration:none;cursor:pointer}
-.wa-actions .wa-done{flex-basis:100%;background:#00a884;border-color:#00a884;color:#0b141a;font-weight:700}
-
-/* Manager: group plan on the Case page */
-.gp{display:flex;flex-direction:column;gap:12px}
-.gp-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
-.gp-list li{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:rgba(255,255,255,.03)}
-.gp-list li.posted{opacity:.7}
-.gp-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:baseline}
-.gp-state{font-size:12.5px;color:var(--mute)}.gp-state.waiting{color:#e8c563}.gp-state.posted{color:var(--brand)}
-.gp-text{white-space:pre-wrap;word-break:break-word;font:inherit;font-size:13.5px;margin:8px 0 0;color:var(--ink)}
-.gp-text.clip{max-height:6.2em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 60%,transparent)}
-.gp-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
-.gp-row input{flex:1;min-width:170px}
-.gp-add{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px}
-.gp-add label{font-size:13px;color:var(--mute)}
-.gp-add input,.gp-add textarea,.gp-row input{background:rgba(255,255,255,.04);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;font:inherit;color-scheme:dark}
-.gp-line{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:12px;padding:8px}
-.gp-line textarea{width:100%;resize:vertical;min-height:84px}
-.gp-line button{align-self:flex-end;min-width:110px}
 
 /* Clearer case + schedule screens */
 .c-choose{display:flex;flex-direction:column;gap:10px;margin-top:4px}
 .c-choose .d-btn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:14px 16px}
 .c-choose .d-btn small{font-weight:400;font-size:12.5px;opacity:.8}
-.gp-how{margin:0;padding:10px 12px;border-radius:12px;background:rgba(79,209,172,.08);border:1px solid rgba(79,209,172,.25);font-size:14px}
-.gp-h{margin:8px 0 0;font-size:15px;letter-spacing:.02em}
-.gp-empty{margin:0;color:var(--mute);font-size:14px}
-.gp-step{display:flex;align-items:center;gap:8px;font-size:14px!important;color:var(--ink)!important;margin-top:4px}
-.gp-step span{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--brand);color:#06231b;font-weight:800;font-size:12px}
 .hint.small{font-size:12px}
 .c-form textarea{min-height:200px}
+
+/* Saved messages: the manager's box */
+.sv-new{display:flex;flex-direction:column;gap:8px;background:#111b21;border:1px solid #2a3942;border-radius:12px;padding:10px}
+.sv-new textarea,.sv-idea textarea{width:100%;background:#0b141a;color:#e9edef;border:1px solid #2a3942;border-radius:10px;padding:10px;font:inherit;font-size:15px;resize:vertical}
+.sv-row{display:flex;gap:8px;flex-wrap:wrap}.sv-row .d-btn{flex:1;min-width:100px}
+.sv-ideas{display:flex;flex-direction:column;gap:8px}
+.sv-idea{display:flex;flex-direction:column;gap:6px}.sv-idea button{align-self:flex-end;min-width:100px}
+/* Manager header: 4 buttons fit on a phone */
+@media (max-width:460px){.p-top .top-btns{flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:62%}.p-top .top-btns .text-btn{padding:6px 10px;font-size:13px}}
