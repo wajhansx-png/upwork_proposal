@@ -75,7 +75,7 @@ export function fmtWhen(ts: number, now: number, tz: string) {
  * Returns a UTC timestamp, or null if no time is found.
  */
 export function parseDeadline(text: string, now: number, tz: string, endHour: number): number | null {
-  const s = text.toLowerCase();
+  const s = text.toLowerCase().replace(/\b(\d{1,2})\.(\d{2})\b(?!\s*(?:dms?|messages?|donors?))/g, "$1:$2");
 
   const rel = /\b(?:in|within|after)\s+(\d+(?:\.\d+)?|an|a|half an)\s*(hours?|hrs?|h|minutes?|mins?|m)\b/.exec(s);
   if (rel) {
@@ -98,8 +98,8 @@ export function parseDeadline(text: string, now: number, tz: string, endHour: nu
     const ap = clock[3]?.[0];
     if (ap === "p" && h < 12) h += 12;
     if (ap === "a" && h === 12) h = 0;
-    if (!ap && h <= 12 && !clock[2]) {
-      // "by 5" with no am/pm: take the earliest option that is still ahead.
+    if (!ap && h <= 12) {
+      // "by 5" or "by 10:30" with no am/pm: take the earliest option that is still ahead.
       const options = [h % 12, (h % 12) + 12];
       const ahead = options.find((x) => zonedToUtc(base.y, base.m, base.d, x, mi, tz) > now);
       h = ahead ?? options[0];

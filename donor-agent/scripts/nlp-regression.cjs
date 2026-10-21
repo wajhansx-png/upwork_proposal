@@ -99,4 +99,15 @@ check('instructions: avoid', nlp.extractInstructions('Areeba message 30 donors b
 check('title: call', nlp.cleanTitle('Areeba call the Reed family by 3pm', 'Areeba'), 'Call the Reed family');
 check('title: prepare', nlp.cleanTitle('please prepare the thank you list by 5pm tomorrow', 'Areeba'), 'Prepare the thank you list');
 
+// ---- change the time of the running task (dot times, "update ... time", no am/pm picks the next one ahead)
+{
+  const tm = require('../src/lib/time.ts');
+  const nowMs = Date.parse('2026-10-21T16:38:00Z'); // 9:38pm in Karachi
+  const when = (txt) => { const c = nlp.managerCommand(txt, 'Areeba', false); if (!c || c.kind !== 'deadline') return c && c.kind; return new Date(tm.parseDeadline(/^\s*(?:by|before|at|until|till|in|within)\b/i.test(c.rest) ? c.rest : `by ${c.rest}`, nowMs, 'Asia/Karachi', 22)).toISOString(); };
+  check('time change: dot time', when('man update by 10.30 the time for existing task'), '2026-10-21T17:30:00.000Z');
+  check('time change: colon, no am/pm', when('change deadline to 10:30'), '2026-10-21T17:30:00.000Z');
+  check('time change: till', when('extend time till 10.45'), '2026-10-21T17:45:00.000Z');
+  check('time change: new task is not a time change', nlp.managerCommand('send 30 dms by 10.30', 'Areeba', false), null);
+}
+
 if (bad) { console.log(`\n${bad} FAILED`); process.exitCode = 1; } else console.log('PASS: numbers, progress reports, started, blockers, questions, manager messages, instructions, titles.');

@@ -289,6 +289,15 @@ export function managerCommand(text: string, teammate: string, hasPendingAsk: bo
   }
   const dl = /\b(?:change|move|set|shift|push|update|make)\s+(?:the\s+|her\s+)?(?:deadline|due time|due|finish time|time)\s*(?:to|till|until|at|for)?\s*(.+)$/i.exec(t) || /\b(?:new deadline|deadline is now|deadline now)\s*(?:is|:)?\s*(.+)$/i.exec(t);
   if (dl) return { kind: "deadline", rest: dl[1] };
+  // "update by 10.30 the time for existing task": a change word, a time word, and a clock time, with no new work.
+  const clockAt = /\b(?:by|before|at|until|till)\s+(\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)?)/i.exec(t);
+  if (
+    clockAt &&
+    /\b(?:update|change|move|set|shift|extend|make|push)\b/i.test(t) &&
+    /\b(?:deadline|due|time|timing)\b/i.test(t) &&
+    !/\b\d+\s*(?:dms?|messages?|donors?)\b/i.test(t)
+  )
+    return { kind: "deadline", rest: `by ${clockAt[1]}` };
   const tg = /\b(?:make it|change (?:it|the target|target|the count|count|the number) to|set (?:the )?target(?: to)?|target (?:is )?now|reduce (?:it )?to|increase (?:it )?to|lower (?:it )?to)\s*(\d{1,4})\b/i.exec(t);
   if (tg) return { kind: "target", target: Number(tg[1]) };
   if (
