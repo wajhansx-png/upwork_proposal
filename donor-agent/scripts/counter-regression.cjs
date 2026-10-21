@@ -19,7 +19,7 @@ Module._load = function (request, parent, ...rest) {
   return load.call(this, request, parent, ...rest);
 };
 const C = require('../src/lib/counter.ts');
-const { recordCounterEvents, setCounter, setOldDonors, markDonor, handleManagerMessage, clearChatsAndTasks } = require('../src/lib/agent.ts');
+const { recordCounterEvents, setCounter, setOldDonors, markDonor, handleManagerMessage, clearChatsAndTasks, deleteTask } = require('../src/lib/agent.ts');
 const { wantsOldDonors } = require('../src/lib/nlp.ts');
 const { seedDonors } = require('../src/lib/donors.ts');
 const { makeZip } = require('../src/lib/zip.ts');
@@ -318,6 +318,25 @@ const ev = (id, phone, dir = 'out', at = now) => ({ id, phone, dir, at });
     assert.equal(rr.ok, true, 'the add-on still works with no task');
     await handleManagerMessage('Areeba send 5 DMs in 2 hours');
     assert.equal(db.tasks.length, 1, 'a new task can be made after a clear');
+  }
+
+  // 11. Delete one task: only that task goes. Chats, donors, the other task and the add-on stay.
+  {
+    db = freshDb([{ ...task(), id: 'keep', status: 'done' }, task()]);
+    const doomed = db.tasks[1].id;
+    db.messages = [{ id: 'm1', owner: 'manager', from: 'user', text: 'hi', at: iso(now) }];
+    db.agent.pendingAssignment = { kind: 'dms', request: 'x', createdAt: iso(now) };
+    db.agent.managerSeen = { at: iso(now), taskId: doomed, done: 3 };
+    const donorsBefore = JSON.stringify(db.donors);
+    assert.deepEqual(await deleteTask(doomed), { ok: true });
+    assert.deepEqual(db.tasks.map((t) => t.id), ['keep'], 'only the chosen task is deleted');
+    assert.equal(db.messages.length, 1, 'chats stay');
+    assert.equal(db.agent.pendingAssignment, undefined, 'an unfinished draft goes too');
+    assert.equal(db.agent.managerSeen, undefined, 'the seen mark for it goes');
+    assert.equal(JSON.stringify(db.donors), donorsBefore, 'donors are untouched');
+    assert.equal((await deleteTask(doomed)).ok, false, 'deleting it twice says it is gone');
+    const rr = await recordCounterEvents('tok', 'teammate', [ev('c9', db.donors.find((d) => d.phone).phone.slice(1))]);
+    assert.equal(rr.ok, true, 'the add-on still works with no running task');
   }
 
   console.log('counter regression: all passed');

@@ -1342,6 +1342,19 @@ export async function clearChatsAndTasks(): Promise<{ messages: number; tasks: n
   });
 }
 
+/** Manager only: delete one task (the one on his screen). Chats, donors and settings stay. The one-minute clock sees the task is gone and stops. */
+export async function deleteTask(id: string): Promise<{ ok: boolean; error?: string }> {
+  return withDb((d) => {
+    const i = d.tasks.findIndex((t) => t.id === id);
+    if (i < 0) return { ok: false, error: "That task is already gone." };
+    d.tasks.splice(i, 1);
+    d.agent.pendingAssignment = undefined;
+    d.agent.heldAnswer = undefined;
+    if (d.agent.managerSeen?.taskId === id) d.agent.managerSeen = undefined;
+    return { ok: true };
+  });
+}
+
 // ---------- ask for update ----------
 
 const ASK_COOLDOWN_MS = 60_000;

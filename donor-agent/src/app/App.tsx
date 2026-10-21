@@ -537,6 +537,22 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
       setAskBusy(false);
     }
   };
+  const [cleanAsk, setCleanAsk] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+  const cleanTask = async () => {
+    if (!task || cleaning) return;
+    setCleaning(true);
+    setError("");
+    try {
+      await api("/api/task-delete", "POST", { id: task.id });
+      setCleanAsk(false);
+      await refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setCleaning(false);
+    }
+  };
   const sent = task?.kind === "dms" ? task.reportedDone ?? 0 : task && (task.status === "review" || task.status === "done") ? 1 : 0;
   const target = task?.kind === "dms" ? task.target : task ? 1 : 0;
   const open = task?.status === "open";
@@ -594,6 +610,18 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
         )}
         {canSwitch && !chatOpen && <p className="best-hint">{task!.oldDonors ? `Old donors ON: each old donor ${name} messages counts once.` : `Old donors OFF: only new donors count. Turn on for a task of old donors.`}</p>}
         {error && !chatOpen && <p role="alert" className="err">{error}</p>}
+        {task && !chatOpen && (
+          <div className="clean-row">
+            {cleanAsk ? (
+              <>
+                <button className="danger-btn" disabled={cleaning} onClick={() => void cleanTask()}>{cleaning ? "Deleting…" : "Yes, delete this task"}</button>
+                <button className="text-btn" disabled={cleaning} onClick={() => setCleanAsk(false)}>Keep it</button>
+              </>
+            ) : (
+              <button className="text-btn clean-btn" onClick={() => setCleanAsk(true)}>🗑 Clean task</button>
+            )}
+          </div>
+        )}
         {!open && !chatOpen && s.bestTime && (
           <p className="best-hint">⏰ {name} sends most DMs {s.bestTime.label} ({Math.round((s.bestTime.sends / s.bestTime.total) * 100)}% of her last {s.bestTime.total} DMs, {s.bestTime.days} days). Give her tasks just before that.</p>
         )}

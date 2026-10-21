@@ -398,3 +398,7 @@ span.bell-btn{display:inline-flex;align-items:center}
 .alert-banner b{font-size:1rem}
 .alert-banner span{font-size:.85rem;color:var(--mute);line-height:1.35}
 .alert-cta{min-height:48px;border-radius:14px;border:0;background:var(--grad);color:#06120e;font:inherit;font-size:1rem;font-weight:800;box-shadow:var(--glow)}
+
+/* Clean task: small, quiet, two taps */
+.clean-row{display:flex;gap:10px;justify-content:center;align-items:center;margin-top:10px}
+.clean-btn{opacity:.8}.clean-btn:hover{opacity:1;border-color:var(--danger);color:var(--ink)}
