@@ -181,7 +181,7 @@ export default function CasePage() {
     <main className="p-shell donors case-page">
       <header className="p-top">
         <div>
-          <p className="p-eyebrow">Case writer</p>
+          <p className="p-eyebrow">Case</p>
           <h1 className="p-title">{mode === "view" && c ? `${c.facts.name}${isOpen ? "" : " · closed"}` : "New case"}</h1>
         </div>
         <div className="top-btns">
@@ -194,14 +194,20 @@ export default function CasePage() {
       <div className="d-scroll">
         {mode === "details" && (
           <section className="d-ideas c-form">
-            <b>Paste the case details</b>
-            <p className="hint">Any language. Name, problem, what doctors said, proof, amount left. I will not guess anything. Already wrote the full post yourself? Paste it and tap “Use my text exactly”: the app keeps every word.</p>
-            <textarea value={details} onChange={(e) => setDetails(e.target.value)} placeholder="Affan, 7, Peshawar. Hemophilia. Bleeding inside, knee and hand. Doctor said delay can put them at risk of removal. Aga Khan lab report. 26k left." />
-            <div className="d-actions">
-              <button className="d-btn hot" disabled={busy === "read" || details.trim().length < 10} onClick={read}>{busy === "read" ? "Reading…" : "Read details"}</button>
-              <button className="d-btn" disabled={busy === "own" || details.trim().length < 20} onClick={() => saveOwn()}>{busy === "own" ? "Saving…" : "Use my text exactly"}</button>
-              <button className="d-btn" onClick={() => { setForm(toForm({})); setNotes([]); setMode("form"); }}>Fill in myself</button>
+            <b>Paste your case</b>
+            <p className="hint">Your full post, or just the details (any language).</p>
+            <textarea value={details} onChange={(e) => setDetails(e.target.value)} placeholder={"Little Yousuf is only 2 years old…\n…\nRs. 70,000 needed."} />
+            <div className="c-choose">
+              <button className="d-btn hot" disabled={busy === "own" || details.trim().length < 20} onClick={() => saveOwn()}>
+                {busy === "own" ? "Saving…" : "Keep my text as it is"}
+                <small>You wrote the full post. Not one word changes.</small>
+              </button>
+              <button className="d-btn" disabled={busy === "read" || details.trim().length < 10} onClick={read}>
+                {busy === "read" ? "Reading…" : "Let the app write the post"}
+                <small>You pasted only details. The app writes the post.</small>
+              </button>
             </div>
+            <button className="text-btn" onClick={() => { setForm(toForm({})); setNotes([]); setMode("form"); }}>Fill a form instead</button>
             {c && <button className="text-btn" onClick={() => setMode("view")}>Back to {c.facts.name}</button>}
           </section>
         )}
@@ -264,13 +270,13 @@ export default function CasePage() {
             {notes.length > 0 && <ul className="c-notes">{notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
             {isOpen && (
               <form className="d-phone" onSubmit={(e) => { e.preventDefault(); void setLeft(); }}>
-                <input inputMode="numeric" placeholder="Amount left now (Rs)" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                <input inputMode="numeric" placeholder="Money still needed (Rs)" value={amount} onChange={(e) => setAmount(e.target.value)} />
                 <button type="submit" disabled={!amount.trim() || !!busy}>Update</button>
               </form>
             )}
             <div className="d-tabs c-tabs" role="tablist">
               {(["main", "groups", "dm", "reminder", "close"] as const).map((t) => (
-                <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t === "main" ? "Group post" : t === "groups" ? "Plan" : t === "dm" ? "DM" : t === "reminder" ? "Reminder" : "Close"}</button>
+                <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t === "main" ? "Post" : t === "groups" ? "Schedule" : t === "dm" ? "DM" : t === "reminder" ? "Reminder" : "Finish"}</button>
               ))}
             </div>
             {tab === "main" && isOpen && !c.ownText && (c.options?.length ?? 0) > 1 && (

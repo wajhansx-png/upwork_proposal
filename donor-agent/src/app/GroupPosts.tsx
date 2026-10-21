@@ -57,7 +57,7 @@ export default function GroupPosts() {
     setBusy(id);
     try {
       setV(await api<View>("/api/groups", "POST", { action: "posted", id }));
-      setToast("Great. Marked as posted ✓");
+      setToast("Thank you ✓");
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -76,20 +76,20 @@ export default function GroupPosts() {
         </div>
       </header>
       <div className="wa-body">
-        <p className="wa-sys">Post each message in ALL groups, then tap “I posted it”.</p>
-        {v && !v.items.length && <p className="wa-sys">No group message yet. You will get a notification when it is time.</p>}
+        <p className="wa-sys">Copy each message, post it in ALL groups, then tap Done.</p>
+        {v && !v.items.length && <p className="wa-sys">Nothing to post now. You will get a notification when it is time.</p>}
         {v?.items.map((m) => (
           <div key={m.id} className={`wa-msg ${m.doneAt ? "done" : ""}`}>
-            <span className="wa-tag">{m.kind === "case" ? "📢 Full case · post in all groups" : `💬 Message ${m.n} · post in all groups`}</span>
+            <span className="wa-tag">📢 Post in ALL groups</span>
             <p className="wa-text">{m.text}</p>
             <span className="wa-time">{hhmm(m.sentAt)}{m.doneAt && <i className="wa-ticks"> ✓✓</i>}</span>
             {m.doneAt ? (
-              <p className="wa-ok">Posted at {hhmm(m.doneAt)} ✓</p>
+              <p className="wa-ok">Done ✓ · {hhmm(m.doneAt)}</p>
             ) : (
               <div className="wa-actions">
                 <button onClick={() => void copy(m.text)}>Copy</button>
-                <a href={`https://wa.me/?text=${encodeURIComponent(m.text)}`} target="_blank" rel="noreferrer">WhatsApp</a>
-                <button className="wa-done" disabled={busy === m.id} onClick={() => void posted(m.id)}>{busy === m.id ? "…" : "I posted it ✓"}</button>
+                <a href={`https://wa.me/?text=${encodeURIComponent(m.text)}`} target="_blank" rel="noreferrer">Share</a>
+                <button className="wa-done" disabled={busy === m.id} onClick={() => void posted(m.id)}>{busy === m.id ? "…" : "Done ✓ I posted it in all groups"}</button>
               </div>
             )}
           </div>

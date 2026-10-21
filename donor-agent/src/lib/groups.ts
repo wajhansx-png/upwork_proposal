@@ -186,7 +186,6 @@ export function runPlan(d: Db, now: number): PlanPush[] {
   const pushes: PlanPush[] = [];
   if (!c?.plan?.length) return pushes;
   const name = d.settings.teammateName;
-  const n = (p: GroupPost) => c.plan!.indexOf(p) + 1;
   for (const p of c.plan) {
     if (p.doneAt) continue;
     if (!p.sentAt) {
@@ -195,8 +194,8 @@ export function runPlan(d: Db, now: number): PlanPush[] {
       p.shownText = postText(c, p);
       pushes.push({
         role: "teammate",
-        title: p.kind === "case" ? "📢 Post the case in all groups" : "📢 New group message",
-        body: `${p.shownText.split("\n").find((l) => l.trim())?.replace(/[*_]/g, "").slice(0, 90) ?? ""}\nOpen, copy, and post it in all groups.`,
+        title: "📢 Post this in all groups now",
+        body: `${p.shownText.split("\n").find((l) => l.trim())?.replace(/[*_]/g, "").slice(0, 90) ?? ""}\nTap to open. Copy it and post in all groups.`,
         tag: `grp-${p.id}`,
         url: "/areeba/posts",
         persistent: true,
@@ -206,13 +205,13 @@ export function runPlan(d: Db, now: number): PlanPush[] {
     const waited = now - ms(p.sentAt);
     if (!p.lateToldAt && waited >= TELL_MANAGER_AFTER) {
       p.lateToldAt = iso(now);
-      pushes.push({ role: "manager", title: "Group message not posted", body: `${name} has not posted group message ${n(p)} yet (${Math.round(waited / MIN)} min).`, tag: `grp-late-${p.id}`, url: "/manager/case" });
+      pushes.push({ role: "manager", title: "Group message not posted", body: `${name} has not posted the group message yet (${Math.round(waited / MIN)} min). See Case → Schedule.`, tag: `grp-late-${p.id}`, url: "/manager/case" });
     }
     const quiet = quietUntil(d.settings, now, Number.MAX_SAFE_INTEGER);
     if (!quiet && now - Math.max(ms(p.sentAt), ms(p.lastNudgeAt)) >= NUDGE_EVERY) {
       p.lastNudgeAt = iso(now);
       p.nudges = (p.nudges ?? 0) + 1;
-      pushes.push({ role: "teammate", title: "Group message waiting", body: `Group message ${n(p)} is not posted yet. Please post it in all groups now.`, tag: `grp-${p.id}`, url: "/areeba/posts", persistent: true });
+      pushes.push({ role: "teammate", title: "Group message waiting", body: "A group message is still not posted. Please post it in all groups and tap Done.", tag: `grp-${p.id}`, url: "/areeba/posts", persistent: true });
     }
   }
   return pushes;

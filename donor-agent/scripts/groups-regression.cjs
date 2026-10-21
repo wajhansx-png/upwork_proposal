@@ -59,7 +59,7 @@ const add = (db, kind, at, text) => G.changePlan(db, { action: 'add', kind, at: 
     assert.equal(p.length, 1);
     assert.equal(p[0].role, 'teammate');
     assert.equal(p[0].url, '/areeba/posts');
-    assert.match(p[0].title, /case/i);
+    assert.match(p[0].title, /all groups/i);
     her = G.planView(db, 'teammate', T0 + 10 * MIN);
     assert.equal(her.items.length, 1);
     assert.match(her.items[0].text, /Affan/);
@@ -86,7 +86,7 @@ const add = (db, kind, at, text) => G.changePlan(db, { action: 'add', kind, at: 
     assert.equal(G.runPlan(db, T0 + 15 * MIN).length, 0);
     p = G.runPlan(db, T0 + 30 * MIN);
     assert.deepEqual(p.map((x) => x.role).sort(), ['manager', 'teammate'], 'manager told at 30 minutes');
-    assert.match(p.find((x) => x.role === 'manager').body, /Areeba has not posted group message 1/);
+    assert.match(p.find((x) => x.role === 'manager').body, /Areeba has not posted the group message/);
     p = G.runPlan(db, T0 + 60 * MIN);
     assert.deepEqual(p.map((x) => x.role), ['teammate'], 'manager told only once');
     assert.equal(G.planView(db, 'manager', T0).items[0].state, 'waiting');

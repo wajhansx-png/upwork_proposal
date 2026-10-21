@@ -33,6 +33,7 @@ export default function GroupPlan({ name }: { name: string }) {
   const [lines, setLines] = useState<string[]>([]);
   const [linesBy, setLinesBy] = useState("");
   const [own, setOwn] = useState("");
+  const [showOwn, setShowOwn] = useState(false);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
 
@@ -77,7 +78,7 @@ export default function GroupPlan({ name }: { name: string }) {
     try {
       const r = await api<{ lines: string[]; by: string }>("/api/groups", "POST", { action: "lines" });
       setLines(r.lines);
-      setLinesBy(r.by === "ai" ? "Written by AI, checked by the app (no new claims, easy English)." : "AI is off or its lines broke a rule: these come from the guide.");
+      setLinesBy(r.by === "ai" ? "Written by AI. The app removed any text with made-up facts." : "AI did not answer, so these are ready-made texts.");
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -86,32 +87,39 @@ export default function GroupPlan({ name }: { name: string }) {
   };
   const addLine = async (text: string, i?: number) => {
     if (await run(`add${i ?? "own"}`, { action: "add", kind: "line", text, at: fromLocal(at) })) {
-      if (i === undefined) setOwn("");
+      if (i === undefined) {
+        setOwn("");
+        setShowOwn(false);
+      }
       else setLines((l) => l.filter((_, j) => j !== i));
     }
   };
 
   if (!v) return <p className="hint">{err || "Loading…"}</p>;
   const hasCase = v.items.some((i) => i.kind === "case" && i.state !== "posted");
+  const stateText = (i: Item) => (i.state === "posted" ? `✓ Posted · ${when(i.doneAt!)}` : i.state === "waiting" ? `⏳ With ${name} · not posted yet` : `🕒 ${when(i.at)}`);
   return (
     <section className="gp">
-      <p className="hint">{name} gets each message at its time, with a notification. She posts it in all groups and taps “I posted it”. If she is late she is pushed every 10 minutes, and you are told after 30 minutes. It all stops when you close the case.</p>
+      <p className="gp-how">At each time, {name} gets a notification with the text. She posts it in all groups and taps <b>Done</b>.</p>
       {err && <p className="err" onClick={() => setErr("")}>{err}</p>}
 
-      {v.items.length > 0 && (
+      <h3 className="gp-h">Schedule</h3>
+      {v.items.length === 0 ? (
+        <p className="gp-empty">Nothing yet. Add messages below.</p>
+      ) : (
         <ol className="gp-list">
           {v.items.map((i) => (
             <li key={i.id} className={i.state}>
               <div className="gp-head">
-                <b>{i.n}. {i.kind === "case" ? "Full case" : "Emotional text"}</b>
-                <span className={`gp-state ${i.state}`}>{i.state === "posted" ? `✓ Posted ${when(i.doneAt!)}` : i.state === "waiting" ? `Sent to ${name} ${when(i.sentAt!)} · not posted yet` : when(i.at)}</span>
+                <b>{i.kind === "case" ? "📄 Case post" : "💬 Short text"}</b>
+                <span className={`gp-state ${i.state}`}>{stateText(i)}</span>
               </div>
               <pre className={`gp-text ${i.kind === "case" ? "clip" : ""}`}>{i.preview}</pre>
               {i.state === "planned" && (
                 <div className="gp-row">
-                  <input type="datetime-local" aria-label="Time" defaultValue={toLocal(new Date(i.at).getTime())} onBlur={(e) => e.target.value && fromLocal(e.target.value) !== i.at && void run(`at${i.id}`, { action: "edit", id: i.id, at: fromLocal(e.target.value) })} />
+                  <input type="datetime-local" aria-label="Change time" defaultValue={toLocal(new Date(i.at).getTime())} onBlur={(e) => e.target.value && fromLocal(e.target.value) !== i.at && void run(`at${i.id}`, { action: "edit", id: i.id, at: fromLocal(e.target.value) })} />
                   <button className="d-btn" disabled={!!busy} onClick={() => void run(`now${i.id}`, { action: "now", id: i.id })}>Send now</button>
-                  <button className="text-btn" disabled={!!busy} onClick={() => void run(`rm${i.id}`, { action: "remove", id: i.id })}>Remove</button>
+                  <button className="text-btn" disabled={!!busy} onClick={() => void run(`rm${i.id}`, { action: "remove", id: i.id })}>Delete</button>
                 </div>
               )}
             </li>
@@ -119,27 +127,35 @@ export default function GroupPlan({ name }: { name: string }) {
         </ol>
       )}
 
+      <h3 className="gp-h">Add a message</h3>
       <div className="gp-add">
-        <label>Time for the next message</label>
+        <label className="gp-step"><span>1</span> When should {name} get it?</label>
         <input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
+        <label className="gp-step"><span>2</span> What should she post?</label>
         {!hasCase && (
-          <button className="d-btn hot" disabled={!!busy || !at} onClick={() => void run("case", { action: "add", kind: "case", at: fromLocal(at) })}>{v.items.some((i) => i.kind === "case") ? "+ Add the full case post again" : "+ Add the full case post"}</button>
+          <button className="d-btn hot" disabled={!!busy || !at} onClick={() => void run("case", { action: "add", kind: "case", at: fromLocal(at) })}>📄 Add the case post</button>
         )}
-        <button className="d-btn" disabled={!!busy} onClick={() => void write()}>{busy === "lines" ? "Writing…" : lines.length ? "✨ Write 5 new versions" : "✨ Write 5 emotional texts"}</button>
+        <button className="d-btn" disabled={!!busy} onClick={() => void write()}>{busy === "lines" ? "Writing…" : lines.length ? "✨ Show 5 other texts" : "✨ Get 5 short texts from AI"}</button>
         {lines.length > 0 && (
           <>
-            <p className="hint">{linesBy} The app adds the last line itself: <i>{v.payLine}</i></p>
+            <p className="hint">Pick one, change it if you want, tap Add. The app puts this at the end: <i>{v.payLine}</i></p>
             {lines.map((l, i) => (
               <div key={i} className="gp-line">
                 <textarea value={l} rows={4} onChange={(e) => setLines((all) => all.map((x, j) => (j === i ? e.target.value : x)))} />
                 <button className="d-btn hot" disabled={!!busy || !at || !l.trim()} onClick={() => void addLine(l, i)}>{busy === `add${i}` ? "Adding…" : "Add"}</button>
               </div>
             ))}
+            {linesBy && <p className="hint small">{linesBy}</p>}
           </>
         )}
-        <label>Or write your own (2–3 lines)</label>
-        <textarea value={own} rows={3} onChange={(e) => setOwn(e.target.value)} placeholder={"He is still waiting.\nWe scroll, he waits.\nBe the one who helps today."} />
-        <button className="d-btn" disabled={!!busy || !own.trim() || !at} onClick={() => void addLine(own)}>Add my text</button>
+        {showOwn ? (
+          <div className="gp-line">
+            <textarea value={own} rows={3} autoFocus onChange={(e) => setOwn(e.target.value)} placeholder={"He is still waiting.\nBe the one who helps today."} />
+            <button className="d-btn hot" disabled={!!busy || !own.trim() || !at} onClick={() => void addLine(own)}>Add</button>
+          </div>
+        ) : (
+          <button className="d-btn" onClick={() => setShowOwn(true)}>✍️ Write my own text</button>
+        )}
       </div>
     </section>
   );

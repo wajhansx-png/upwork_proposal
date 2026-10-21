@@ -1023,7 +1023,7 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
       {!!s.groupWaiting && !typing && (
         <a className="group-banner" href="/areeba/posts">
           <span>📢</span>
-          <p><b>{s.groupWaiting === 1 ? "1 group message to post" : `${s.groupWaiting} group messages to post`}</b><small>Tap to open, copy, and post in all groups.</small></p>
+          <p><b>{s.groupWaiting === 1 ? "Post 1 message in your groups" : `Post ${s.groupWaiting} messages in your groups`}</b><small>Tap here. Copy it and post in all groups.</small></p>
           <i aria-hidden>›</i>
         </a>
       )}

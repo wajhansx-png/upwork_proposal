@@ -56,8 +56,8 @@ export async function POST(req: NextRequest) {
         d.cases = d.cases.slice(-30);
       });
       const notes = [
-        `Saved exactly as you wrote it. I read: name ${facts.name}, amount left ${facts.amountLeft ? `Rs ${facts.amountLeft.toLocaleString("en-US")}` : "not found"}.`,
-        ...(facts.amountLeft ? [] : ["Type the amount left in the box below, so reminders and the plan show the right amount."]),
+        `Saved. Name: ${facts.name}. Still needed: ${facts.amountLeft ? `Rs ${facts.amountLeft.toLocaleString("en-US")}` : "not found"}.`,
+        ...(facts.amountLeft ? [] : ["Type the money still needed in the box below."]),
       ];
       return NextResponse.json({ ...view(await readDb()), dropped: notes });
     }

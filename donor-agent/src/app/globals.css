@@ -442,3 +442,15 @@ span.bell-btn{display:inline-flex;align-items:center}
 .gp-line{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:12px;padding:8px}
 .gp-line textarea{width:100%;resize:vertical;min-height:84px}
 .gp-line button{align-self:flex-end;min-width:110px}
+
+/* Clearer case + schedule screens */
+.c-choose{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+.c-choose .d-btn{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:14px 16px}
+.c-choose .d-btn small{font-weight:400;font-size:12.5px;opacity:.8}
+.gp-how{margin:0;padding:10px 12px;border-radius:12px;background:rgba(79,209,172,.08);border:1px solid rgba(79,209,172,.25);font-size:14px}
+.gp-h{margin:8px 0 0;font-size:15px;letter-spacing:.02em}
+.gp-empty{margin:0;color:var(--mute);font-size:14px}
+.gp-step{display:flex;align-items:center;gap:8px;font-size:14px!important;color:var(--ink)!important;margin-top:4px}
+.gp-step span{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--brand);color:#06231b;font-weight:800;font-size:12px}
+.hint.small{font-size:12px}
+.c-form textarea{min-height:200px}
