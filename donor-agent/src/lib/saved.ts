@@ -21,12 +21,13 @@ export const withPayLine = (c: CaseFile, text: string) => (text.includes(PAY_SHO
 
 // ---------- the list ----------
 
-export function saveMessage(d: Db, text: string, id: string, now: number): string | null {
+export function saveMessage(d: Db, text: string, id: string, now: number, title = ""): string | null {
   const t = text.replace(/\r/g, "").trim().slice(0, 5000);
+  const h = title.replace(/\s+/g, " ").trim().slice(0, 80);
   if (!t) return "Write the message first.";
   d.saved ??= [];
   if (d.saved.some((m) => m.text === t)) return "This message is already saved.";
-  d.saved.unshift({ id, text: t, at: new Date(now).toISOString() });
+  d.saved.unshift({ id, ...(h ? { title: h } : {}), text: t, at: new Date(now).toISOString() });
   d.saved = d.saved.slice(0, MAX_SAVED);
   return null;
 }

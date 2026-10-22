@@ -70,6 +70,8 @@ export interface CasePost {
 /** A ready text the manager saved. Areeba sees the list and copies or shares it in the groups. */
 export interface SavedMessage {
   id: string;
+  /** Short heading the manager gives it, like "Yousuf – reminder 1". */
+  title?: string;
   text: string;
   at: string;
   /** Last time Areeba tapped Copy or Share, and how many times. */

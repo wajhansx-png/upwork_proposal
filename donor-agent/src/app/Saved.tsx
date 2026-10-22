@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./App";
 
-interface Msg { id: string; text: string; at: string; usedAt?: string; uses?: number }
+interface Msg { id: string; title?: string; text: string; at: string; usedAt?: string; uses?: number }
 interface View { items: Msg[]; caseName: string | null; caseText: string | null }
 
 const when = (iso: string) => {
@@ -20,16 +20,21 @@ export default function Saved() {
   const [manager, setManager] = useState(false);
   const [v, setV] = useState<View | null>(null);
   const [text, setText] = useState("");
+  const [title, setTitle] = useState("");
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   const [ideas, setIdeas] = useState<string[]>([]);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
   const [toast, setToast] = useState("");
 
+  const loaded = useRef(false);
   const load = useCallback(async () => {
     try {
       setV(await api<View>("/api/saved"));
+      loaded.current = true;
     } catch (e) {
-      setErr((e as Error).message);
+      // A failed background refresh is not shown: the list stays, the next refresh tries again.
+      if (!loaded.current) setErr((e as Error).message);
     }
   }, []);
   useEffect(() => {
@@ -63,9 +68,12 @@ export default function Saved() {
     }
   };
   const save = async (t: string, idea?: number) => {
-    if (!(await call(`save${idea ?? ""}`, { action: "save", text: t }))) return;
+    if (!(await call(`save${idea ?? ""}`, { action: "save", text: t, title: idea === undefined ? title : "" }))) return;
     setToast(`Saved. ${manager ? "Areeba can see it now." : ""}`);
-    if (idea === undefined) setText("");
+    if (idea === undefined) {
+      setText("");
+      setTitle("");
+    }
     else setIdeas((all) => all.filter((_, i) => i !== idea));
   };
   const getIdeas = async () => {
@@ -94,7 +102,7 @@ export default function Saved() {
 
   const items = v?.items ?? [];
   return (
-    <main className="wa">
+    <main className="wa wide">
       <header className="wa-top">
         <a href={manager ? "/manager" : "/areeba"} aria-label="Back">←</a>
         <span className="wa-av" aria-hidden>💬</span>
@@ -107,6 +115,7 @@ export default function Saved() {
       <div className="wa-body">
         {manager && (
           <section className="sv-new">
+            <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="Heading (optional), like: Yousuf – reminder 1" />
             <textarea value={text} rows={4} onChange={(e) => setText(e.target.value)} placeholder="Write or paste a message…" />
             <div className="sv-row">
               <button className="d-btn hot" disabled={!!busy || !text.trim()} onClick={() => void save(text)}>{busy === "save" ? "Saving…" : "Save"}</button>
@@ -130,20 +139,32 @@ export default function Saved() {
         {v && !items.length && <p className="wa-sys">{manager ? "No saved messages yet. Write one above." : "No messages yet. Your manager will add them here."}</p>}
         {!manager && items.length > 0 && <p className="wa-sys">Copy a message and post it in all groups.</p>}
 
-        {items.map((m) => (
-          <div key={m.id} className="wa-msg">
-            <p className="wa-text">{m.text}</p>
-            <span className="wa-time">
-              {when(m.at)}
-              {manager && m.usedAt && <i className="wa-ticks"> · used by Areeba {when(m.usedAt)}</i>}
-            </span>
-            <div className="wa-actions">
-              <button onClick={() => void copy(m)}>Copy</button>
-              <a href={`https://wa.me/?text=${encodeURIComponent(m.text)}`} target="_blank" rel="noreferrer" onClick={() => share(m)}>Share</a>
-              {manager && <button disabled={!!busy} onClick={() => confirm("Delete this message? Areeba will not see it anymore.") && void call(`rm${m.id}`, { action: "remove", id: m.id })}>Delete</button>}
-            </div>
-          </div>
-        ))}
+        <div className="sv-grid">
+          {items.map((m) => {
+            const isOpen = !!open[m.id];
+            const long = m.text.split("\n").length > 2 || m.text.length > 110;
+            return (
+              <div key={m.id} className="wa-msg sv-card">
+                {m.title && <b className="sv-title">{m.title}</b>}
+                <p className={`wa-text ${isOpen ? "" : "clamp"}`}>{m.text}</p>
+                {long && (
+                  <button className="sv-more" aria-expanded={isOpen} onClick={() => setOpen((o) => ({ ...o, [m.id]: !isOpen }))}>
+                    {isOpen ? "− Less" : "+ More"}
+                  </button>
+                )}
+                <span className="wa-time">
+                  {when(m.at)}
+                  {manager && m.usedAt && <i className="wa-ticks"> · used by Areeba {when(m.usedAt)}</i>}
+                </span>
+                <div className="wa-actions">
+                  <button onClick={() => void copy(m)}>Copy</button>
+                  <a href={`https://wa.me/?text=${encodeURIComponent(m.text)}`} target="_blank" rel="noreferrer" onClick={() => share(m)}>Share</a>
+                  {manager && <button disabled={!!busy} onClick={() => confirm("Delete this message? Areeba will not see it anymore.") && void call(`rm${m.id}`, { action: "remove", id: m.id })}>Delete</button>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
         {err && <p className="wa-sys bad" onClick={() => setErr("")}>{err}</p>}
       </div>
       {toast && <div className="d-toast" role="status"><span>{toast}</span></div>}

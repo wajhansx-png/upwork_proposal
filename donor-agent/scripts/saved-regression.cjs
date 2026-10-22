@@ -28,7 +28,9 @@ const freshDb = () => ({ settings: { teammateName: 'Areeba', timezone: 'Asia/Kar
     const db = freshDb();
     assert.match(S.saveMessage(db, '   ', 'a', T0), /Write the message/);
     assert.equal(S.saveMessage(db, 'First text', 'a', T0), null);
-    assert.equal(S.saveMessage(db, 'Second text', 'b', T0 + 1), null);
+    assert.equal(S.saveMessage(db, 'Second text', 'b', T0 + 1, '  Yousuf –   reminder 1 '), null);
+    assert.equal(db.saved[0].title, 'Yousuf – reminder 1', 'heading kept, tidied');
+    assert.equal(db.saved[1].title, undefined, 'no heading is fine');
     assert.deepEqual(db.saved.map((m) => m.id), ['b', 'a'], 'newest first');
     assert.match(S.saveMessage(db, 'First text', 'c', T0), /already saved/);
     assert.equal(S.markUsed(db, 'a', T0 + 5), null);

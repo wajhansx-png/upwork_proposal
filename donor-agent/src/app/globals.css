@@ -599,3 +599,12 @@ span.bell-btn{display:inline-flex;align-items:center}
 .sv-idea{display:flex;flex-direction:column;gap:6px}.sv-idea button{align-self:flex-end;min-width:100px}
 /* Manager header: 4 buttons fit on a phone */
 @media (max-width:460px){.p-top .top-btns{flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:62%}.p-top .top-btns .text-btn{padding:6px 10px;font-size:13px}}
+/* Saved messages: headings, 2-line preview, grid of cards */
+.wa.wide{max-width:1240px}
+.sv-new input{width:100%;background:#0b141a;color:#e9edef;border:1px solid #2a3942;border-radius:10px;padding:10px;font:inherit;font-size:15px;font-weight:600}
+.sv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;align-items:start}
+.sv-card{max-width:none;width:100%;align-self:stretch;display:flex;flex-direction:column;border-radius:12px}
+.sv-title{display:block;font-size:15.5px;margin-bottom:4px;color:#e9edef}
+.wa-text.clamp{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sv-more{align-self:flex-start;margin-top:4px;background:none;border:0;color:#00a884;font:inherit;font-size:14px;font-weight:700;padding:2px 0;cursor:pointer}
+.sv-card .wa-actions{margin-top:auto;padding-top:8px}

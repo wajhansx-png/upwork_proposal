@@ -16,12 +16,12 @@ export async function GET() {
 }
 
 /**
- * Manager: { action: "save", text } · { action: "remove", id } · { action: "lines" } 5 AI suggestions (nothing saved).
+ * Manager: { action: "save", text, title? } · { action: "remove", id } · { action: "lines" } 5 AI suggestions (nothing saved).
  * Both: { action: "used", id } a tap on Copy or Share.
  */
 export async function POST(req: NextRequest) {
   const role = await getRole(req);
-  const body = await readBody<{ action: string; text: string; id: string }>(req);
+  const body = await readBody<{ action: string; text: string; title: string; id: string }>(req);
   const now = Date.now();
   if (body.action === "used") {
     if (role === "teammate") await withDb((d) => markUsed(d, String(body.id ?? ""), now));
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ...r, lines: r.lines.map((l) => withPayLine(c, l)) });
   }
   const err = await withDb((d) =>
-    body.action === "save" ? saveMessage(d, String(body.text ?? ""), newId(), now) : body.action === "remove" ? removeMessage(d, String(body.id ?? "")) : "Bad request",
+    body.action === "save" ? saveMessage(d, String(body.text ?? ""), newId(), now, String(body.title ?? "")) : body.action === "remove" ? removeMessage(d, String(body.id ?? "")) : "Bad request",
   );
   if (err) return NextResponse.json({ error: err }, { status: 400 });
   return NextResponse.json(view(await readDb()));
