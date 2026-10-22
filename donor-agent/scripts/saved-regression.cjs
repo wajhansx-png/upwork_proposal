@@ -15,6 +15,7 @@ Module._load = function (request, parent, ...rest) {
   return load.call(this, request, parent, ...rest);
 };
 const S = require('../src/lib/saved.ts');
+const GT = require('../src/lib/group-time.ts');
 const { PAY_SHORT } = require('../src/lib/case-guide.ts');
 
 const T0 = Date.parse('2026-10-21T14:00:00Z');
@@ -86,6 +87,47 @@ const freshDb = () => ({ settings: { teammateName: 'Areeba', timezone: 'Asia/Kar
     assert.ok(!S.fallbackLines(c).some((l) => /kind people/.test(l)));
     c.facts.amountLeft = 0;
     assert.ok(!S.payLine(c).includes('0 left'));
+  }
+
+  // 4. Group Time: off = nothing; on = at once, then every 20 min; rotates; never at night; nothing saved = nothing.
+  {
+    const db = freshDb();
+    db.settings.quietEnabled = true; db.settings.quietStartHour = 23; db.settings.quietEndHour = 8;
+    const day = Date.parse('2026-10-22T10:00:00Z'); // 3 pm Karachi
+    S.saveMessage(db, 'Old one', 'm1', day - 3000, 'Reminder 1');
+    S.saveMessage(db, 'Newer one', 'm2', day - 2000);
+    S.saveMessage(db, 'Newest one', 'm3', day - 1000, 'Case post');
+    assert.equal(GT.groupTimeDue(db, day), null, 'off: nothing');
+    GT.setGroupTime(db, true);
+    let p = GT.groupTimeDue(db, day);
+    assert.ok(p, 'on: first reminder at once');
+    assert.equal(p.title, '📢 Group Time');
+    assert.match(p.body, /Reminder 1/, 'the oldest never-used message first, by its heading');
+    assert.equal(p.url, '/areeba/messages?m=m1');
+    assert.equal(GT.groupTimeDue(db, day + 19 * 60000), null, 'not before 20 minutes');
+    assert.equal(GT.groupTimeNext(db, day + 60000), new Date(day + 20 * 60000).toISOString());
+    p = GT.groupTimeDue(db, day + 20 * 60000);
+    assert.match(p.body, /Newer one/, 'next one, first line when there is no heading');
+    S.markUsed(db, 'm3', day + 21 * 60000);
+    p = GT.groupTimeDue(db, day + 40 * 60000);
+    assert.match(p.body, /Reminder 1/, 'a message she just used goes to the back');
+    p = GT.groupTimeDue(db, day + 60 * 60000);
+    assert.notEqual(p.url, '/areeba/messages?m=m1', 'never the same twice in a row');
+    const night = Date.parse('2026-10-22T18:30:00Z'); // 11:30 pm Karachi
+    assert.equal(GT.groupTimeDue(db, night), null, 'no reminders at night');
+    assert.equal(GT.groupTimeNext(db, night), new Date(Date.parse('2026-10-23T03:00:00Z')).toISOString(), 'next one at 8 am');
+    assert.ok(GT.groupTimeDue(db, Date.parse('2026-10-23T03:00:00Z')), 'morning: back on');
+    GT.setGroupTime(db, false);
+    assert.equal(GT.groupTimeDue(db, Date.parse('2026-10-23T05:00:00Z')), null, 'off again: nothing');
+    const empty = freshDb();
+    GT.setGroupTime(empty, true);
+    assert.equal(GT.groupTimeDue(empty, day), null, 'nothing saved: nothing to remind');
+    assert.equal(GT.groupTimeNext(empty, day), null);
+    const one = freshDb();
+    S.saveMessage(one, 'Only one', 'o1', day);
+    GT.setGroupTime(one, true);
+    GT.groupTimeDue(one, day);
+    assert.ok(GT.groupTimeDue(one, day + 20 * 60000), 'with one message it repeats that one');
   }
 
   console.log('saved regression: all passed');

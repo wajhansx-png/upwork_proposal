@@ -247,7 +247,22 @@ export interface PushSub {
   sub: { endpoint: string; keys: { p256dh: string; auth: string } };
 }
 
+/** "Group Time": a push to Areeba every few minutes to post the next saved message in the groups. */
+export interface GroupTime {
+  on: boolean;
+  everyMin: number;
+  /** Last reminder sent, and which saved message it named. */
+  lastAt?: string;
+  lastId?: string;
+  sent?: number;
+  /** Its one-minute clock (a Vercel Workflow), like a task's. */
+  runId?: string;
+  startedAt?: string;
+  workerAt?: string;
+}
+
 export interface AgentState {
+  groupTime?: GroupTime;
   lastRunAt?: string;
   lastDigestDay?: string;
   lastNoTaskPromptDay?: string;

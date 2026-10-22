@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./App";
 
 interface Msg { id: string; title?: string; text: string; imageId?: string; at: string; usedAt?: string; uses?: number }
-interface View { items: Msg[]; caseName: string | null; caseText: string | null }
+interface GroupTime { on: boolean; everyMin: number; lastAt: string | null; lastId: string | null; nextAt: string | null }
+interface View { items: Msg[]; caseName: string | null; caseText: string | null; groupTime?: GroupTime }
 
 /** Shrink a picture in the browser (max 1600 px, JPEG) so it stays under the server's 450 KB limit. */
 async function shrink(file: File): Promise<string> {
@@ -49,6 +50,7 @@ export default function Saved() {
   const [title, setTitle] = useState("");
   const [image, setImage] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [focus, setFocus] = useState("");
   const [ideas, setIdeas] = useState<string[]>([]);
   const [busy, setBusy] = useState("");
   const [err, setErr] = useState("");
@@ -67,6 +69,8 @@ export default function Saved() {
   useEffect(() => {
     const first = setTimeout(() => {
       setManager(location.pathname.startsWith("/manager"));
+      // From a "Group Time" notification: show that message first.
+      setFocus(new URLSearchParams(location.search).get("m") ?? "");
       void load();
     }, 0);
     const id = setInterval(load, 30_000);
@@ -162,6 +166,12 @@ export default function Saved() {
     })();
   };
 
+  useEffect(() => {
+    if (!focus || !v) return;
+    document.getElementById(`msg-${focus}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [focus, v]);
+  const gt = v?.groupTime;
+  const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const items = v?.items ?? [];
   return (
     <main className="wa wide">
@@ -175,6 +185,24 @@ export default function Saved() {
       </header>
 
       <div className="wa-body">
+        {manager && gt && (
+          <section className={`sv-gt ${gt.on ? "on" : ""}`}>
+            <p>
+              <b>⏰ Group Time</b>
+              <span>
+                {gt.on
+                  ? gt.nextAt
+                    ? `ON · Areeba gets a reminder every ${gt.everyMin} min. Next: ${hhmm(gt.nextAt)}`
+                    : "ON · save a message first, then reminders start."
+                  : `OFF · turn on to remind Areeba every ${gt.everyMin} min to post in the groups.`}
+              </span>
+            </p>
+            <button className={`old-switch ${gt.on ? "on" : ""}`} role="switch" aria-checked={gt.on} disabled={!!busy} onClick={() => void call("gt", { action: "groupTime", on: !gt.on })}>
+              <span>{gt.on ? "Stop" : "Start"}</span><b>{gt.on ? "ON" : "OFF"}</b>
+            </button>
+          </section>
+        )}
+        {!manager && gt?.on && <p className="wa-sys">⏰ Group Time is on: a reminder every {gt.everyMin} min.{gt.nextAt ? ` Next ${hhmm(gt.nextAt)}.` : ""}</p>}
         {manager && (
           <section className="sv-new">
             <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="Heading (optional), like: Yousuf – reminder 1" />
@@ -218,7 +246,8 @@ export default function Saved() {
             const isOpen = !!open[m.id];
             const long = m.text.split("\n").length > 2 || m.text.length > 110;
             return (
-              <div key={m.id} className="wa-msg sv-card">
+              <div key={m.id} id={`msg-${m.id}`} className={`wa-msg sv-card ${focus === m.id ? "focus" : ""}`}>
+                {focus === m.id && <span className="sv-now">📢 Post this one now</span>}
                 {m.title && <b className="sv-title">{m.title}</b>}
                 {m.imageId && (
                   <a href={`/api/img/${m.imageId}`} target="_blank" rel="noreferrer" className="sv-img">

@@ -3,6 +3,8 @@ import { getRole } from "@/lib/auth";
 import { runAgent } from "@/lib/agent";
 import { ensureFollowup } from "@/lib/start-followup";
 import { evaluatePending } from "@/lib/evaluate";
+import { tickGroupTime } from "@/lib/group-time-tick";
+import { ensureGroupTimeClock } from "@/lib/group-time-clock";
 
 /** Called every minute by a scheduler (Authorization: Bearer CRON_SECRET, or ?key=CRON_SECRET), or by the manager. */
 async function handle(req: NextRequest) {
@@ -15,6 +17,8 @@ async function handle(req: NextRequest) {
   await ensureFollowup();
   const result = await runAgent();
   await evaluatePending();
+  await tickGroupTime().catch((e) => console.error(e));
+  await ensureGroupTimeClock().catch((e) => console.error(e));
   return NextResponse.json(result);
 }
 
