@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readBody } from "@/lib/http";
 import { getRole } from "@/lib/auth";
 import { newId, readDb, withDb } from "@/lib/db";
+import { saveImage } from "@/lib/images";
 import { emotionalLines, markUsed, openCaseOf, removeMessage, saveMessage, withPayLine } from "@/lib/saved";
 import type { Db } from "@/lib/types";
 
@@ -16,12 +17,12 @@ export async function GET() {
 }
 
 /**
- * Manager: { action: "save", text, title? } · { action: "remove", id } · { action: "lines" } 5 AI suggestions (nothing saved).
+ * Manager: { action: "save", text, title?, image? (data URL, shrunk by the browser) } · { action: "remove", id } · { action: "lines" } 5 AI suggestions (nothing saved).
  * Both: { action: "used", id } a tap on Copy or Share.
  */
 export async function POST(req: NextRequest) {
   const role = await getRole(req);
-  const body = await readBody<{ action: string; text: string; title: string; id: string }>(req);
+  const body = await readBody<{ action: string; text: string; title: string; id: string; image: string }>(req);
   const now = Date.now();
   if (body.action === "used") {
     if (role === "teammate") await withDb((d) => markUsed(d, String(body.id ?? ""), now));
@@ -35,8 +36,16 @@ export async function POST(req: NextRequest) {
     const r = await emotionalLines(c, (d.saved ?? []).map((m) => m.text));
     return NextResponse.json({ ...r, lines: r.lines.map((l) => withPayLine(c, l)) });
   }
+  let imageId = "";
+  if (body.action === "save" && body.image) {
+    try {
+      imageId = (await saveImage(body.image)).id;
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    }
+  }
   const err = await withDb((d) =>
-    body.action === "save" ? saveMessage(d, String(body.text ?? ""), newId(), now, String(body.title ?? "")) : body.action === "remove" ? removeMessage(d, String(body.id ?? "")) : "Bad request",
+    body.action === "save" ? saveMessage(d, String(body.text ?? ""), newId(), now, String(body.title ?? ""), imageId) : body.action === "remove" ? removeMessage(d, String(body.id ?? "")) : "Bad request",
   );
   if (err) return NextResponse.json({ error: err }, { status: 400 });
   return NextResponse.json(view(await readDb()));

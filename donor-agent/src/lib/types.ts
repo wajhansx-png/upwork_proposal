@@ -73,6 +73,8 @@ export interface SavedMessage {
   /** Short heading the manager gives it, like "Yousuf – reminder 1". */
   title?: string;
   text: string;
+  /** A picture with the message (poster, report), stored like proof screenshots; served at /api/img/<id>. */
+  imageId?: string;
   at: string;
   /** Last time Areeba tapped Copy or Share, and how many times. */
   usedAt?: string;

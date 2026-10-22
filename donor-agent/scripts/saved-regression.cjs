@@ -27,6 +27,11 @@ const freshDb = () => ({ settings: { teammateName: 'Areeba', timezone: 'Asia/Kar
   {
     const db = freshDb();
     assert.match(S.saveMessage(db, '   ', 'a', T0), /Write the message/);
+    const pic = freshDb();
+    assert.equal(S.saveMessage(pic, '', 'p1', T0, 'Poster', 'abcdef0123456789'), null, 'a picture alone is a message');
+    assert.equal(S.saveMessage(pic, 'Same text', 'p2', T0, '', 'abcdef0123456780'), null);
+    assert.equal(S.saveMessage(pic, 'Same text', 'p3', T0, '', 'abcdef0123456781'), null, 'same text with another picture is fine');
+    assert.equal(pic.saved[2].imageId, 'abcdef0123456789');
     assert.equal(S.saveMessage(db, 'First text', 'a', T0), null);
     assert.equal(S.saveMessage(db, 'Second text', 'b', T0 + 1, '  Yousuf –   reminder 1 '), null);
     assert.equal(db.saved[0].title, 'Yousuf – reminder 1', 'heading kept, tidied');
