@@ -635,3 +635,4 @@ span.bell-btn{display:inline-flex;align-items:center}
 .cb-ai{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:#8696a0;background:#111b21;border:1px solid #2a3942;border-radius:12px;padding:10px}.cb-ai input{margin-top:3px;width:18px;height:18px;accent-color:#00a884}
 .cb-read{background:#111b21;border:1px solid #2a3942;border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 .cb-read p{margin:0;font-size:14px}.cb-read div{display:flex;gap:8px}.cb-read ul{margin:0;padding-left:18px;font-size:13.5px;color:#cfd8dc;display:flex;flex-direction:column;gap:3px}
+@media (max-width:520px){.cb-btns{grid-template-columns:1fr 1fr}.cb-btns button:first-child{grid-column:1/-1}}

@@ -6,7 +6,7 @@ import { api } from "./App";
 
 const money = (n: number) => Math.round(n).toLocaleString("en-US");
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-const KIND: Record<BrainOut["kind"], string> = { update: "UPDATE", short: "20 MIN", "dry-main": "DRY · main group", "dry-groups": "DRY · freelancer groups", done: "DONE" };
+const KIND: Record<BrainOut["kind"], string> = { update: "UPDATE", short: "20 minutes passed", "dry-main": "No donations · main group", "dry-groups": "No donations · freelancer groups", done: "DONE" };
 
 /** The Case Brain: setup, the 4 commands, and every message it wrote (newest first). */
 export default function CaseBrain() {
@@ -124,7 +124,13 @@ export default function CaseBrain() {
   const left = b?.left;
   const p2 = left !== undefined ? Math.ceil(left / 2000) : 0;
   const p1 = left !== undefined ? Math.ceil(left / 1000) : 0;
-  const outs = [...(b?.history ?? [])].reverse();
+  // Newest press first, but the messages of one press stay in order (main group, then freelancer groups).
+  const outs: BrainOut[] = [];
+  for (const o of b?.history ?? []) {
+    const last = outs[0];
+    if (last && last.at === o.at) outs.splice(outs.findIndex((x) => x.at !== o.at) === -1 ? outs.length : outs.findIndex((x) => x.at !== o.at), 0, o);
+    else outs.unshift(o);
+  }
   return (
     <main className="wa wide">
       <header className="wa-top">
@@ -185,12 +191,12 @@ export default function CaseBrain() {
                 <div><b>{b.angles.length}/10</b><span>angles used</span></div>
               </section>
               <form className="cb-cmd" onSubmit={(e) => { e.preventDefault(); void send(/^\d/.test(cmd.trim()) ? `LEFT ${cmd}` : cmd); }}>
-                <input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Amount left, like 44000 (or type 20 MIN, DRY, DONE)" inputMode="text" />
+                <input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Amount left now, like 44000" inputMode="text" />
                 <button className="d-btn hot" disabled={!!busy || !cmd.trim()}>{busy && busy === (/^\d/.test(cmd.trim()) ? `LEFT ${cmd}` : cmd) ? "…" : "LEFT"}</button>
               </form>
               <div className="cb-btns">
-                <button className="d-btn" disabled={!!busy} onClick={() => void send("20 MIN")}>{busy === "20 MIN" ? "Writing…" : "⏱ 20 MIN"}</button>
-                <button className="d-btn" disabled={!!busy} onClick={() => void send("DRY")}>{busy === "DRY" ? "Writing…" : "🏜 DRY"}</button>
+                <button className="d-btn" disabled={!!busy} onClick={() => void send("20 MIN")}>{busy === "20 MIN" ? "Writing…" : "⏱ 20 minutes passed / Update group"}</button>
+                <button className="d-btn" disabled={!!busy} onClick={() => void send("DRY")}>{busy === "DRY" ? "Writing…" : `😔 No donations${b.dryLevel ? ` · next: level ${b.dryLevel + 1}` : ""}`}</button>
                 <button className="d-btn" disabled={!!busy} onClick={() => confirm(`Is ${b.name}'s case complete?`) && void send("DONE")}>{busy === "DONE" ? "Writing…" : "✅ DONE"}</button>
               </div>
               <label className="cb-ai">

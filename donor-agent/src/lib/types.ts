@@ -293,6 +293,8 @@ export interface Brain {
   /** How many times all angles were used (round 2 uses other ready lines). */
   round?: number;
   hadith?: number;
+  /** "No donations" presses since money last came: each one is more emotional. */
+  dryLevel?: number;
   you?: number;
   fact?: number;
   done?: boolean;

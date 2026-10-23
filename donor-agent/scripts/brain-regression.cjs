@@ -36,7 +36,7 @@ function checkStyle(text, left) {
   if (left !== undefined && !/complete/.test(text)) {
     const p2 = Math.ceil(left / 2000), p1 = Math.ceil(left / 1000);
     assert.ok(text.includes(`${p2} `) && text.includes(`${p1} at Rs. 1,000`), `people maths ${p2}/${p1} in: ${text}`);
-    assert.ok(/\byou\b/i.test(text.replace(/^.*\n/, '')), 'a "you" line');
+    assert.ok(/\byou\b/i.test(text.replace(/^.*\n/, '')), 'a "you" line: ' + text);
   }
   for (const m of text.matchAll(/"([^"]+)"/g)) assert.ok(B.HADITHS.some((h) => h.includes(m[1])), `hadith exact: ${m[1]}`);
 }
@@ -49,6 +49,9 @@ function checkStyle(text, left) {
   assert.deepEqual(B.parseCommand('20 MIN'), { kind: 'tick' });
   assert.deepEqual(B.parseCommand('20min'), { kind: 'tick' });
   assert.deepEqual(B.parseCommand('DRY'), { kind: 'dry' });
+  assert.deepEqual(B.parseCommand('No donations'), { kind: 'dry' });
+  assert.deepEqual(B.parseCommand('20 minutes passed'), { kind: 'tick' });
+  assert.deepEqual(B.parseCommand('update group'), { kind: 'tick' });
   assert.deepEqual(B.parseCommand('done'), { kind: 'done' });
   assert.equal(B.parseCommand('hello'), null);
   assert.deepEqual(B.people(44000), { p2: 22, p1: 44 });
@@ -112,6 +115,27 @@ function checkStyle(text, left) {
   assert.ok(B.HADITHS.some((h) => r.outputs[1].text.includes(h)), 'freelancer message has a hadith');
   assert.notEqual(r.outputs[0].text, r.outputs[1].text);
   for (const o of r.outputs) checkStyle(o.text, 44000);
+
+  // 4b. "No donations" gets more emotional with every press; money coming resets it.
+  {
+    const d = fresh();
+    await B.runCommand(d, { kind: 'left', amount: 44000 }, T0);
+    const firsts = [];
+    for (let lv = 1; lv <= 5; lv++) {
+      const rr = await B.runCommand(d, { kind: 'dry' }, T0 + lv * HOUR);
+      assert.match(rr.outputs[0].do, new RegExp(`level ${lv}`));
+      for (const o of rr.outputs) checkStyle(o.text, 44000);
+      firsts.push(rr.outputs[0].text.split('\n')[0]);
+    }
+    assert.match(firsts[1], /donations have stopped/i, 'level 2');
+    assert.match(firsts[2], /don't scroll past/i, 'level 3');
+    assert.match(firsts[3], /one more time/i, 'level 4');
+    assert.equal(new Set(firsts.slice(0, 4)).size, 4, 'each level is different');
+    assert.ok(d.history.filter((h) => h.kind === 'dry-main').at(3).text.includes(B.HADITHS[2]), 'level 4 has the mercy hadith');
+    await B.runCommand(d, { kind: 'left', amount: 42000 }, T0 + 6 * HOUR);
+    const again = await B.runCommand(d, { kind: 'dry' }, T0 + 7 * HOUR);
+    assert.match(again.outputs[0].do, /level 1/, 'money came: back to level 1');
+  }
 
   // 5. DONE: his complete message, then nothing more.
   r = await B.runCommand(b, { kind: 'done' }, T0 + 21 * HOUR);

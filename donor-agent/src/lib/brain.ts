@@ -1,5 +1,5 @@
 /**
- * The Case Brain. During a live case the manager sends short commands (LEFT 44000, 20 MIN, DRY, DONE);
+ * The Case Brain. During a live case the manager sends short commands (LEFT 44000, 20 minutes passed, No donations, DONE);
  * the Brain decides what to do and writes the message in his style. It never sends anything.
  *
  * The rules are code: the people maths, when an UPDATE is due, angle rotation, the exact hadiths and the
@@ -195,14 +195,62 @@ async function writeShort(b: Brain, left: number, t: number): Promise<BrainOut> 
   return { kind: "short", do: `Send this in ${MAIN} with @all`, text: lines.join("\n"), angle, at: now_(t) };
 }
 
+/** Stronger "you" lines for "No donations", one set per level. */
+const DRY_YOU = [
+  ["If you are reading this, Allah sent this to you for a reason.", "Don't wait for someone else. You be the one."],
+  ["Everyone is waiting for someone else. Please, let it be you.", "If not you, then who?"],
+  ["We are asking you: please don't scroll past this one.", "You can be the reason this changes today."],
+];
+
+/**
+ * "No donations": two messages, and each press since money last came is more emotional.
+ * Level 1 = the amount and an angle. Level 2 = the money has stopped. Level 3 = please don't scroll past.
+ * Level 4+ = we are asking one more time, with the mercy hadith. Never a banned word, never a new fact.
+ */
 async function writeDry(b: Brain, left: number, t: number): Promise<BrainOut[]> {
+  const level = (b.dryLevel = (b.dryLevel ?? 0) + 1);
+  const L = Math.min(level, 4);
+  const p = pron(b);
   const angle = nextAngle(b, ["hadith"]);
   const h = await heart(b, angle, left, true);
-  const main = [`*Rs. ${money(left)} is still left for ${b.name}.*`, "", `${h.first} 💔`, factLine(b), "", youLine(b), "", peopleLong(left), "", ENDING].join("\n");
-  const groups = [`🤲 *A ${b.age ? `${b.age}-year-old child` : b.ageLabel ? kidWord(b) : "small child"} needs our help.*`, "", hadithLine(b), "", `💔 ${factLine(b)}`, "", youLine(b), "", peopleShort(left), "", ENDING].join("\n");
+  const you = DRY_YOU[Math.min(L, 3) - 1][level % 2];
+  const kid = b.age ? `${b.age}-year-old child` : b.ageLabel ? kidWord(b) : "small child";
+  let main: string[];
+  if (L === 1) main = [`*Rs. ${money(left)} is still left for ${b.name}.*`, "", `${h.first} 💔`, factLine(b), "", you, "", peopleLong(left), "", ENDING];
+  else if (L === 2) main = [`*The donations have stopped. ${b.name}'s need has not.*`, "", `${h.first} 💔`, factLine(b), "", you, "", peopleLong(left), "", ENDING];
+  else if (L === 3) main = [`*Please don't scroll past ${b.name} again.* 💔`, "", `We have posted many times. Rs. ${money(left)} is still left.`, factLine(b), factLine(b), "", you, "", peopleLong(left), "", ENDING];
+  else
+    main = [
+      `*${b.name} is only a ${kid}. ${p.he} cannot ask you for help, so we are asking one more time.* 💔`,
+      "",
+      factLine(b),
+      factLine(b),
+      "",
+      HADITHS[2],
+      "",
+      you,
+      "",
+      peopleLong(left),
+      "",
+      ENDING,
+    ];
+  const groups = [
+    L >= 3 ? `🤲 *A ${kid} still needs our help. Very few have come forward.*` : `🤲 *A ${kid} needs our help.*`,
+    "",
+    L >= 4 ? HADITHS[(b.hadith ?? 0) % 2] : hadithLine(b),
+    "",
+    `💔 ${factLine(b)}`,
+    "",
+    you,
+    "",
+    peopleShort(left),
+    "",
+    ENDING,
+  ];
+  const tag = `No donations · level ${level}`;
   return [
-    { kind: "dry-main", do: `Send this in ${MAIN} with @all. Then: DM new people who saw the message, and ask donors to share the post.`, text: main, angle, at: now_(t) },
-    { kind: "dry-groups", do: `Send this in ${GROUPS}.`, text: groups, at: now_(t) },
+    { kind: "dry-main", do: `${tag}: send this in ${MAIN} with @all. Then: DM new people who saw the message, and ask donors to share the post.`, text: main.join("\n"), angle, at: now_(t) },
+    { kind: "dry-groups", do: `${tag}: send this in ${GROUPS}.`, text: groups.join("\n"), at: now_(t) },
   ];
 }
 
@@ -216,8 +264,8 @@ export type Command = { kind: "left"; amount: number } | { kind: "tick" } | { ki
 /** "LEFT 44000", "left 44k", "44,000", "20 MIN", "20min", "dry", "done". */
 export function parseCommand(input: string): Command | null {
   const t = input.trim().toLowerCase();
-  if (/^20\s*min(?:ute)?s?$/.test(t) || t === "20") return { kind: "tick" };
-  if (/^dry$/.test(t)) return { kind: "dry" };
+  if (/^20\s*min(?:ute)?s?(?:\s*passed)?$/.test(t) || t === "20" || /^update\s*(?:the\s*)?group$/.test(t)) return { kind: "tick" };
+  if (/^(?:dry|no\s*donations?|no\s*money)$/.test(t)) return { kind: "dry" };
   if (/^done$/.test(t)) return { kind: "done" };
   const m = /^(?:left\s*)?(?:rs\.?\s*)?(\d[\d,]*(?:\.\d+)?)\s*(k)?$/.exec(t);
   if (!m) return null;
@@ -272,6 +320,7 @@ export async function runCommand(b: Brain, cmd: Command, t: number): Promise<Bra
     const quietFor = t - new Date(b.leftAt ?? 0).getTime();
     b.left = n;
     b.leftAt = now_(t);
+    b.dryLevel = 0;
     if (drop >= 2000 || (drop >= 1500 && quietFor >= 2 * HOUR)) {
       b.updateLeft = n;
       return keep([await writeUpdate(b, n, t)]);
