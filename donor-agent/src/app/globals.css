@@ -923,3 +923,20 @@ small,.sub.small,.hint{font-size:13px!important}
 .wa-body{background:transparent!important}
 .p-hero:not(.compact) .status-line{background:transparent!important;border:0!important;padding:0!important}
 @media (hover:none),(max-width:760px){.kbd-hint{display:none}}
+/* Case screen v3: one-line header so the message gets the room; plain buttons, no icons */
+.cbx{gap:12px!important;padding-top:14px!important}
+.cbx-head{flex-direction:row!important;align-items:center;gap:12px!important;flex-wrap:wrap}
+.cbx-head h1{margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em}
+.cbx-amt{color:var(--mute);font-size:14px}.cbx-amt b{color:var(--ink)}
+.cbx-head .btn{margin-left:auto}
+.act{flex-direction:column!important;align-items:flex-start!important;gap:2px!important;min-height:0!important;padding:11px 14px!important}
+.act b{font-size:15px}.act small{font-size:13px}
+.cbx-side .box{padding:14px;gap:10px}
+.msg-where{color:var(--mute)!important;font-size:14px!important}.msg-where b{color:var(--ink)}
+@media (max-width:760px){
+  .cbx-head{gap:6px 10px!important}
+  .cbx-head h1{font-size:18px}
+  .cbx-amt{order:5;flex-basis:100%;font-size:13px}
+  .act{align-items:center!important;padding:9px 6px!important}
+  .act small{display:none}
+}

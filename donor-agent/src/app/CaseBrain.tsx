@@ -10,17 +10,6 @@ const money = (n: number) => Math.round(n).toLocaleString("en-US");
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const KIND: Record<Card["kind"], string> = { post: "Case post", update: "Update", short: "20 minutes passed", "dry-main": "No donations · main group", "dry-groups": "No donations · freelancer groups", done: "Case complete" };
 
-const Icon = ({ d }: { d: string }) => (
-  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
-);
-const I = {
-  clock: "M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z",
-  bell: "M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0",
-  check: "M20 6 9 17l-5-5",
-  copy: "M8 8h11v13H8zM5 16V3h11",
-};
-const Kbd = ({ k }: { k: string }) => <kbd className="kbd">{k}</kbd>;
-
 /**
  * The live case, on one screen. It starts by itself from the case saved on the Case page.
  * Three buttons write the next message; the amount box is only for when money comes in.
@@ -162,24 +151,16 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
   const left = b.left;
   const p2 = left ? Math.ceil(left / 2000) : 0;
   const p1 = left ? Math.ceil(left / 1000) : 0;
-  const raised = left !== undefined && b.total > 0 ? Math.max(0, Math.min(1, (b.total - left) / b.total)) : 0;
   const where = shown?.do.replace(/^No donations · level \d+: /, "").replace(/^Send this (first )?in /i, "").replace(/\.$/, "");
 
   return (
     <main className="pg cbx">
       <div className="cbx-head">
         <button className="link" onClick={onBack}>← All cases</button>
-        <div className="cbx-title">
-          <h1>{b.name}</h1>
-          <span className={`pill ${isOpen ? "live" : ""}`}>{isOpen ? "Open" : "Complete"}</span>
-          {isOpen && <button className="btn sm" onClick={() => { setForm({ name: b.name, age: b.ageLabel ?? (b.age ? String(b.age) : ""), gender: b.gender, total: String(b.total), facts: b.facts.join("\n") }); setEditing(!editing); }}>{editing ? "Close" : "Edit facts"}</button>}
-        </div>
-        {left !== undefined && (
-          <div className="prog">
-            <div className="prog-bar"><i style={{ width: `${Math.round(raised * 100)}%` }} /></div>
-            <p><b>Rs {money(left)}</b> still needed of Rs {money(b.total)} · {p2} people at Rs 2,000 or {p1} at Rs 1,000</p>
-          </div>
-        )}
+        <h1>{b.name}</h1>
+        <span className={`pill ${isOpen ? "live" : ""}`}>{isOpen ? "Open" : "Complete"}</span>
+        {left !== undefined && <span className="cbx-amt"><b>Rs {money(left)}</b> still needed · {p2} people × Rs 2,000 or {p1} × Rs 1,000</span>}
+        {isOpen && <button className="btn sm" onClick={() => { setForm({ name: b.name, age: b.ageLabel ?? (b.age ? String(b.age) : ""), gender: b.gender, total: String(b.total), facts: b.facts.join("\n") }); setEditing(!editing); }}>{editing ? "Close" : "Edit facts"}</button>}
       </div>
 
       {editing ? (
@@ -209,32 +190,28 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
             {isOpen ? (
               <>
                 <section className="box">
-                  <h2>Write the next message</h2>
+                  <h2>What happened?</h2>
                   <div className="acts">
                     <button className="act" disabled={!!busy || left === undefined} onClick={() => void send("20 MIN")}>
-                      <span className="act-ic"><Icon d={I.clock} /></span>
-                      <span className="act-tx"><b>{busy === "20 MIN" ? "Writing…" : "20 minutes passed"}</b><small>A short update for the group</small></span>
-                      <Kbd k="1" />
+                      <b>{busy === "20 MIN" ? "Writing…" : "20 minutes passed"}</b>
+                      <small>Write the next group update</small>
                     </button>
-                    <button className="act warn" disabled={!!busy || left === undefined} onClick={() => void send("DRY")}>
-                      <span className="act-ic"><Icon d={I.bell} /></span>
-                      <span className="act-tx"><b>{busy === "DRY" ? "Writing…" : "No donations"}</b><small>{b.dryLevel ? `Stronger message · level ${b.dryLevel + 1}` : "A stronger message for 2 groups"}</small></span>
-                      <Kbd k="2" />
+                    <button className="act" disabled={!!busy || left === undefined} onClick={() => void send("DRY")}>
+                      <b>{busy === "DRY" ? "Writing…" : "No donations"}</b>
+                      <small>{b.dryLevel ? `Write a stronger message (level ${b.dryLevel + 1})` : "Write a stronger message"}</small>
                     </button>
-                    <button className="act done" disabled={!!busy} onClick={() => confirm(`Is ${b.name}'s case complete? It will be closed.`) && void send("DONE")}>
-                      <span className="act-ic"><Icon d={I.check} /></span>
-                      <span className="act-tx"><b>{busy === "DONE" ? "Writing…" : "Case complete"}</b><small>Thank-you message, closes the case</small></span>
-                      <Kbd k="3" />
+                    <button className="act" disabled={!!busy} onClick={() => confirm(`Is ${b.name}'s case complete? It will be closed.`) && void send("DONE")}>
+                      <b>{busy === "DONE" ? "Writing…" : "Case complete"}</b>
+                      <small>Write the thank-you message and close the case</small>
                     </button>
                   </div>
                 </section>
                 <section className="box">
-                  <h2>Money received? <Kbd k="M" /></h2>
+                  <h2>Money came?</h2>
                   <form className="row" onSubmit={(e) => { e.preventDefault(); void send(`LEFT ${amount}`); }}>
-                    <input ref={moneyRef} className="inp" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount still needed" inputMode="numeric" />
-                    <button className="btn primary" disabled={!!busy || !amount.trim()}>{busy.startsWith("LEFT") ? "…" : "Save"}</button>
+                    <input ref={moneyRef} className="inp" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount still needed now" inputMode="numeric" />
+                    <button className="btn primary" disabled={!!busy || !amount.trim()}>{busy.startsWith("LEFT") ? "…" : "Update"}</button>
                   </form>
-                  <p className="sub small">Type what is still needed, press Enter. I write an update when enough came in.</p>
                 </section>
               </>
             ) : (
@@ -248,7 +225,7 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
               <>
                 <div className="msg-top">
                   <div>
-                    <b>{KIND[shown.kind]}{shown.at && shown.at === fresh && <span className="pill live new">New · copied</span>}</b>
+                    <b>{KIND[shown.kind]}{shown.at && shown.at === fresh && <span className="pill live new">Copied</span>}</b>
                     <small>{shown.at ? hhmm(shown.at) : "Your post"}{cards.length > 1 ? ` · ${idx + 1} of ${cards.length}` : ""}</small>
                   </div>
                   <div className="pager">
@@ -256,10 +233,10 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
                     <button aria-label="Older message (right arrow key)" title="Older (→)" disabled={idx >= cards.length - 1} onClick={() => setView(idx + 1)}>›</button>
                   </div>
                 </div>
-                <p className="msg-where"><span>Send to</span> {where}</p>
+                <p className="msg-where">Copy this and send it in <b>{where}</b></p>
                 <p className="msg-text">{shown.text}</p>
                 <div className="row msg-acts">
-                  <button className="btn primary" onClick={() => void copy(shown.text)}><Icon d={I.copy} /> Copy <Kbd k="C" /></button>
+                  <button className="btn primary" onClick={() => void copy(shown.text)}>Copy message</button>
                   <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(shown.text)}`} target="_blank" rel="noreferrer">Open WhatsApp</a>
                   <button className="btn" onClick={() => void keep(shown)}>Save for Areeba</button>
                 </div>
