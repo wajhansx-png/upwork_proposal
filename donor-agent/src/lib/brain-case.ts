@@ -42,7 +42,8 @@ export async function brainFromCase(c: CaseFile, now = Date.now()): Promise<Brai
     total: read?.total ?? f.amountLeft ?? 0,
     age: f.age ?? read?.age,
     ageLabel: f.age ? undefined : read?.ageLabel,
-    gender: f.gender ?? read?.gender ?? "m",
+    // His own post: he/she is counted from his words (the saved form value may only be a default).
+    gender: (c.ownText ? read?.gender : undefined) ?? f.gender ?? "m",
     facts,
     source,
   });

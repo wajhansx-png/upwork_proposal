@@ -192,13 +192,13 @@ export default function CasePage() {
         <section className="box cs-new">
           <h2>New case</h2>
           <p className="sub">Paste your full post, or just the details.</p>
-          <textarea value={details} onChange={(e) => setDetails(e.target.value)} placeholder={"Little Yousuf is only 2 years old…\n\nRs. 70,000 needed."} />
+          <textarea value={details} onChange={(e) => setDetails(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && details.trim().length >= 20) { e.preventDefault(); void saveOwn(); } }} placeholder={"Little Yousuf is only 2 years old…\n\nRs. 70,000 needed."} aria-label="Case post" />
           {err && <p className="err-line">{err}</p>}
           <div className="row">
             <button className="btn primary" disabled={busy === "own" || details.trim().length < 20} onClick={() => void saveOwn()}>{busy === "own" ? "Saving…" : "Save my post"}</button>
             <button className="btn" disabled={busy === "read" || details.trim().length < 10} onClick={() => void read()}>{busy === "read" ? "Reading…" : "Write it for me"}</button>
           </div>
-          <p className="sub small">“Save my post” keeps every word. “Write it for me” turns details into a post.</p>
+          <p className="sub small">“Save my post” keeps every word<span className="kbd-hint"> (shortcut: <kbd className="kbd">Ctrl</kbd> + <kbd className="kbd">Enter</kbd>)</span>. “Write it for me” turns details into a post.</p>
         </section>
 
         <section className="cs-list">

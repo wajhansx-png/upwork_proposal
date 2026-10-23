@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Brain, BrainOut } from "@/lib/types";
 import { api } from "./App";
 
@@ -9,6 +9,17 @@ type Card = Omit<BrainOut, "kind"> & { kind: BrainOut["kind"] | "post" };
 const money = (n: number) => Math.round(n).toLocaleString("en-US");
 const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const KIND: Record<Card["kind"], string> = { post: "Case post", update: "Update", short: "20 minutes passed", "dry-main": "No donations · main group", "dry-groups": "No donations · freelancer groups", done: "Case complete" };
+
+const Icon = ({ d }: { d: string }) => (
+  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d={d} /></svg>
+);
+const I = {
+  clock: "M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z",
+  bell: "M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0",
+  check: "M20 6 9 17l-5-5",
+  copy: "M8 8h11v13H8zM5 16V3h11",
+};
+const Kbd = ({ k }: { k: string }) => <kbd className="kbd">{k}</kbd>;
 
 /**
  * The live case, on one screen. It starts by itself from the case saved on the Case page.
@@ -27,6 +38,8 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
   const [err, setErr] = useState("");
   const [toast, setToast] = useState("");
   const [view, setView] = useState(0);
+  const [fresh, setFresh] = useState("");
+  const moneyRef = useRef<HTMLInputElement>(null);
   
   const load = useCallback(async () => {
     try {
@@ -60,8 +73,18 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
       const r = await api<{ brain: Brain; reply?: string; outputs: BrainOut[] }>("/api/brain", "POST", { action: "cmd", text, caseId: b?.caseId });
       setB(r.brain);
       if (r.brain.done) setIsOpen(false);
-      if (r.outputs.length) setView(0);
-      setReply(r.reply ?? (r.outputs.length > 1 ? "2 messages: main group first, then › for the freelancer groups." : ""));
+      if (r.outputs.length) {
+        setView(0);
+        setFresh(r.outputs[0].at);
+        // One click less: the new message is already on the clipboard. Paste it in WhatsApp.
+        try {
+          await navigator.clipboard.writeText(r.outputs[0].text);
+          setToast("Written and copied. Paste it in WhatsApp.");
+        } catch {
+          setToast("Written. Press Copy.");
+        }
+      }
+      setReply(r.reply ?? (r.outputs.length > 1 ? "2 messages: the main group one is copied. Press → for the freelancer groups one." : ""));
       setAmount("");
     } catch (e) {
       setErr((e as Error).message);
@@ -99,19 +122,43 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
     }
   };
 
-  if (!loaded) return <main className="pg"><p className="sub">Loading…</p></main>;
-  if (!b) return null;
-
   // Newest first; one press's messages stay in order. The case post itself is always the last (oldest) card.
   const cards: Card[] = [];
-  for (const o of b.history) {
+  for (const o of b?.history ?? []) {
     const i = cards.findIndex((x) => x.at !== o.at);
     if (cards[0] && cards[0].at === o.at) cards.splice(i === -1 ? cards.length : i, 0, o);
     else cards.unshift(o);
   }
   if (post) cards.push({ kind: "post", do: "Send this first in GiveLife Foundation with @all.", text: post, at: "" });
-  const idx = Math.min(view, cards.length - 1);
+  const idx = Math.min(view, Math.max(0, cards.length - 1));
   const shown = cards[idx];
+
+  // Keyboard: 1 / 2 / 3 write the next message, C copies, ← → move between messages, M jumps to the amount box.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (editing || e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable) return;
+      const k = e.key.toLowerCase();
+      const can = isOpen && !busy && b?.left !== undefined;
+      if (k === "1" && can) void send("20 MIN");
+      else if (k === "2" && can) void send("DRY");
+      else if (k === "3" && isOpen && !busy && b && confirm(`Is ${b.name}'s case complete? It will be closed.`)) void send("DONE");
+      else if (k === "c" && shown) void copy(shown.text);
+      else if (k === "arrowleft") setView((v) => Math.max(0, v - 1));
+      else if (k === "arrowright") setView((v) => Math.min(cards.length - 1, v + 1));
+      else if (k === "m" && isOpen) {
+        e.preventDefault();
+        moneyRef.current?.focus();
+      } else return;
+      e.preventDefault();
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  });
+
+  if (!loaded) return <main className="pg"><p className="sub">Loading…</p></main>;
+  if (!b) return null;
+
   const left = b.left;
   const p2 = left ? Math.ceil(left / 2000) : 0;
   const p1 = left ? Math.ceil(left / 1000) : 0;
@@ -165,26 +212,29 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
                   <h2>Write the next message</h2>
                   <div className="acts">
                     <button className="act" disabled={!!busy || left === undefined} onClick={() => void send("20 MIN")}>
-                      <b>{busy === "20 MIN" ? "Writing…" : "20 minutes passed"}</b>
-                      <small>A short update for the group</small>
+                      <span className="act-ic"><Icon d={I.clock} /></span>
+                      <span className="act-tx"><b>{busy === "20 MIN" ? "Writing…" : "20 minutes passed"}</b><small>A short update for the group</small></span>
+                      <Kbd k="1" />
                     </button>
-                    <button className="act" disabled={!!busy || left === undefined} onClick={() => void send("DRY")}>
-                      <b>{busy === "DRY" ? "Writing…" : "No donations"}</b>
-                      <small>{b.dryLevel ? `Stronger message · level ${b.dryLevel + 1}` : "A stronger message for 2 groups"}</small>
+                    <button className="act warn" disabled={!!busy || left === undefined} onClick={() => void send("DRY")}>
+                      <span className="act-ic"><Icon d={I.bell} /></span>
+                      <span className="act-tx"><b>{busy === "DRY" ? "Writing…" : "No donations"}</b><small>{b.dryLevel ? `Stronger message · level ${b.dryLevel + 1}` : "A stronger message for 2 groups"}</small></span>
+                      <Kbd k="2" />
                     </button>
-                    <button className="act" disabled={!!busy} onClick={() => confirm(`Is ${b.name}'s case complete? It will be closed.`) && void send("DONE")}>
-                      <b>{busy === "DONE" ? "Writing…" : "Case complete"}</b>
-                      <small>Thank-you message, closes the case</small>
+                    <button className="act done" disabled={!!busy} onClick={() => confirm(`Is ${b.name}'s case complete? It will be closed.`) && void send("DONE")}>
+                      <span className="act-ic"><Icon d={I.check} /></span>
+                      <span className="act-tx"><b>{busy === "DONE" ? "Writing…" : "Case complete"}</b><small>Thank-you message, closes the case</small></span>
+                      <Kbd k="3" />
                     </button>
                   </div>
                 </section>
                 <section className="box">
-                  <h2>Money received?</h2>
+                  <h2>Money received? <Kbd k="M" /></h2>
                   <form className="row" onSubmit={(e) => { e.preventDefault(); void send(`LEFT ${amount}`); }}>
-                    <input className="inp" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount still needed" inputMode="numeric" />
+                    <input ref={moneyRef} className="inp" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount still needed" inputMode="numeric" />
                     <button className="btn primary" disabled={!!busy || !amount.trim()}>{busy.startsWith("LEFT") ? "…" : "Save"}</button>
                   </form>
-                  <p className="sub small">I write an update when enough came in.</p>
+                  <p className="sub small">Type what is still needed, press Enter. I write an update when enough came in.</p>
                 </section>
               </>
             ) : (
@@ -198,18 +248,18 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
               <>
                 <div className="msg-top">
                   <div>
-                    <b>{KIND[shown.kind]}</b>
+                    <b>{KIND[shown.kind]}{shown.at && shown.at === fresh && <span className="pill live new">New · copied</span>}</b>
                     <small>{shown.at ? hhmm(shown.at) : "Your post"}{cards.length > 1 ? ` · ${idx + 1} of ${cards.length}` : ""}</small>
                   </div>
                   <div className="pager">
-                    <button aria-label="Newer" disabled={idx <= 0} onClick={() => setView(idx - 1)}>‹</button>
-                    <button aria-label="Older" disabled={idx >= cards.length - 1} onClick={() => setView(idx + 1)}>›</button>
+                    <button aria-label="Newer message (left arrow key)" title="Newer (←)" disabled={idx <= 0} onClick={() => setView(idx - 1)}>‹</button>
+                    <button aria-label="Older message (right arrow key)" title="Older (→)" disabled={idx >= cards.length - 1} onClick={() => setView(idx + 1)}>›</button>
                   </div>
                 </div>
                 <p className="msg-where"><span>Send to</span> {where}</p>
                 <p className="msg-text">{shown.text}</p>
                 <div className="row msg-acts">
-                  <button className="btn primary" onClick={() => void copy(shown.text)}>Copy</button>
+                  <button className="btn primary" onClick={() => void copy(shown.text)}><Icon d={I.copy} /> Copy <Kbd k="C" /></button>
                   <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(shown.text)}`} target="_blank" rel="noreferrer">Open WhatsApp</a>
                   <button className="btn" onClick={() => void keep(shown)}>Save for Areeba</button>
                 </div>

@@ -231,6 +231,12 @@ function checkStyle(text, left) {
     assert.deepEqual(fb.facts, ['Affan is bleeding inside his knee and hand', 'He has Hemophilia (blood does not clot)', 'Without treatment, he can lose his leg', 'Doctors said delay can put the leg at risk']);
     assert.equal(fb.left, 26000);
     assert.match(C.casePost(form), /Affan/, "the app's case post");
+    // A girl's own post: she/her is counted from the post even if the saved form value says boy.
+    const girl = { ...own, id: 'c3', ownText: "Helpless Ayesha (8 months) cannot breathe on her own. She was born with a hole in her heart.\n\nRs. 1.5 lakh needed.", facts: { ...own.facts, name: 'Ayesha', gender: 'm', age: undefined, amountLeft: 150000 } };
+    const gb = await C.brainFromCase(girl, T0);
+    assert.equal(gb.gender, 'f');
+    const gr = await B.runCommand(gb, { kind: 'tick' }, T0 + 1200000);
+    assert.ok(!/\bHe\b|\bhis\b/.test(gr.outputs[0].text), gr.outputs[0].text);
   }
 
   console.log('brain regression: all passed');

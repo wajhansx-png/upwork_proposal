@@ -49,6 +49,8 @@ export default function Saved() {
   const [text, setText] = useState("");
   const [title, setTitle] = useState("");
   const [image, setImage] = useState("");
+  // The form stays folded until he wants to write: the list is what he looks at most.
+  const [composing, setComposing] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [focus, setFocus] = useState("");
   const [ideas, setIdeas] = useState<string[]>([]);
@@ -105,6 +107,7 @@ export default function Saved() {
       setText("");
       setTitle("");
       setImage("");
+      setComposing(false);
     }
     else setIdeas((all) => all.filter((_, i) => i !== idea));
   };
@@ -204,10 +207,13 @@ export default function Saved() {
           </section>
         )}
         {!manager && gt?.on && <p className="wa-sys">⏰ Group Time is on: a reminder every {gt.everyMin} min.{gt.nextAt ? ` Next ${hhmm(gt.nextAt)}.` : ""}</p>}
-        {manager && (
+        {manager && !composing && !text && !image && !ideas.length && (
+          <button className="btn primary sv-open" onClick={() => setComposing(true)}>+ New message</button>
+        )}
+        {manager && (composing || !!text || !!image || ideas.length > 0) && (
           <section className="sv-new">
             <input value={title} maxLength={80} onChange={(e) => setTitle(e.target.value)} placeholder="Heading (optional), like: Yousuf – reminder 1" />
-            <textarea value={text} rows={4} onChange={(e) => setText(e.target.value)} placeholder="Write or paste a message…" />
+            <textarea value={text} rows={4} autoFocus onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && text.trim()) { e.preventDefault(); void save(text); } }} placeholder="Write or paste a message… (Ctrl + Enter saves)" />
             {image ? (
               <div className="sv-preview">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -223,6 +229,7 @@ export default function Saved() {
             <div className="sv-row">
               <button className="d-btn hot" disabled={!!busy || (!text.trim() && !image)} onClick={() => void save(text)}>{busy === "save" ? "Saving…" : "Save"}</button>
               {v?.caseText && <button className="d-btn" disabled={!!busy} onClick={() => setText(v.caseText!)}>Use case post</button>}
+              <button className="d-btn" disabled={!!busy} onClick={() => { setText(""); setTitle(""); setImage(""); setIdeas([]); setComposing(false); }}>Cancel</button>
               {v?.caseName && <button className="d-btn" disabled={!!busy} onClick={() => void getIdeas()}>{busy === "ideas" ? "Writing…" : "5 ideas from AI"}</button>}
             </div>
             {ideas.length > 0 && (

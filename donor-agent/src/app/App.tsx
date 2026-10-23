@@ -674,9 +674,11 @@ function DueLine({ deadlineAt, tz, bare = false }: { deadlineAt: string; tz?: st
   }, []);
   const left = new Date(deadlineAt).getTime() - nowMs;
   const at = new Date(deadlineAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: tz || undefined });
-  if (bare) return <span className="due-bare">{left > 0 ? <>Due {at} · <b>{countdown(left)}</b></> : <>Was due {at} · <b>late</b></>}</span>;
+  // Color means something: calm while there is time, amber in the last 30 minutes, red only when late.
+  const level = left <= 0 ? "over" : left < 30 * 60_000 ? "soon" : "calm";
+  if (bare) return <span className={`due-bare ${level}`}>{left > 0 ? <>Due {at} · <b>{countdown(left)}</b></> : <>Was due {at} · <b>late</b></>}</span>;
   return (
-    <p className={`due ${left <= 0 ? "over" : ""}`}>
+    <p className={`due ${level}`}>
       <i /> {left > 0 ? <>Due {at} · <b>{countdown(left)}</b></> : <>Was due {at} · <b>late</b></>}
     </p>
   );

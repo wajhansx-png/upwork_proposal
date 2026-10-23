@@ -877,3 +877,49 @@ body{background-image:none!important;font-family:var(--font);color:var(--ink);fo
 .wa-top small{font-size:14.5px!important;color:var(--mute)!important;margin-top:4px}
 .wa-top{padding:22px 16px 16px!important}
 .ring.good .ring-fill,.ring.warn .ring-fill{stroke:var(--brand)!important}
+
+/* =====================================================================
+   UX pass: focus you can see, disabled you can tell, color with meaning,
+   keyboard hints, icons for scanning, readable sizes.
+   ===================================================================== */
+:focus{outline:none}
+:focus-visible{outline:2px solid var(--brand)!important;outline-offset:2px!important;border-radius:6px}
+.btn:disabled,.d-btn:disabled,.act:disabled{opacity:1!important;background:var(--card-2)!important;color:var(--faint)!important;border-color:var(--line)!important;cursor:not-allowed}
+.btn.primary:disabled{background:var(--card-2)!important;color:var(--faint)!important;border-color:var(--line)!important}
+.btn svg{margin-right:6px}
+small,.sub.small,.hint{font-size:13px!important}
+/* Keyboard hints: only where there is a keyboard */
+.kbd{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 5px;border-radius:5px;border:1px solid var(--line);border-bottom-width:2px;background:var(--bg);color:var(--mute);font:600 11.5px/1 ui-monospace,SFMono-Regular,Menlo,monospace;vertical-align:middle}
+.btn .kbd{margin-left:8px;background:rgba(0,0,0,.18);border-color:rgba(0,0,0,.25);color:inherit}
+.box h2 .kbd{margin-left:6px}
+@media (hover:none),(max-width:760px){.kbd{display:none!important}}
+/* Case actions: icon + words + key, big target */
+.act{flex-direction:row!important;align-items:center!important;gap:12px!important;min-height:58px}
+.act-ic{flex:none;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;background:var(--brand-soft);color:var(--brand)}
+.act.warn .act-ic{background:rgba(224,166,58,.12);color:var(--amber)}
+.act.done .act-ic{background:rgba(141,153,170,.12);color:var(--mute)}
+.act-tx{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.act .kbd{flex:none}
+.pill.new{margin-left:8px;height:20px;font-size:11.5px;vertical-align:middle}
+@media (max-width:760px){
+  .act{flex-direction:column!important;gap:4px!important;min-height:64px;justify-content:center}
+  .act-ic{width:28px;height:28px}
+  .act-tx{align-items:center}
+}
+/* Due time: calm, amber in the last 30 minutes, red only when late */
+.due.calm,.due-bare.calm{color:var(--ink)!important;background:var(--card-2)!important}
+.due.soon,.due-bare.soon{color:var(--amber)!important;background:rgba(224,166,58,.12)!important}
+.due.over,.due-bare.over{color:var(--danger)!important;background:var(--danger-soft)!important}
+.due-bare{padding:2px 8px;border-radius:6px}
+.due.calm i{animation:none;background:var(--mute)}
+/* Areeba page (manager home): one card, one main action, quiet extras */
+.p-hero:not(.compact){background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px 16px}
+.p-hero .best-hint{color:var(--mute);font-size:13px}
+.clean-btn{background:none!important;border:0!important;color:var(--faint)!important;text-decoration:underline;text-underline-offset:3px}
+.clean-btn:hover{color:var(--danger)!important}
+.sv-open{align-self:flex-start}
+/* Feedback appears at the top, never on top of the buttons you need next */
+.d-toast{top:calc(var(--navh) + 12px)!important;bottom:auto!important;background:var(--card-2)!important;border:1px solid var(--brand)!important;color:var(--ink)!important;width:auto!important;max-width:calc(100% - 32px);justify-content:center!important}
+.wa-body{background:transparent!important}
+.p-hero:not(.compact) .status-line{background:transparent!important;border:0!important;padding:0!important}
+@media (hover:none),(max-width:760px){.kbd-hint{display:none}}

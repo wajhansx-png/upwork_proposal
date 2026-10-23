@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       const named = /\b(?:[Ll]ittle|[Hh]elpless|[Bb]aby|[Bb]rother|[Ss]ister|[Mm]other|[Ff]ather)\s+([A-Z][a-z]+)/.exec(own)?.[1];
       // Without the AI, the plain rules still find the amount ("Rs. 1.5 lakh needed").
       const rules = readByRules(own);
-      const facts = { ...r.facts, amountLeft: r.facts.amountLeft || rules.total || 0, age: r.facts.age ?? rules.age, gender: r.facts.gender ?? rules.gender, name: r.facts.name || named || rules.name || "this case", problem: r.facts.problem || own.split("\n")[0].slice(0, 300), proof: r.facts.proof || "", askAmount: r.facts.askAmount || 2000 } as CaseFacts;
+      const facts = { ...r.facts, amountLeft: r.facts.amountLeft || rules.total || 0, age: r.facts.age ?? rules.age, gender: r.by === "ai" ? r.facts.gender ?? rules.gender : rules.gender, name: r.facts.name || named || rules.name || "this case", problem: r.facts.problem || own.split("\n")[0].slice(0, 300), proof: r.facts.proof || "", askAmount: r.facts.askAmount || 2000 } as CaseFacts;
       const now = new Date().toISOString();
       await withDb((d) => {
         const cur = openCase(d);
