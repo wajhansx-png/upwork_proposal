@@ -261,6 +261,42 @@ export interface GroupTime {
   workerAt?: string;
 }
 
+/** One message the Case Brain wrote. */
+export interface BrainOut {
+  kind: "update" | "short" | "dry-main" | "dry-groups" | "done";
+  /** The one-line instruction: where to send it. */
+  do: string;
+  text: string;
+  angle?: string;
+  at: string;
+}
+
+/** The Case Brain: the live case, the amount, and what was already written (so nothing repeats). */
+export interface Brain {
+  name: string;
+  age?: number;
+  gender: "m" | "f";
+  total: number;
+  /** Only these facts may be used in messages. One per line. */
+  facts: string[];
+  left?: number;
+  /** When the amount last went down (money came). */
+  leftAt?: string;
+  /** The amount in the last UPDATE message. */
+  updateLeft?: number;
+  /** Angles used in this round; a new round starts when all are used. */
+  angles: string[];
+  /** How many times all angles were used (round 2 uses other ready lines). */
+  round?: number;
+  hadith?: number;
+  you?: number;
+  fact?: number;
+  done?: boolean;
+  /** Off: only the ready lines (no AI wording at all). */
+  noAi?: boolean;
+  history: BrainOut[];
+}
+
 export interface AgentState {
   groupTime?: GroupTime;
   lastRunAt?: string;
@@ -305,6 +341,8 @@ export interface Db {
   cases: CaseFile[];
   /** Saved messages for the groups (newest first). */
   saved?: SavedMessage[];
+  /** The Case Brain for the live case. */
+  brain?: Brain;
   tasks: Task[];
   messages: ChatMessage[];
   subs: PushSub[];

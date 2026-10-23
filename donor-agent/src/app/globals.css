@@ -618,3 +618,18 @@ span.bell-btn{display:inline-flex;align-items:center}
 .sv-gt p{margin:0;display:flex;flex-direction:column;gap:3px}.sv-gt span{color:#8696a0;font-size:13.5px}
 .sv-card.focus{border:2px solid #00a884;box-shadow:0 0 22px rgba(0,168,132,.3)}
 .sv-now{display:inline-block;margin-bottom:6px;color:#00a884;font-weight:700;font-size:13px}
+/* Case Brain */
+.cb-setup{gap:10px}.cb-setup b{font-size:16px}
+.cb-two{display:flex;gap:8px}.cb-two>*{flex:1;min-width:0}
+.cb-setup input,.cb-setup select,.cb-cmd input{width:100%;background:#0b141a;color:#e9edef;border:1px solid #2a3942;border-radius:10px;padding:11px;font:inherit;font-size:15px}
+.cb-status{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.cb-status div{background:#111b21;border:1px solid #2a3942;border-radius:12px;padding:10px;text-align:center;display:flex;flex-direction:column;gap:2px}
+.cb-status b{font-size:17px}.cb-status span{color:#8696a0;font-size:12px}
+.cb-cmd{display:flex;gap:8px}.cb-cmd input{flex:1}.cb-cmd button{min-width:90px}
+.cb-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.cb-reply{margin:0;align-self:center;background:#182229;color:#e9edef;padding:8px 14px;border-radius:10px;font-weight:600}
+.cb-do{margin:0 0 8px;font-size:13.5px;color:#e8c563}.cb-do b{color:#e8c563}
+.cb-new{align-self:center;margin-top:8px}
+@media (max-width:460px){.cb-status{grid-template-columns:repeat(2,1fr)}}
+.cb-link{margin-left:auto!important;font-size:14px!important;font-weight:700;background:#00a884;color:#0b141a!important;padding:8px 12px!important;border-radius:18px;white-space:nowrap}
+.cb-ai{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:#8696a0;background:#111b21;border:1px solid #2a3942;border-radius:12px;padding:10px}.cb-ai input{margin-top:3px;width:18px;height:18px;accent-color:#00a884}
