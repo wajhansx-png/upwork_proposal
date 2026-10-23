@@ -206,5 +206,13 @@ Wajdan Khan — GiveLife Foundation
   zero.facts.amountLeft = 0;
   assert.ok(C.checkText(zero, C.caseText(zero), 'main').some((x) => !x.ok && /more than 0/.test(x.label)), 'a 0-left post is blocked');
 
-  console.log('case regression: all passed');
+  // His own post: the DM is his greeting + his post, word for word, no @all (was a broken template).
+{
+  const own = 'Little Yousuf is only 2 years old.\n\nRs. 70,000 needed.\n\n03097458815 — Easypaisa / JazzCash @all';
+  const dm = C.caseText({ ownText: own, facts: { name: 'Yousuf' } }, { greet: 'Ali Bhai,' });
+  assert.ok(dm.startsWith('Ali Bhai,\n\nLittle Yousuf is only 2 years old.'), dm);
+  assert.ok(!dm.includes('@all') && !dm.includes('attached') && !dm.includes('___'), 'no template parts, no @all');
+  assert.equal(C.caseText({ ownText: own, facts: { name: 'Yousuf' } }), own, 'the group post is his text exactly');
+}
+console.log('case regression: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

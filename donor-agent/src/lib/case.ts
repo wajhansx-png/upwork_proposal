@@ -326,6 +326,8 @@ function askLine(c: CaseFile, dm: boolean): string[] {
 
 /** The main group post (Part 4 shape). With `dm`, the one-person version (Part 8). */
 export function caseText(c: CaseFile, dm?: { greet: string }): string {
+  // His own finished post is used word for word (a DM gets his greeting on top and no @all).
+  if (c.ownText) return dm ? ownDm(c.ownText, dm.greet) : c.ownText;
   const f = c.facts;
   const doctor = medical(f.type) && f.doctorLine ? ` Doctors said ${f.doctorLine}.` : "";
   const second = f.type === "death" ? `- *Help do a Muslim ${f.gender === "f" ? "sister" : "brother"}'s janazah.*` : "- *Allah is giving you this chance.*";

@@ -14,9 +14,10 @@ const KIND: Record<Card["kind"], string> = { post: "Case post", update: "Update"
  * The live case, on one screen. It starts by itself from the case saved on the Case page.
  * Three buttons write the next message; the amount box is only for when money comes in.
  */
-export default function CaseBrain({ onNewCase }: { onNewCase: () => void }) {
+export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack: () => void }) {
   const [b, setB] = useState<Brain | null>(null);
   const [post, setPost] = useState("");
+  const [isOpen, setIsOpen] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: "", age: "", gender: "m", total: "", facts: "" });
@@ -26,20 +27,20 @@ export default function CaseBrain({ onNewCase }: { onNewCase: () => void }) {
   const [err, setErr] = useState("");
   const [toast, setToast] = useState("");
   const [view, setView] = useState(0);
-  const [doOpen, setDoOpen] = useState(false);
-
+  
   const load = useCallback(async () => {
     try {
-      const r = await api<{ brain: Brain | null; post: string | null }>("/api/brain");
+      const r = await api<{ brain: Brain | null; post: string | null; open: boolean }>(`/api/brain${caseId ? `?case=${encodeURIComponent(caseId)}` : ""}`);
       setB(r.brain);
       setPost(r.post ?? "");
-      if (!r.brain) onNewCase();
+      setIsOpen(r.open);
+      if (!r.brain) onBack();
     } catch (e) {
       setErr((e as Error).message);
     } finally {
       setLoaded(true);
     }
-  }, [onNewCase]);
+  }, [caseId, onBack]);
   useEffect(() => {
     const t = setTimeout(load, 0);
     return () => clearTimeout(t);
@@ -56,8 +57,9 @@ export default function CaseBrain({ onNewCase }: { onNewCase: () => void }) {
     setErr("");
     setReply("");
     try {
-      const r = await api<{ brain: Brain; reply?: string; outputs: BrainOut[] }>("/api/brain", "POST", { action: "cmd", text });
+      const r = await api<{ brain: Brain; reply?: string; outputs: BrainOut[] }>("/api/brain", "POST", { action: "cmd", text, caseId: b?.caseId });
       setB(r.brain);
+      if (r.brain.done) setIsOpen(false);
       if (r.outputs.length) setView(0);
       setReply(r.reply ?? (r.outputs.length > 1 ? "2 messages: main group first, then › for the freelancer groups." : ""));
       setAmount("");
@@ -71,7 +73,7 @@ export default function CaseBrain({ onNewCase }: { onNewCase: () => void }) {
     setBusy("edit");
     setErr("");
     try {
-      setB((await api<{ brain: Brain }>("/api/brain", "POST", { action: "setup", ...form })).brain);
+      setB((await api<{ brain: Brain }>("/api/brain", "POST", { action: "setup", ...form, caseId: b?.caseId })).brain);
       setEditing(false);
       setToast("Saved.");
     } catch (e) {
@@ -97,7 +99,7 @@ export default function CaseBrain({ onNewCase }: { onNewCase: () => void }) {
     }
   };
 
-  if (!loaded) return <main className="cb"><p className="cb-empty">Loading…</p></main>;
+  if (!loaded) return <main className="pg"><p className="sub">Loading…</p></main>;
   if (!b) return null;
 
   // Newest first; one press's messages stay in order. The case post itself is always the last (oldest) card.
@@ -108,77 +110,108 @@ export default function CaseBrain({ onNewCase }: { onNewCase: () => void }) {
     else cards.unshift(o);
   }
   if (post) cards.push({ kind: "post", do: "Send this first in GiveLife Foundation with @all.", text: post, at: "" });
-  const shown = cards[Math.min(view, cards.length - 1)];
+  const idx = Math.min(view, cards.length - 1);
+  const shown = cards[idx];
   const left = b.left;
   const p2 = left ? Math.ceil(left / 2000) : 0;
   const p1 = left ? Math.ceil(left / 1000) : 0;
+  const raised = left !== undefined && b.total > 0 ? Math.max(0, Math.min(1, (b.total - left) / b.total)) : 0;
+  const where = shown?.do.replace(/^No donations · level \d+: /, "").replace(/^Send this (first )?in /i, "").replace(/\.$/, "");
 
   return (
-    <main className="cb">
-      <header className="wa-top cb-top">
-        <a href="/manager" aria-label="Back">←</a>
-        <div className="cb-title">
-          <b>{b.name}&apos;s case</b>
-          <small>{left !== undefined ? `Rs. ${money(left)} left · ${p2} × Rs. 2,000 · ${p1} × Rs. 1,000` : "Type the amount left to start"}</small>
+    <main className="pg cbx">
+      <div className="cbx-head">
+        <button className="link" onClick={onBack}>← All cases</button>
+        <div className="cbx-title">
+          <h1>{b.name}</h1>
+          <span className={`pill ${isOpen ? "live" : ""}`}>{isOpen ? "Open" : "Complete"}</span>
+          {isOpen && <button className="btn sm" onClick={() => { setForm({ name: b.name, age: b.ageLabel ?? (b.age ? String(b.age) : ""), gender: b.gender, total: String(b.total), facts: b.facts.join("\n") }); setEditing(!editing); }}>{editing ? "Close" : "Edit facts"}</button>}
         </div>
-        <div className="cb-tools">
-          <button className="cb-chip" onClick={() => { setForm({ name: b.name, age: b.ageLabel ?? (b.age ? String(b.age) : ""), gender: b.gender, total: String(b.total), facts: b.facts.join("\n") }); setEditing(!editing); }}>{editing ? "Close" : "Edit"}</button>
-          <button className="cb-chip" onClick={onNewCase}>New case</button>
-        </div>
-      </header>
+        {left !== undefined && (
+          <div className="prog">
+            <div className="prog-bar"><i style={{ width: `${Math.round(raised * 100)}%` }} /></div>
+            <p><b>Rs {money(left)}</b> still needed of Rs {money(b.total)} · {p2} people at Rs 2,000 or {p1} at Rs 1,000</p>
+          </div>
+        )}
+      </div>
 
       {editing ? (
-        <div className="cb-setupwrap">
-          <section className="cb-card cb-setup">
-            <b>The facts I use</b>
-            <p className="hint">Only these are ever used in messages. Nothing is added.</p>
-            <div className="cb-two">
-              <input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <input placeholder="Age (2, or 8 months)" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
-              <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}><option value="m">Boy</option><option value="f">Girl</option></select>
-              <input placeholder="Total (70000)" inputMode="numeric" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} />
-            </div>
-            <textarea value={form.facts} onChange={(e) => setForm({ ...form, facts: e.target.value })} placeholder="One fact per line" />
-            <label className="cb-ai">
-              <input type="checkbox" checked={!b.noAi} onChange={async (e) => setB((await api<{ brain: Brain }>("/api/brain", "POST", { action: "ai", on: e.target.checked })).brain)} />
-              <span>{b.noAi ? "AI wording off: only ready lines in your style (safe)." : "AI wording on: fresh words each time. Read before you send."}</span>
-            </label>
-            <div className="cb-row">
-              <button className="d-btn hot" disabled={busy === "edit"} onClick={() => void saveEdit()}>{busy === "edit" ? "Saving…" : "Save"}</button>
-              <button className="d-btn" onClick={() => setEditing(false)}>Cancel</button>
-            </div>
-          </section>
-          {err && <p className="cb-err" onClick={() => setErr("")}>{err}</p>}
-        </div>
+        <section className="box frm">
+          <h2>Facts used in messages</h2>
+          <p className="sub">Only these are used. Nothing else is ever added.</p>
+          <div className="frm-2">
+            <label>Name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+            <label>Age<input placeholder="2, or 8 months" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} /></label>
+            <label>Boy / girl<select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}><option value="m">Boy</option><option value="f">Girl</option></select></label>
+            <label>Total (Rs)<input inputMode="numeric" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} /></label>
+          </div>
+          <label>Facts, one per line<textarea value={form.facts} onChange={(e) => setForm({ ...form, facts: e.target.value })} /></label>
+          <label className="chk">
+            <input type="checkbox" checked={!b.noAi} onChange={async (e) => setB((await api<{ brain: Brain }>("/api/brain", "POST", { action: "ai", on: e.target.checked, caseId: b.caseId })).brain)} />
+            Let AI vary the wording (read before you send). Off = only ready lines in your style.
+          </label>
+          {err && <p className="err-line">{err}</p>}
+          <div className="row">
+            <button className="btn primary" disabled={busy === "edit"} onClick={() => void saveEdit()}>{busy === "edit" ? "Saving…" : "Save"}</button>
+            <button className="btn" onClick={() => setEditing(false)}>Cancel</button>
+          </div>
+        </section>
       ) : (
-        <div className="cb-main">
-          <aside className="cb-side">
-            <div className="cb-btns">
-              <button className="d-btn" disabled={!!busy || left === undefined} onClick={() => void send("20 MIN")}>{busy === "20 MIN" ? "Writing…" : <>⏱ 20 minutes passed<span className="cb-long"> / Update group</span></>}</button>
-              <button className="d-btn" disabled={!!busy || left === undefined} onClick={() => void send("DRY")}>{busy === "DRY" ? "Writing…" : `😔 No donations${b.dryLevel ? ` · level ${b.dryLevel + 1}` : ""}`}</button>
-              <button className="d-btn" disabled={!!busy} onClick={() => confirm(`Is ${b.name}'s case complete? It will be closed.`) && void send("DONE")}>{busy === "DONE" ? "Writing…" : "✅ Case complete"}</button>
-            </div>
-            <form className="cb-cmd" onSubmit={(e) => { e.preventDefault(); void send(`LEFT ${amount}`); }}>
-              <input value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={left !== undefined ? "Money came? New amount left" : "Amount left now"} inputMode="numeric" />
-              <button className="d-btn hot" disabled={!!busy || !amount.trim()}>{busy.startsWith("LEFT") ? "…" : "Update"}</button>
-            </form>
-            {(reply || err) && <p className={err ? "cb-err" : "cb-reply"} onClick={() => setErr("")}>{err || reply}</p>}
+        <div className="cbx-main">
+          <aside className="cbx-side">
+            {isOpen ? (
+              <>
+                <section className="box">
+                  <h2>Write the next message</h2>
+                  <div className="acts">
+                    <button className="act" disabled={!!busy || left === undefined} onClick={() => void send("20 MIN")}>
+                      <b>{busy === "20 MIN" ? "Writing…" : "20 minutes passed"}</b>
+                      <small>A short update for the group</small>
+                    </button>
+                    <button className="act" disabled={!!busy || left === undefined} onClick={() => void send("DRY")}>
+                      <b>{busy === "DRY" ? "Writing…" : "No donations"}</b>
+                      <small>{b.dryLevel ? `Stronger message · level ${b.dryLevel + 1}` : "A stronger message for 2 groups"}</small>
+                    </button>
+                    <button className="act" disabled={!!busy} onClick={() => confirm(`Is ${b.name}'s case complete? It will be closed.`) && void send("DONE")}>
+                      <b>{busy === "DONE" ? "Writing…" : "Case complete"}</b>
+                      <small>Thank-you message, closes the case</small>
+                    </button>
+                  </div>
+                </section>
+                <section className="box">
+                  <h2>Money received?</h2>
+                  <form className="row" onSubmit={(e) => { e.preventDefault(); void send(`LEFT ${amount}`); }}>
+                    <input className="inp" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount still needed" inputMode="numeric" />
+                    <button className="btn primary" disabled={!!busy || !amount.trim()}>{busy.startsWith("LEFT") ? "…" : "Save"}</button>
+                  </form>
+                  <p className="sub small">I write an update when enough came in.</p>
+                </section>
+              </>
+            ) : (
+              <section className="box"><h2>Case complete</h2><p className="sub">Its messages are kept here. You can still copy them.</p></section>
+            )}
+            {(reply || err) && <p className={err ? "err-line" : "note-line"} onClick={() => setErr("")}>{err || reply}</p>}
           </aside>
 
-          <section className="cb-out">
+          <section className="box msg">
             {shown && (
               <>
-                <div className="cb-nav">
-                  <button aria-label="Newer" disabled={view <= 0} onClick={() => setView(view - 1)}>‹</button>
-                  <span>{KIND[shown.kind]}{shown.at ? ` · ${hhmm(shown.at)}` : ""}{cards.length > 1 ? ` · ${Math.min(view, cards.length - 1) + 1} of ${cards.length}` : ""}</span>
-                  <button aria-label="Older" disabled={view >= cards.length - 1} onClick={() => setView(view + 1)}>›</button>
+                <div className="msg-top">
+                  <div>
+                    <b>{KIND[shown.kind]}</b>
+                    <small>{shown.at ? hhmm(shown.at) : "Your post"}{cards.length > 1 ? ` · ${idx + 1} of ${cards.length}` : ""}</small>
+                  </div>
+                  <div className="pager">
+                    <button aria-label="Newer" disabled={idx <= 0} onClick={() => setView(idx - 1)}>‹</button>
+                    <button aria-label="Older" disabled={idx >= cards.length - 1} onClick={() => setView(idx + 1)}>›</button>
+                  </div>
                 </div>
-                <p className={`cb-do ${doOpen ? "open" : ""}`} onClick={() => setDoOpen(!doOpen)}><b>DO:</b> {shown.do}</p>
-                <p className="cb-text">{shown.text}</p>
-                <div className="cb-acts">
-                  <button className="d-btn hot" onClick={() => void copy(shown.text)}>Copy</button>
-                  <a className="d-btn" href={`https://wa.me/?text=${encodeURIComponent(shown.text)}`} target="_blank" rel="noreferrer">WhatsApp</a>
-                  <button className="d-btn" onClick={() => void keep(shown)}>Save for Areeba</button>
+                <p className="msg-where"><span>Send to</span> {where}</p>
+                <p className="msg-text">{shown.text}</p>
+                <div className="row msg-acts">
+                  <button className="btn primary" onClick={() => void copy(shown.text)}>Copy</button>
+                  <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(shown.text)}`} target="_blank" rel="noreferrer">Open WhatsApp</a>
+                  <button className="btn" onClick={() => void keep(shown)}>Save for Areeba</button>
                 </div>
               </>
             )}

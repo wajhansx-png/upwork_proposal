@@ -177,19 +177,19 @@ export default function Saved() {
     <main className="wa wide">
       <header className="wa-top">
         <a href={manager ? "/manager" : "/areeba"} aria-label="Back">←</a>
-        <span className="wa-av" aria-hidden>💬</span>
+        
         <div>
           <b>Saved messages</b>
           <small>{manager ? "Areeba sees this same list" : "From your manager · for the groups"}</small>
         </div>
-        {manager && <a className="cb-link" href="/manager/case">🧠 Case</a>}
+
       </header>
 
       <div className="wa-body">
         {manager && gt && (
           <section className={`sv-gt ${gt.on ? "on" : ""}`}>
             <p>
-              <b>⏰ Group Time</b>
+              <b>Group Time reminders</b>
               <span>
                 {gt.on
                   ? gt.nextAt
@@ -216,14 +216,14 @@ export default function Saved() {
               </div>
             ) : (
               <label className="d-btn sv-pick">
-                🖼️ Add a picture
+                Add a picture
                 <input type="file" accept="image/*" hidden onChange={(e) => void pick(e.target.files?.[0])} />
               </label>
             )}
             <div className="sv-row">
               <button className="d-btn hot" disabled={!!busy || (!text.trim() && !image)} onClick={() => void save(text)}>{busy === "save" ? "Saving…" : "Save"}</button>
               {v?.caseText && <button className="d-btn" disabled={!!busy} onClick={() => setText(v.caseText!)}>Use case post</button>}
-              {v?.caseName && <button className="d-btn" disabled={!!busy} onClick={() => void getIdeas()}>{busy === "ideas" ? "Writing…" : "✨ 5 AI texts"}</button>}
+              {v?.caseName && <button className="d-btn" disabled={!!busy} onClick={() => void getIdeas()}>{busy === "ideas" ? "Writing…" : "5 ideas from AI"}</button>}
             </div>
             {ideas.length > 0 && (
               <div className="sv-ideas">

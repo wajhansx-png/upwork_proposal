@@ -147,7 +147,7 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
             <h1 className="p-title">{s.total} donors</h1>
           </div>
         </div>
-        <a className="text-btn back" href={back}>← Chat</a>
+
       </header>
 
       <section className="d-stats" aria-label="Numbers">
@@ -182,7 +182,7 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
                 <b>{data.case.name}&apos;s case · {rs(data.case.amountLeft)} left</b>
                 <span>{data.case.any ? "Any amount helps" : `${data.case.n} people × ${data.case.ask.toLocaleString("en-US")}`} · sent to {data.case.sent}</span>
                 <span>Send the case poster first, then the text. One DM per person.</span>
-                {data.role === "manager" && <a href="/manager/case">Open case writer →</a>}
+                {data.role === "manager" && <a href="/manager/case">Open the case →</a>}
               </section>
             )}
             {data.task && <p className="hint d-task">Task: {data.task.title} · {data.task.done} of {data.task.target} sent. “Sent” here adds 1.</p>}

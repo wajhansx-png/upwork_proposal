@@ -4,6 +4,7 @@ import { getRole } from "@/lib/auth";
 import { newId, readDb, withDb } from "@/lib/db";
 import { openCase } from "@/lib/agent";
 import { caseView, checkText, cleanFacts, closingText, missingFacts, readDetails, writeLines } from "@/lib/case";
+import { readByRules } from "@/lib/brain-read";
 import { parseAmount } from "@/lib/money";
 import type { CaseFacts, CasePost, Db } from "@/lib/types";
 
@@ -47,7 +48,9 @@ export async function POST(req: NextRequest) {
       if (open && !body.replace) return NextResponse.json({ error: `${open.facts.name}'s case is still open.`, needsReplace: true }, { status: 409 });
       const r = await readDetails(own);
       const named = /\b(?:[Ll]ittle|[Hh]elpless|[Bb]aby|[Bb]rother|[Ss]ister|[Mm]other|[Ff]ather)\s+([A-Z][a-z]+)/.exec(own)?.[1];
-      const facts = { ...r.facts, name: r.facts.name || named || "this case", problem: r.facts.problem || own.split("\n")[0].slice(0, 300), proof: r.facts.proof || "", askAmount: r.facts.askAmount || 2000 } as CaseFacts;
+      // Without the AI, the plain rules still find the amount ("Rs. 1.5 lakh needed").
+      const rules = readByRules(own);
+      const facts = { ...r.facts, amountLeft: r.facts.amountLeft || rules.total || 0, age: r.facts.age ?? rules.age, gender: r.facts.gender ?? rules.gender, name: r.facts.name || named || rules.name || "this case", problem: r.facts.problem || own.split("\n")[0].slice(0, 300), proof: r.facts.proof || "", askAmount: r.facts.askAmount || 2000 } as CaseFacts;
       const now = new Date().toISOString();
       await withDb((d) => {
         const cur = openCase(d);

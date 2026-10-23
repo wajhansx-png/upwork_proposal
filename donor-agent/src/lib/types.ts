@@ -349,8 +349,10 @@ export interface Db {
   cases: CaseFile[];
   /** Saved messages for the groups (newest first). */
   saved?: SavedMessage[];
-  /** The Case Brain for the live case. */
+  /** Old single Case Brain (before each case had its own). Read once, then moved into `brains`. */
   brain?: Brain;
+  /** Each case's Case Brain (its messages, amount, angles), by case id. */
+  brains?: Record<string, Brain>;
   tasks: Task[];
   messages: ChatMessage[];
   subs: PushSub[];

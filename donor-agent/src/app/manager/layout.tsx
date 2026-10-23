@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import TopNav from "../TopNav";
 
 // This folder's icon.svg and apple-icon.png are the manager's own icon (Areeba has a different one).
 export const metadata: Metadata = {
@@ -7,5 +8,10 @@ export const metadata: Metadata = {
 };
 
 export default function ManagerLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return (
+    <>
+      <TopNav who="manager" />
+      {children}
+    </>
+  );
 }

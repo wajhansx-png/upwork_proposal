@@ -452,6 +452,16 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
   const task = currentTask(s) ?? s.tasks.at(-1);
   const [chatOpen, setChatOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // "Settings" in the top bar opens /manager?settings=1.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (new URLSearchParams(location.search).get("settings")) {
+        setSettingsOpen(true);
+        history.replaceState(null, "", "/manager");
+      }
+    }, 0);
+    return () => clearTimeout(t);
+  }, []);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -580,12 +590,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
           <p className="p-eyebrow">{name}</p>
           <h1 className="p-title">{task ? task.title : "No task yet"}</h1>
         </div>
-        <div className="top-btns">
-          <a className="text-btn" href="/manager/case">Case</a>
-          <a className="text-btn" href="/manager/messages">Messages</a>
-          <a className="text-btn" href="/manager/donors">Donors</a>
-          <button className="text-btn" onClick={() => setSettingsOpen(true)}>Settings</button>
-        </div>
+
       </header>
 
       <section className={`p-hero ${chatOpen ? "compact" : ""}`} aria-live="polite">
@@ -619,7 +624,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
                 <button className="text-btn" disabled={cleaning} onClick={() => setCleanAsk(false)}>Keep it</button>
               </>
             ) : (
-              <button className="text-btn clean-btn" onClick={() => setCleanAsk(true)}>🗑 Clean task</button>
+              <button className="text-btn clean-btn" onClick={() => setCleanAsk(true)}>Delete task</button>
             )}
           </div>
         )}
@@ -1016,8 +1021,6 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
         <div className="top-btns">
           {alerts.subscribed && alerts.owner === "me" && <span className="bell-btn on">🔔 On ✓</span>}
           {alerts.subscribed && alerts.owner === "manager" && <span className="bell-btn warn">🔔 Manager</span>}
-          <a className="bell-btn" href="/areeba/messages">Messages</a>
-          <a className="bell-btn" href="/areeba/donors">Donors</a>
         </div>
       </header>
       {alerts.subscribed === false && !typing && (
