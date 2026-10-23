@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { CaseFacts, CaseFile, CasePost, CaseType } from "@/lib/types";
 import { api } from "./App";
+import CaseBrain from "./CaseBrain";
 
 interface Check { ok: boolean; label: string }
 interface Out { text: string; checks: Check[] }
@@ -94,6 +95,12 @@ export default function CasePage() {
     }
   };
 
+  const newCase = useCallback(() => {
+    setDetails("");
+    setNotes([]);
+    setMode("details");
+  }, []);
+
   const read = () => run("read", async () => {
     const r = await api<{ facts: Partial<CaseFacts>; missing: string[]; notes: string[] }>("/api/case", "POST", { action: "read", details });
     setForm(toForm(r.facts));
@@ -161,6 +168,8 @@ export default function CasePage() {
   const v = data?.current;
   const c = v?.case;
   const isOpen = c?.status === "open";
+  // An open case: the live case screen (it reads the saved case itself; no second paste, no amount to type).
+  if (mode === "view" && c && isOpen) return <CaseBrain onNewCase={newCase} />;
   const f = (k: string) => String(form[k] ?? "");
   const set = (k: string) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
 

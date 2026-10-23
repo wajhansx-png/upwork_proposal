@@ -182,7 +182,7 @@ export default function Saved() {
           <b>Saved messages</b>
           <small>{manager ? "Areeba sees this same list" : "From your manager · for the groups"}</small>
         </div>
-        {manager && <a className="cb-link" href="/manager/brain">🧠 Case Brain</a>}
+        {manager && <a className="cb-link" href="/manager/case">🧠 Case</a>}
       </header>
 
       <div className="wa-body">

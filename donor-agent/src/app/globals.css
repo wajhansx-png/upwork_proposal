@@ -693,7 +693,6 @@ span.bell-btn{display:inline-flex;align-items:center}
   .cb-top{padding:8px 10px}.cb-top .wa-av{display:none}.cb-top>a{font-size:20px;padding:2px 4px}
   .cb-title b{font-size:15px}.cb-title small{font-size:11.5px}
   .cb-tools{gap:4px}.cb-tools .cb-chip{padding:4px 7px;font-size:11.5px}
-  .cb-tools .cb-chip:nth-child(2){display:none}
   .cb-main{padding:8px;gap:6px}
   .cb-side{gap:6px}
   .cb .cb-status{gap:4px}.cb .cb-status div{padding:4px 2px;border-radius:8px}.cb .cb-status b{font-size:12.5px}.cb .cb-status span{font-size:10px}

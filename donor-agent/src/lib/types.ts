@@ -273,6 +273,8 @@ export interface BrainOut {
 
 /** The Case Brain: the live case, the amount, and what was already written (so nothing repeats). */
 export interface Brain {
+  /** The saved case (Case page) this brain belongs to. */
+  caseId?: string;
   name: string;
   age?: number;
   /** "8 months" when the child is under one year. */

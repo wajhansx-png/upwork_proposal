@@ -10,7 +10,7 @@ let aiReply = null;
 const load = Module._load;
 Module._load = function (request, parent, ...rest) {
   const from = parent?.filename ?? '';
-  if ((from.endsWith(path.join('lib', 'brain.ts')) || from.endsWith(path.join('lib', 'brain-read.ts')) || from.endsWith(path.join('lib', 'case.ts'))) && request === './llm')
+  if ((from.endsWith(path.join('lib', 'brain.ts')) || from.endsWith(path.join('lib', 'brain-read.ts')) || from.endsWith(path.join('lib', 'brain-case.ts')) || from.endsWith(path.join('lib', 'case.ts'))) && request === './llm')
     return { llm: async () => ({ text: typeof aiReply === 'function' ? aiReply() : aiReply, status: 'ok' }), parseJson: (t) => { try { return JSON.parse(t); } catch { return null; } } };
   return load.call(this, request, parent, ...rest);
 };
@@ -212,6 +212,26 @@ function checkStyle(text, left) {
   for (let i = 0; i < 10; i++) { r = await B.runCommand(baby, { kind: 'tick' }, T0 + (i + 1) * 1200000); checkStyle(r.outputs[0].text, 100000); }
   assert.ok(baby.history.some((h) => /8-month-old baby|8 months old/.test(h.text)), 'months are written right');
   assert.ok(!baby.history.some((h) => /\bHe\b|\bhis\b/.test(h.text)), 'a girl is "she/her"');
+
+  // 8. The brain starts by itself from the saved case: his own post, or a case made with the form.
+  {
+    const C = require('../src/lib/brain-case.ts');
+    aiReply = null;
+    const own = { id: 'c1', status: 'open', createdAt: '', hook: '', story: '', verse: 0, by: 'rules', posts: [], ownText: YOUSUF, facts: { type: 'child', name: 'Yousuf', gender: 'm', age: 2, problem: 'x', proof: '', amountLeft: 70000, askAmount: 2000 } };
+    const bb = await C.brainFromCase(own, T0);
+    assert.equal(bb.caseId, 'c1');
+    assert.equal(bb.name, 'Yousuf');
+    assert.equal(bb.left, 70000, 'no amount to type: the saved amount is used');
+    assert.equal(bb.facts[0], 'Fluid is filling inside his brain');
+    assert.equal(C.casePost(own), YOUSUF, 'the first card is his own post, word for word');
+    const rr = await B.runCommand(bb, { kind: 'tick' }, T0 + 1200000);
+    checkStyle(rr.outputs[0].text, 70000);
+    const form = { ...own, ownText: undefined, facts: { type: 'child', name: 'Affan', gender: 'm', age: 7, problem: 'bleeding inside his knee and hand', illness: 'Hemophilia', illnessMeaning: 'blood does not clot', worstRisk: 'he can lose his leg', doctorLine: 'delay can put the leg at risk', proof: 'Aga Khan lab report', amountLeft: 26000, askAmount: 2000 } };
+    const fb = await C.brainFromCase(form, T0);
+    assert.deepEqual(fb.facts, ['Affan is bleeding inside his knee and hand', 'He has Hemophilia (blood does not clot)', 'Without treatment, he can lose his leg', 'Doctors said delay can put the leg at risk']);
+    assert.equal(fb.left, 26000);
+    assert.match(C.casePost(form), /Affan/, "the app's case post");
+  }
 
   console.log('brain regression: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

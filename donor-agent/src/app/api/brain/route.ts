@@ -4,12 +4,28 @@ import { getRole } from "@/lib/auth";
 import { readDb, withDb } from "@/lib/db";
 import { newBrain, parseCommand, runCommand, type BrainResult } from "@/lib/brain";
 import { readCase } from "@/lib/brain-read";
+import { brainFromCase, casePost } from "@/lib/brain-case";
+import { openCase } from "@/lib/agent";
 import type { Brain } from "@/lib/types";
 
 /** The Case Brain. Manager only. */
 export async function GET(req: NextRequest) {
   if ((await getRole(req)) !== "manager") return NextResponse.json({ error: "Managers only" }, { status: 403 });
-  return NextResponse.json({ brain: (await readDb()).brain ?? null });
+  const db = await readDb();
+  const open = openCase(db);
+  if (!open) return NextResponse.json({ brain: null, post: null });
+  let b = db.brain;
+  // A new case on the Case page: the brain starts from it by itself (no second paste, no amount to type).
+  if (!b || b.caseId !== open.id) {
+    const fresh = await brainFromCase(open);
+    b = await withDb((d) => {
+      const cur = openCase(d);
+      if (cur?.id !== open.id) return d.brain ?? fresh;
+      if (d.brain?.caseId !== open.id) d.brain = fresh;
+      return d.brain;
+    });
+  }
+  return NextResponse.json({ brain: b, post: casePost(open) });
 }
 
 /**
@@ -43,7 +59,10 @@ export async function POST(req: NextRequest) {
     if (!facts.length) return NextResponse.json({ error: "Write the facts, one per line. Only these will be used." }, { status: 400 });
     const source = String(body.text ?? "").trim().slice(0, 6000) || undefined;
     const ageLabel = /month/i.test(String(body.age ?? "")) ? `${age} months` : undefined;
-    const b: Brain = newBrain({ name, total, age: !ageLabel && age && age < 120 ? age : undefined, ageLabel, gender: body.gender === "f" ? "f" : "m", facts, source });
+    const prev = (await readDb()).brain;
+    // Editing the facts keeps the amount, the messages already written and the angles used.
+    const keep = prev ? { caseId: prev.caseId, left: prev.left, updateLeft: prev.updateLeft, leftAt: prev.leftAt, history: prev.history, angles: prev.angles, round: prev.round, hadith: prev.hadith, dryLevel: prev.dryLevel, noAi: prev.noAi } : {};
+    const b: Brain = { ...newBrain({ name, total, age: !ageLabel && age && age < 120 ? age : undefined, ageLabel, gender: body.gender === "f" ? "f" : "m", facts, source: source ?? prev?.source }), ...keep };
     await withDb((d) => {
       d.brain = b;
     });
@@ -67,6 +86,10 @@ export async function POST(req: NextRequest) {
     const saved = await withDb((d) => {
       if (!d.brain || d.brain.history.length !== start.history.length || d.brain.left !== start.left) return false;
       d.brain = work;
+      // One amount everywhere: the case (Case page, saved messages, DMs) follows what he typed here.
+      const c = d.cases.find((x) => x.id === work.caseId && x.status === "open");
+      if (c && work.left !== undefined) c.facts.amountLeft = work.left;
+      if (c && work.done) Object.assign(c, { status: "closed", closedAt: new Date().toISOString() });
       return true;
     });
     if (!saved) return NextResponse.json({ error: "Something changed at the same time. Please send it again." }, { status: 409 });
