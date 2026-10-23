@@ -33,12 +33,15 @@ export const people = (left: number) => ({ p2: Math.ceil(left / 2000), p1: Math.
 
 const pron = (b: Brain) => (b.gender === "f" ? { he: "She", him: "her", his: "her" } : { he: "He", him: "him", his: "his" });
 
+/** "2-year-old", "8-month-old baby", "child". */
+export const kidWord = (b: Brain) => (b.age ? `${b.age}-year-old` : b.ageLabel ? `${b.ageLabel.replace(/s$/, "").replace(" ", "-")}-old baby` : "child");
+
 /** The heart lines of each angle in his own words. {N} name, {A} age, {P2} people at Rs. 2,000. */
 function readyLines(b: Brain, angle: Angle, left: number): { first: string; line: string } {
   const N = b.name;
   const p = pron(b);
   const { p2 } = people(left);
-  const age = b.age ? `${b.age}` : "small";
+  const age = b.age ? `${b.age}` : b.ageLabel ? `${b.ageLabel} old` : "small";
   const map: Record<Angle, { first: string; line: string }> = {
     dua: { first: `Every parent makes dua for their child. Today, you can be the answer to ${N}'s mother's dua.`, line: `${p.he} cannot even tell ${p.his} mother where it hurts.` },
     meal: { first: `One meal outside costs Rs. 2,000. For ${N}, the same Rs. 2,000 means treatment.`, line: `${N} is still waiting for that treatment.` },
@@ -46,7 +49,7 @@ function readyLines(b: Brain, angle: Angle, left: number): { first: string; line
     allahSees: { first: `Allah sees who helped ${N} today.`, line: `And Allah sees who scrolled past.` },
     tooYoung: { first: `${p.he} is only ${age}. ${p.he} doesn't even know what a hospital is.`, line: `${p.he} only knows it hurts.` },
     helpless: { first: `${p.he} cannot even tell ${p.his} mother where it hurts.`, line: `${p.he} can only cry.` },
-    ownChild: { first: b.age ? `Imagine your own ${b.age}-year-old like this.` : `Imagine your own child like this.`, line: `Now look at ${N} again.` },
+    ownChild: { first: `Imagine your own ${kidWord(b)} like this.`, line: `Now look at ${N} again.` },
     count: { first: `Only ${p2} more ${p2 === 1 ? "person" : "people"} needed. Be the next one.`, line: `${N} is still waiting for them.` },
     waiting: { first: `${N} is still lying there.`, line: `Waiting for people like you.` },
     hadith: { first: `${N} cannot help ${p.him}self. You can.`, line: `${p.he} cannot even tell ${p.his} mother where it hurts.` },
@@ -86,13 +89,14 @@ export function lineProblems(line: string, b: Brain, left: number): string[] {
   if (TIRED.test(t)) p.push("tired opener");
   if (/[*_~]/.test(t)) p.push("formatting marks");
   if (/[“"]/.test(t)) p.push("quotes (hadiths are added by the app)");
-  const facts = b.facts.join(" ").toLowerCase();
+  // Allowed words: his facts and the whole case post he pasted.
+  const facts = `${b.facts.join(" ")} ${b.source ?? ""}`.toLowerCase();
   for (const m of t.matchAll(MEDICAL)) {
     const w = m[0].toLowerCase().replace(/s$/, "");
     if (!facts.includes(w) && w !== "hospital") p.push(`not in the facts: “${m[0]}”`);
   }
   const { p2, p1 } = people(left);
-  const ok = new Set([String(b.age ?? ""), String(left), money(left), String(p2), String(p1), "2000", "2,000", "1000", "1,000"]);
+  const ok = new Set([String(b.age ?? ""), b.ageLabel?.split(" ")[0] ?? "", String(left), money(left), String(p2), String(p1), "2000", "2,000", "1000", "1,000"]);
   for (const m of t.matchAll(/\d[\d,]*/g)) if (!ok.has(m[0].replace(/,$/, ""))) p.push(`made-up number ${m[0]}`);
   return [...new Set(p)];
 }
@@ -107,7 +111,7 @@ async function aiLines(b: Brain, angle: Angle, left: number, avoid: string[], st
       "Use ONLY these facts. Never add a medical fact, a danger, a time or a number. Never write: dying, life-threatening, extreme pain, critical, last chance, deadline, kindly, generous. " +
       "Do not start with 'fluid is filling' or 'fluid is pressing'. No emoji, no * or _, no quotes, no hadith (the app adds those). Do not repeat the old messages.\n" +
       'Return ONLY JSON: {"first":"...","line":"..."}',
-    JSON.stringify({ child: { name: b.name, age: b.age, gender: b.gender === "f" ? "girl" : "boy" }, facts: b.facts, old_messages_do_not_repeat: avoid.slice(-8) }),
+    JSON.stringify({ child: { name: b.name, age: b.age ?? b.ageLabel, gender: b.gender === "f" ? "girl" : "boy" }, facts: b.facts, case_post: b.source?.slice(0, 2500), old_messages_do_not_repeat: avoid.slice(-8) }),
     { json: true },
   );
   const j = parseJson<{ first?: unknown; line?: unknown }>(r.text);
@@ -195,7 +199,7 @@ async function writeDry(b: Brain, left: number, t: number): Promise<BrainOut[]> 
   const angle = nextAngle(b, ["hadith"]);
   const h = await heart(b, angle, left, true);
   const main = [`*Rs. ${money(left)} is still left for ${b.name}.*`, "", `${h.first} 💔`, factLine(b), "", youLine(b), "", peopleLong(left), "", ENDING].join("\n");
-  const groups = [`🤲 *A ${b.age ? `${b.age}-year-old` : "small"} child needs our help.*`, "", hadithLine(b), "", `💔 ${factLine(b)}`, "", youLine(b), "", peopleShort(left), "", ENDING].join("\n");
+  const groups = [`🤲 *A ${b.age ? `${b.age}-year-old child` : b.ageLabel ? kidWord(b) : "small child"} needs our help.*`, "", hadithLine(b), "", `💔 ${factLine(b)}`, "", youLine(b), "", peopleShort(left), "", ENDING].join("\n");
   return [
     { kind: "dry-main", do: `Send this in ${MAIN} with @all. Then: DM new people who saw the message, and ask donors to share the post.`, text: main, angle, at: now_(t) },
     { kind: "dry-groups", do: `Send this in ${GROUPS}.`, text: groups, at: now_(t) },

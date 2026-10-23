@@ -10,11 +10,12 @@ let aiReply = null;
 const load = Module._load;
 Module._load = function (request, parent, ...rest) {
   const from = parent?.filename ?? '';
-  if ((from.endsWith(path.join('lib', 'brain.ts')) || from.endsWith(path.join('lib', 'case.ts'))) && request === './llm')
+  if ((from.endsWith(path.join('lib', 'brain.ts')) || from.endsWith(path.join('lib', 'brain-read.ts')) || from.endsWith(path.join('lib', 'case.ts'))) && request === './llm')
     return { llm: async () => ({ text: typeof aiReply === 'function' ? aiReply() : aiReply, status: 'ok' }), parseJson: (t) => { try { return JSON.parse(t); } catch { return null; } } };
   return load.call(this, request, parent, ...rest);
 };
 const B = require('../src/lib/brain.ts');
+const R = require('../src/lib/brain-read.ts');
 
 const FACTS = ['Fluid is filling his brain', 'His head is swollen', 'Both his kidneys are badly swollen', 'He has a hernia', 'His blood was so weak he needed a transfusion'];
 const fresh = () => B.newBrain({ name: 'Yousuf', age: 2, gender: 'm', total: 70000, facts: [...FACTS] });
@@ -149,6 +150,44 @@ function checkStyle(text, left) {
   aiReply = 'not json';
   r = await B.runCommand(b, { kind: 'tick' }, T0 + 1200000);
   checkStyle(r.outputs[0].text, 44000);
+
+  // 7. Paste the whole post: name, age, boy/girl, total and facts are read; money/pay/ask lines are not facts.
+  const YOUSUF = "Little Yousuf is only 2 years old & fluid is filling inside his brain.💔\n\nHis both kidneys are badly swollen because urine goes back into them. He has a hernia on both sides, and his blood became so weak he needed a transfusion.💔\n\nHe needs specialist treatment, hospital care, multiple surgeries for his treatment\n\n🚨 Rs. 70,000 needed.\n\n- 🤲 Just 35 kind people donating Rs. 2,000 can save Yousaf.\n\nPlease don't think someone else will help.\n\n📲 03097458815 — Easypaisa / JazzCash\n👤 Wajdan Khan — GiveLife Foundation";
+  aiReply = null;
+  let rd = await R.readCase(YOUSUF);
+  assert.equal(rd.name, 'Yousuf');
+  assert.equal(rd.age, 2);
+  assert.equal(rd.gender, 'm');
+  assert.equal(rd.total, 70000);
+  assert.deepEqual(rd.facts, ['Fluid is filling inside his brain', 'His both kidneys are badly swollen because urine goes back into them', 'He has a hernia on both sides', 'His blood became so weak he needed a transfusion', 'He needs specialist treatment, hospital care, multiple surgeries for his treatment']);
+  assert.deepEqual(rd.missing, []);
+  rd = R.readByRules("*Helpless Ayesha (8 months) cannot breathe on her own.* 💔\n\nShe was born with a hole in her heart. Doctors at Children Hospital Lahore said she needs surgery.\n\nRs. 1.5 lakh needed. 50k collected.\n\n🤲 Just 50 kind people donating 2,000 can save her.\n📲 03097458815");
+  assert.equal(rd.name, 'Ayesha');
+  assert.equal(rd.ageLabel, '8 months');
+  assert.equal(rd.gender, 'f');
+  assert.equal(rd.total, 150000, 'lakh read, the 50k collected and the 2,000 ask are not the total');
+  assert.ok(!rd.facts.some((f) => /lakh|collected|2,000/.test(f)));
+  rd = R.readByRules("Ahmed's father passed away last week. The family has no ration and rent is due.\n35,000 required for ration and rent.\n03097458815 Easypaisa");
+  assert.equal(rd.name, 'Ahmed', 'not "Passed"');
+  assert.equal(rd.total, 35000);
+  rd = R.readByRules('Please help. Send money to 03097458815.');
+  assert.deepEqual(rd.missing.sort(), ['facts', 'name', 'total'], 'nothing guessed');
+  // AI facts must use the words of the post; invented ones are dropped, a wrong total is ignored.
+  aiReply = JSON.stringify({ name: 'Yousuf', age: 2, gender: 'm', total: 90000, facts: ['Fluid is filling inside his brain', 'He has cancer', 'His head is swollen and he cannot see', 'Both his kidneys are badly swollen'] });
+  rd = await R.readCase(YOUSUF);
+  assert.equal(rd.total, 70000, 'an amount not in the post is ignored');
+  assert.ok(!rd.facts.some((f) => /cancer|cannot see/.test(f)), 'invented facts dropped');
+  assert.ok(rd.facts.includes('Fluid is filling inside his brain'));
+  aiReply = null;
+  // The post is the allowed vocabulary: "surgeries" is in the post, "cancer" is not.
+  const pb = B.newBrain({ name: 'Yousuf', age: 2, gender: 'm', total: 70000, facts: rd.facts, source: YOUSUF });
+  assert.deepEqual(B.lineProblems('He needs surgeries and hospital care.', pb, 70000), []);
+  assert.ok(B.lineProblems('He has cancer.', pb, 70000).length);
+  const baby = B.newBrain({ name: 'Ayesha', ageLabel: '8 months', gender: 'f', total: 150000, facts: ['She was born with a hole in her heart'] });
+  r = await B.runCommand(baby, { kind: 'left', amount: 100000 }, T0);
+  for (let i = 0; i < 10; i++) { r = await B.runCommand(baby, { kind: 'tick' }, T0 + (i + 1) * 1200000); checkStyle(r.outputs[0].text, 100000); }
+  assert.ok(baby.history.some((h) => /8-month-old baby|8 months old/.test(h.text)), 'months are written right');
+  assert.ok(!baby.history.some((h) => /\bHe\b|\bhis\b/.test(h.text)), 'a girl is "she/her"');
 
   console.log('brain regression: all passed');
 })().catch((e) => { console.error(e); process.exit(1); });

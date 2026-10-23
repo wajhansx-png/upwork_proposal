@@ -3,6 +3,7 @@ import { readBody } from "@/lib/http";
 import { getRole } from "@/lib/auth";
 import { readDb, withDb } from "@/lib/db";
 import { newBrain, parseCommand, runCommand, type BrainResult } from "@/lib/brain";
+import { readCase } from "@/lib/brain-read";
 import type { Brain } from "@/lib/types";
 
 /** The Case Brain. Manager only. */
@@ -12,6 +13,7 @@ export async function GET(req: NextRequest) {
 }
 
 /**
+ * { action: "paste", text } his whole case post: read and started.
  * { action: "setup", name, age?, gender, total, facts } a new case (forgets the old one).
  * { action: "ai", on } AI wording on/off (off = only the ready lines).
  * { action: "cmd", text } "LEFT 44000", "20 MIN", "DRY", "DONE".
@@ -19,6 +21,18 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if ((await getRole(req)) !== "manager") return NextResponse.json({ error: "Managers only" }, { status: 403 });
   const body = await readBody<{ on: boolean; action: string; name: string; age: number | string; gender: string; total: number | string; facts: string; text: string }>(req);
+  if (body.action === "paste") {
+    // His whole case post: read it, start the case if everything is there, else send back what was read.
+    const source = String(body.text ?? "").replace(/\r/g, "").trim().slice(0, 6000);
+    if (source.length < 30) return NextResponse.json({ error: "Paste the full case post." }, { status: 400 });
+    const read = await readCase(source);
+    if (read.missing.length) return NextResponse.json({ error: `I could not find: ${read.missing.join(", ")}. Please fill it in.`, read }, { status: 422 });
+    const b: Brain = newBrain({ name: read.name, total: read.total!, age: read.age, ageLabel: read.ageLabel, gender: read.gender, facts: read.facts, source });
+    await withDb((d) => {
+      d.brain = b;
+    });
+    return NextResponse.json({ brain: b, read });
+  }
   if (body.action === "setup") {
     const name = String(body.name ?? "").replace(/\s+/g, " ").trim().slice(0, 40);
     const total = Math.round(Number(String(body.total ?? "").replace(/[^\d.]/g, "")));
@@ -27,7 +41,9 @@ export async function POST(req: NextRequest) {
     if (!name) return NextResponse.json({ error: "Write the child's name." }, { status: 400 });
     if (!total || total < 100) return NextResponse.json({ error: "Write the total amount." }, { status: 400 });
     if (!facts.length) return NextResponse.json({ error: "Write the facts, one per line. Only these will be used." }, { status: 400 });
-    const b: Brain = newBrain({ name, total, age: age && age < 120 ? age : undefined, gender: body.gender === "f" ? "f" : "m", facts });
+    const source = String(body.text ?? "").trim().slice(0, 6000) || undefined;
+    const ageLabel = /month/i.test(String(body.age ?? "")) ? `${age} months` : undefined;
+    const b: Brain = newBrain({ name, total, age: !ageLabel && age && age < 120 ? age : undefined, ageLabel, gender: body.gender === "f" ? "f" : "m", facts, source });
     await withDb((d) => {
       d.brain = b;
     });

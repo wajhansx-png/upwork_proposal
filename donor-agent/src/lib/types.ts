@@ -275,6 +275,10 @@ export interface BrainOut {
 export interface Brain {
   name: string;
   age?: number;
+  /** "8 months" when the child is under one year. */
+  ageLabel?: string;
+  /** The case text he pasted. Its words are the only medical words allowed. */
+  source?: string;
   gender: "m" | "f";
   total: number;
   /** Only these facts may be used in messages. One per line. */

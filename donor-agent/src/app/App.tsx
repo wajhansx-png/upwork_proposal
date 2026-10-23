@@ -33,7 +33,7 @@ export async function api<T = unknown>(url: string, method = "GET", body?: unkno
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw Object.assign(new Error((data as { error?: string }).error || `Something went wrong (${res.status})`), { status: res.status });
+  if (!res.ok) throw Object.assign(new Error((data as { error?: string }).error || `Something went wrong (${res.status})`), { status: res.status, data });
   return data as T;
 }
 
