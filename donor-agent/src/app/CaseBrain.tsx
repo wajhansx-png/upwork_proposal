@@ -17,6 +17,8 @@ export default function CaseBrain() {
   const [paste, setPaste] = useState("");
   const [byHand, setByHand] = useState(false);
   const [showFacts, setShowFacts] = useState(false);
+  const [view, setView] = useState(0);
+  const [doOpen, setDoOpen] = useState(false);
   const [cmd, setCmd] = useState("");
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState("");
@@ -96,7 +98,8 @@ export default function CaseBrain() {
     try {
       const r = await api<{ brain: Brain; reply?: string; outputs: BrainOut[] }>("/api/brain", "POST", { action: "cmd", text });
       setB(r.brain);
-      setReply(r.reply ?? (r.outputs.length > 1 ? `${r.outputs.length} messages below.` : ""));
+      if (r.outputs.length) setView(0);
+      setReply(r.reply ?? (r.outputs.length > 1 ? `${r.outputs.length} messages: main group first, then › for the freelancer groups.` : ""));
       setCmd("");
     } catch (e) {
       setErr((e as Error).message);
@@ -131,101 +134,107 @@ export default function CaseBrain() {
     if (last && last.at === o.at) outs.splice(outs.findIndex((x) => x.at !== o.at) === -1 ? outs.length : outs.findIndex((x) => x.at !== o.at), 0, o);
     else outs.unshift(o);
   }
+  const shown = outs[Math.min(view, Math.max(0, outs.length - 1))];
+  const ageText = b ? (b.age ? `${b.age} yrs` : b.ageLabel ?? "") : "";
   return (
-    <main className="wa wide">
-      <header className="wa-top">
+    <main className="cb">
+      <header className="wa-top cb-top">
         <a href="/manager/messages" aria-label="Back">←</a>
         <span className="wa-av" aria-hidden>🧠</span>
-        <div>
+        <div className="cb-title">
           <b>Case Brain</b>
-          <small>{b ? `${b.name} · Rs. ${money(b.total)} total` : "Writes the next message. You send it."}</small>
+          <small>{b && !setup ? `${b.name} · ${ageText}${ageText ? " · " : ""}${b.gender === "f" ? "girl" : "boy"} · Rs. ${money(b.total)} total` : "Writes the next message. You send it."}</small>
         </div>
+        {b && !setup && (
+          <div className="cb-tools">
+            <button className={`cb-chip ${b.noAi ? "" : "on"}`} title={b.noAi ? "AI wording is off: only ready lines in your style (safe)." : "AI wording is on: fresh words each time. Read before you send."} disabled={!!busy} onClick={async () => setB((await api<{ brain: Brain }>("/api/brain", "POST", { action: "ai", on: !!b.noAi })).brain)}>{b.noAi ? "AI off" : "AI on"}</button>
+            <button className="cb-chip" onClick={() => setShowFacts(!showFacts)}>{showFacts ? "Hide facts" : `${b.facts.length} facts`}</button>
+            <button className="cb-chip" onClick={edit}>Edit</button>
+            <button className="cb-chip" onClick={() => { setForm({ name: "", age: "", gender: "m", total: "", facts: "", text: "" }); setByHand(false); setSetup(true); }}>New case</button>
+          </div>
+        )}
       </header>
-      <div className="wa-body">
-        {setup ? (
-          !byHand ? (
-          <section className="sv-new cb-setup">
-            <b>Paste your case post</b>
-            <p className="hint">The whole post, as you wrote it. I read the name, age, amount and facts from it. Only those facts are ever used.</p>
-            <textarea rows={10} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={"Little Yousuf is only 2 years old & fluid is filling inside his brain.💔\n\nHis both kidneys are badly swollen…\n\n🚨 Rs. 70,000 needed."} />
-            <div className="sv-row">
-              <button className="d-btn hot" disabled={busy === "paste" || paste.trim().length < 30} onClick={() => void read()}>{busy === "paste" ? "Reading…" : "Read & start"}</button>
-              {b && <button className="d-btn" onClick={() => setSetup(false)}>Cancel</button>}
-            </div>
-            <button className="text-btn" onClick={() => setByHand(true)}>Fill by hand instead</button>
-          </section>
+
+      {setup ? (
+        <div className="cb-setupwrap">
+          {!byHand ? (
+            <section className="cb-card cb-setup">
+              <b>Paste your case post</b>
+              <p className="hint">The whole post, as you wrote it. I read the name, age, amount and facts. Only those facts are ever used.</p>
+              <textarea value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={"Little Yousuf is only 2 years old & fluid is filling inside his brain.💔\n\nHis both kidneys are badly swollen…\n\n🚨 Rs. 70,000 needed."} />
+              <div className="cb-row">
+                <button className="d-btn hot" disabled={busy === "paste" || paste.trim().length < 30} onClick={() => void read()}>{busy === "paste" ? "Reading…" : "Read & start"}</button>
+                {b && <button className="d-btn" onClick={() => setSetup(false)}>Cancel</button>}
+                <button className="text-btn" onClick={() => setByHand(true)}>Fill by hand</button>
+              </div>
+            </section>
           ) : (
-          <section className="sv-new cb-setup">
-            <b>Check the case</b>
-            <p className="hint">Only these facts are used. Nothing is added.</p>
-            <div className="cb-two">
-              <input placeholder="Child's name (Yousuf)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <input placeholder="Age (2, or 8 months)" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
-            </div>
-            <div className="cb-two">
-              <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}><option value="m">Boy</option><option value="f">Girl</option></select>
-              <input placeholder="Total (70000)" inputMode="numeric" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} />
-            </div>
-            <textarea rows={6} value={form.facts} onChange={(e) => setForm({ ...form, facts: e.target.value })} placeholder={"Facts, one per line:\nFluid is filling his brain\nHis head is swollen\nBoth his kidneys are badly swollen\nHe has a hernia\nHis blood was so weak he needed a transfusion"} />
-            <div className="sv-row">
-              <button className="d-btn hot" disabled={busy === "setup"} onClick={() => void start()}>{busy === "setup" ? "Starting…" : "Start this case"}</button>
-              <button className="d-btn" onClick={() => (b && !form.text ? setSetup(false) : setByHand(false))}>Back</button>
-            </div>
-          </section>
-          )
-        ) : (
-          b && (
-            <>
-              <section className="cb-read">
-                <p><b>I read:</b> {b.name} · {b.age ? `${b.age} years` : b.ageLabel ?? "age not given"} · {b.gender === "f" ? "girl" : "boy"} · Rs. {money(b.total)} · {b.facts.length} facts</p>
-                <div>
-                  <button className="text-btn" onClick={() => setShowFacts(!showFacts)}>{showFacts ? "Hide facts" : "See facts"}</button>
-                  <button className="text-btn" onClick={edit}>Edit</button>
-                </div>
-                {showFacts && <ul>{b.facts.map((f, i) => <li key={i}>{f}</li>)}</ul>}
-              </section>
+            <section className="cb-card cb-setup">
+              <b>Check the case</b>
+              <p className="hint">Only these facts are used. Nothing is added.</p>
+              <div className="cb-two">
+                <input placeholder="Child's name (Yousuf)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <input placeholder="Age (2, or 8 months)" value={form.age} onChange={(e) => setForm({ ...form, age: e.target.value })} />
+                <select value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}><option value="m">Boy</option><option value="f">Girl</option></select>
+                <input placeholder="Total (70000)" inputMode="numeric" value={form.total} onChange={(e) => setForm({ ...form, total: e.target.value })} />
+              </div>
+              <textarea value={form.facts} onChange={(e) => setForm({ ...form, facts: e.target.value })} placeholder={"Facts, one per line:\nFluid is filling his brain\nHis head is swollen"} />
+              <div className="cb-row">
+                <button className="d-btn hot" disabled={busy === "setup"} onClick={() => void start()}>{busy === "setup" ? "Starting…" : "Start this case"}</button>
+                <button className="d-btn" onClick={() => (b && !form.text ? setSetup(false) : setByHand(false))}>Back</button>
+              </div>
+            </section>
+          )}
+          {err && <p className="cb-err" onClick={() => setErr("")}>{err}</p>}
+        </div>
+      ) : (
+        b && (
+          <div className="cb-main">
+            <aside className="cb-side">
+              {showFacts && <ul className="cb-facts">{b.facts.map((f, i) => <li key={i}>{f}</li>)}</ul>}
               <section className="cb-status">
                 <div><b>{left !== undefined ? `Rs. ${money(left)}` : "—"}</b><span>left</span></div>
-                <div><b>{left !== undefined ? p2 : "—"}</b><span>at Rs. 2,000</span></div>
-                <div><b>{left !== undefined ? p1 : "—"}</b><span>at Rs. 1,000</span></div>
-                <div><b>{b.angles.length}/10</b><span>angles used</span></div>
+                <div><b>{left !== undefined ? p2 : "—"}</b><span>× Rs. 2,000</span></div>
+                <div><b>{left !== undefined ? p1 : "—"}</b><span>× Rs. 1,000</span></div>
+                <div><b>{b.angles.length}/10</b><span>angles</span></div>
               </section>
               <form className="cb-cmd" onSubmit={(e) => { e.preventDefault(); void send(/^\d/.test(cmd.trim()) ? `LEFT ${cmd}` : cmd); }}>
-                <input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Amount left now, like 44000" inputMode="text" />
-                <button className="d-btn hot" disabled={!!busy || !cmd.trim()}>{busy && busy === (/^\d/.test(cmd.trim()) ? `LEFT ${cmd}` : cmd) ? "…" : "LEFT"}</button>
+                <input value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="Amount left now" inputMode="numeric" />
+                <button className="d-btn hot" disabled={!!busy || !cmd.trim()}>{busy.startsWith("LEFT") ? "…" : "LEFT"}</button>
               </form>
               <div className="cb-btns">
-                <button className="d-btn" disabled={!!busy} onClick={() => void send("20 MIN")}>{busy === "20 MIN" ? "Writing…" : "⏱ 20 minutes passed / Update group"}</button>
-                <button className="d-btn" disabled={!!busy} onClick={() => void send("DRY")}>{busy === "DRY" ? "Writing…" : `😔 No donations${b.dryLevel ? ` · next: level ${b.dryLevel + 1}` : ""}`}</button>
-                <button className="d-btn" disabled={!!busy} onClick={() => confirm(`Is ${b.name}'s case complete?`) && void send("DONE")}>{busy === "DONE" ? "Writing…" : "✅ DONE"}</button>
+                <button className="d-btn" disabled={!!busy} onClick={() => void send("20 MIN")}>{busy === "20 MIN" ? "Writing…" : <>⏱ 20 minutes passed<span className="cb-long"> / Update group</span></>}</button>
+                <button className="d-btn" disabled={!!busy} onClick={() => void send("DRY")}>{busy === "DRY" ? "Writing…" : `😔 No donations${b.dryLevel ? ` · level ${b.dryLevel + 1}` : ""}`}</button>
+                <button className="d-btn" disabled={!!busy} onClick={() => confirm(`Is ${b.name}'s case complete?`) && void send("DONE")}>{busy === "DONE" ? "Writing…" : "✅ Done"}</button>
               </div>
-              <label className="cb-ai">
-                <input type="checkbox" checked={!b.noAi} disabled={!!busy} onChange={async (e) => setB((await api<{ brain: Brain }>("/api/brain", "POST", { action: "ai", on: e.target.checked })).brain)} />
-                <span>AI wording {b.noAi ? "OFF: only ready lines in your style (100% safe)." : "ON: fresh words each time. It can still add a small detail that is not a fact, so read before you send."}</span>
-              </label>
-              {reply && <p className="cb-reply">{reply}</p>}
-              <div className="sv-grid">
-                {outs.map((o, i) => (
-                  <div key={`${o.at}-${i}`} className={`wa-msg sv-card ${i === 0 ? "focus" : ""}`}>
-                    <span className="sv-now">{KIND[o.kind]} · {hhmm(o.at)}</span>
-                    <p className="cb-do"><b>DO:</b> {o.do}</p>
-                    <p className="wa-text">{o.text}</p>
-                    <div className="wa-actions">
-                      <button onClick={() => void copy(o.text)}>Copy</button>
-                      <a href={`https://wa.me/?text=${encodeURIComponent(o.text)}`} target="_blank" rel="noreferrer">WhatsApp</a>
-                      <button onClick={() => void keep(o)}>Save to Messages</button>
-                    </div>
+              <p className="cb-ainote">{b.noAi ? "AI off: only ready lines in your style." : "AI on: fresh words each time. Read before you send."}</p>
+              {(reply || err) && <p className={err ? "cb-err" : "cb-reply"} onClick={() => setErr("")}>{err || reply}</p>}
+            </aside>
+
+            <section className="cb-out">
+              {shown ? (
+                <>
+                  <div className="cb-nav">
+                    <button aria-label="Newer" disabled={view <= 0} onClick={() => setView(view - 1)}>‹</button>
+                    <span>{KIND[shown.kind]} · {hhmm(shown.at)}{outs.length > 1 ? ` · ${Math.min(view, outs.length - 1) + 1} of ${outs.length}` : ""}</span>
+                    <button aria-label="Older" disabled={view >= outs.length - 1} onClick={() => setView(view + 1)}>›</button>
                   </div>
-                ))}
-              </div>
-              {!outs.length && <p className="wa-sys">Send me LEFT [amount] to start.</p>}
-              <button className="text-btn cb-new" onClick={() => { setForm({ name: "", age: "", gender: "m", total: "", facts: "", text: "" }); setByHand(false); setSetup(true); }}>Start a new case</button>
-            </>
-          )
-        )}
-        {!loaded && <p className="wa-sys">Loading…</p>}
-        {err && <p className="wa-sys bad" onClick={() => setErr("")}>{err}</p>}
-      </div>
+                  <p className={`cb-do ${doOpen ? "open" : ""}`} onClick={() => setDoOpen(!doOpen)}><b>DO:</b> {shown.do}</p>
+                  <p className="cb-text">{shown.text}</p>
+                  <div className="cb-acts">
+                    <button className="d-btn hot" onClick={() => void copy(shown.text)}>Copy</button>
+                    <a className="d-btn" href={`https://wa.me/?text=${encodeURIComponent(shown.text)}`} target="_blank" rel="noreferrer">WhatsApp</a>
+                    <button className="d-btn" onClick={() => void keep(shown)}>Save to Messages</button>
+                  </div>
+                </>
+              ) : (
+                <p className="cb-empty">Tap <b>LEFT</b> with the amount left now. Your first message comes here.</p>
+              )}
+            </section>
+          </div>
+        )
+      )}
+      {!loaded && <p className="cb-empty">Loading…</p>}
       {toast && <div className="d-toast" role="status"><span>{toast}</span></div>}
     </main>
   );
