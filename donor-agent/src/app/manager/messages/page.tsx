@@ -1,5 +1,6 @@
-import Saved from "../../Saved";
+import { redirect } from "next/navigation";
 
+/** Saved messages now live inside Cases ("Messages for Areeba"). */
 export default function ManagerMessagesPage() {
-  return <Saved />;
+  redirect("/manager/case?view=messages");
 }

@@ -43,7 +43,7 @@ const when = (iso: string) => {
  * Saved messages, one page for both. The manager writes or picks texts and saves them;
  * Areeba sees the same list, like a WhatsApp chat, and copies or shares them into the groups.
  */
-export default function Saved() {
+export default function Saved({ embedded = false }: { embedded?: boolean }) {
   const [manager, setManager] = useState(false);
   const [v, setV] = useState<View | null>(null);
   const [text, setText] = useState("");
@@ -176,9 +176,10 @@ export default function Saved() {
   const gt = v?.groupTime;
   const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   const items = v?.items ?? [];
+  const Root = embedded ? "div" : "main";
   return (
-    <main className="wa wide">
-      <header className="wa-top">
+    <Root className={`wa-page wide ${embedded ? "embedded" : ""}`}>
+      {!embedded && <header className="wa-top">
         <a href={manager ? "/manager" : "/areeba"} aria-label="Back">←</a>
         
         <div>
@@ -186,7 +187,7 @@ export default function Saved() {
           <small>{manager ? "Areeba sees this same list" : "From your manager · for the groups"}</small>
         </div>
 
-      </header>
+      </header>}
 
       <div className="wa-body">
         {manager && gt && (
@@ -278,7 +279,7 @@ export default function Saved() {
                   {m.imageId && <button onClick={() => void copyImage(m)}>Copy image</button>}
                   {m.imageId && <a href={`/api/img/${m.imageId}`} download={`givelife-${m.id}.jpg`} onClick={() => used(m)}>Save picture</a>}
                   <a href={`https://wa.me/?text=${encodeURIComponent(m.text)}`} target="_blank" rel="noreferrer" onClick={(e) => share(m, e)}>Share</a>
-                  {manager && <button disabled={!!busy} onClick={() => confirm("Delete this message? Areeba will not see it anymore.") && void call(`rm${m.id}`, { action: "remove", id: m.id })}>Delete</button>}
+                  {manager && <button className="danger-link sv-del" disabled={!!busy} onClick={() => confirm("Delete this message? Areeba will not see it anymore.") && void call(`rm${m.id}`, { action: "remove", id: m.id })}>Delete</button>}
                 </div>
               </div>
             );
@@ -287,6 +288,6 @@ export default function Saved() {
         {err && <p className="wa-sys bad" onClick={() => setErr("")}>{err}</p>}
       </div>
       {toast && <div className="d-toast" role="status"><span>{toast}</span></div>}
-    </main>
+    </Root>
   );
 }

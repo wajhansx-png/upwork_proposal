@@ -566,7 +566,7 @@ span.bell-btn{display:inline-flex;align-items:center}
 .clean-btn{opacity:.8}.clean-btn:hover{opacity:1;border-color:var(--danger);color:var(--ink)}
 
 /* Saved messages, WhatsApp-like (dark) */
-.wa{min-height:100dvh;display:flex;flex-direction:column;background:#0b141a;color:#e9edef;max-width:720px;margin:0 auto}
+.wa-page{min-height:100dvh;display:flex;flex-direction:column;background:#0b141a;color:#e9edef;max-width:720px;margin:0 auto}
 .wa-top{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:12px;padding:10px 14px;background:#202c33}
 .wa-top>a{color:#e9edef;text-decoration:none;font-size:22px;padding:4px 6px}
 .wa-av{width:40px;height:40px;border-radius:50%;background:#00a884;display:grid;place-items:center;font-size:20px}
@@ -600,7 +600,7 @@ span.bell-btn{display:inline-flex;align-items:center}
 /* Manager header: 4 buttons fit on a phone */
 @media (max-width:460px){.p-top .top-btns{flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:62%}.p-top .top-btns .text-btn{padding:6px 10px;font-size:13px}}
 /* Saved messages: headings, 2-line preview, grid of cards */
-.wa.wide{max-width:1240px}
+.wa-page.wide{max-width:1240px}
 .sv-new input{width:100%;background:#0b141a;color:#e9edef;border:1px solid #2a3942;border-radius:10px;padding:10px;font:inherit;font-size:15px;font-weight:600}
 .sv-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;align-items:start}
 .sv-card{max-width:none;width:100%;align-self:stretch;display:flex;flex-direction:column;border-radius:12px}
@@ -751,7 +751,7 @@ body{background-image:none!important;font-family:var(--font);color:var(--ink);fo
 
 /* Pages sit under the top bar */
 .p-shell{height:calc(100dvh - var(--navh))!important;padding-top:16px!important}
-.wa{min-height:calc(100dvh - var(--navh))!important}
+.wa-page{min-height:calc(100dvh - var(--navh))!important}
 
 /* ---- Base parts ---- */
 .pg{max-width:1180px;margin:0 auto;padding:22px 16px 40px;display:flex;flex-direction:column;gap:16px}
@@ -857,7 +857,7 @@ body{background-image:none!important;font-family:var(--font);color:var(--ink);fo
 .ring .ring-fill{stroke:var(--brand)}
 .due{background:var(--card-2)!important;color:var(--ink)!important}
 /* Messages page in the same system */
-.wa{background:var(--bg)!important;max-width:1180px!important}
+.wa-page{background:var(--bg)!important;max-width:1180px!important}
 .wa-top{background:transparent!important;border-bottom:1px solid var(--line);padding:16px!important}
 .wa-top>a:first-child{display:none}
 .wa-av{background:var(--card-2)!important;border:1px solid var(--line);border-radius:10px!important}
@@ -940,3 +940,117 @@ small,.sub.small,.hint{font-size:13px!important}
   .act{align-items:center!important;padding:9px 6px!important}
   .act small{display:none}
 }
+
+/* =====================================================================
+   v3 — colors with one job each, one primary per screen, 40px targets.
+   Blue = the main action. Green = success only. Red = danger / delete only.
+   ===================================================================== */
+:root{
+  --brand:#2563eb;--brand-ink:#ffffff;--brand-text:#7ea2ff;--brand-soft:rgba(37,99,235,.16);
+  --ok:#3fbf7f;--ok-soft:rgba(63,191,127,.13);
+  --danger:#f06a6a;--danger-soft:rgba(240,106,106,.12);
+}
+/* Primary (blue): the one main action */
+.btn.primary,.d-btn.hot,.p-hero .ask-btn,.alert-cta,.sv-open,.chat-pill.give,.her .counter .plus,.bubble.me{background:var(--brand)!important;border-color:var(--brand)!important;color:#fff!important}
+.btn.primary:hover:not(:disabled),.d-btn.hot:hover{background:#1d4fd7!important}
+/* Links and the active tab in blue text (contrast 4.8:1+) */
+.tn-tabs a.on{border-bottom-color:var(--brand)!important}
+.sv-more,.d-case a,.link:hover{color:var(--brand-text)!important}
+:focus-visible{outline-color:var(--brand-text)!important}
+.tn-logo{background:var(--brand)!important;color:#fff!important}
+/* Success (green): good news only */
+.pill.live,.pill.new{background:var(--ok-soft)!important;color:var(--ok)!important}
+.wa-ok,.wa-ticks,.status-main{color:var(--ok)!important}
+.ring .ring-fill,.ring.good .ring-fill,.ring.warn .ring-fill,.prog-bar i{stroke:var(--brand)!important;background:var(--brand)!important}
+.sv-card.focus,.alert-banner{border-color:var(--brand)!important}
+.wa-tag,.sv-now{color:var(--brand-text)!important}
+.d-toast{border-color:var(--line)!important}
+/* Danger (red): delete / clear / late only */
+.danger-link{background:none;border:0;padding:0 4px;min-height:40px;color:var(--danger);font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.danger-link:hover{text-decoration:underline}
+.danger-outline{color:var(--danger)!important;border-color:rgba(240,106,106,.45)!important;background:transparent!important}
+.danger-btn{background:#c53d3d!important;border-color:#c53d3d!important;color:#fff!important}
+.due.over,.due-bare.over{color:var(--danger)!important}
+/* Secondary = neutral grey everywhere (settings rows, old switches) */
+.set-row button,.counter-box button{min-height:40px;background:var(--card-2)!important;color:var(--ink)!important;border:1px solid var(--line)!important;border-radius:var(--r-sm)!important}
+.set-row button.danger-outline{color:var(--danger)!important;background:transparent!important}
+.old-switch.on b{background:var(--ok-soft)!important;color:var(--ok)!important}
+/* Click targets at least 40px */
+.btn,.d-btn,.text-btn,.act,.cs-row,.wa-actions>*,.d-more button,.d-tabs button,.seg button,.pager button,.tn-tabs a{min-height:40px}
+.pager button{width:40px;height:40px}
+.d-more button{padding:0 12px}
+/* Cases tab: two views as a segmented control */
+.seg{display:inline-flex;padding:3px;border-radius:10px;background:var(--card);border:1px solid var(--line);gap:2px;flex:none}
+.seg button{border:0;background:transparent;color:var(--mute);font:inherit;font-size:14px;font-weight:600;padding:0 14px;border-radius:8px;cursor:pointer}
+.seg button.on{background:var(--card-2);color:var(--ink)}
+@media (max-width:760px){.pg-head{flex-direction:column;align-items:stretch}.seg{display:flex}.seg button{flex:1}}
+/* Saved messages inside Cases */
+.wa-page.embedded{min-height:0!important;max-width:none!important;width:100%;margin:0!important;background:transparent!important}
+.wa-page.embedded .wa-body{padding:0!important}
+.sv-del{margin-left:auto}
+.wa-actions{align-items:center}
+/* Areeba page: risky actions behind "More" */
+.more-menu{align-self:center;margin-top:6px}
+.more-menu summary{list-style:none;cursor:pointer;color:var(--mute);font-size:14px;font-weight:600;min-height:40px;display:flex;align-items:center;padding:0 12px;border-radius:var(--r-sm)}
+.more-menu summary::-webkit-details-marker{display:none}
+.more-menu summary::after{content:" ▾";margin-left:4px}
+.more-menu[open] summary{color:var(--ink)}
+.more-menu .clean-row{margin-top:4px}
+/* Donors: ideas folded, title like other pages */
+.d-sub{margin:2px 0 0;color:var(--mute);font-size:14px}
+.donors .p-title{font-size:24px!important}
+details.d-ideas{padding:0!important}
+details.d-ideas summary{cursor:pointer;padding:12px 14px;font-weight:600;min-height:40px;display:flex;align-items:center}
+details.d-ideas>ul,details.d-ideas>.row{padding:0 14px 12px}
+details.d-ideas .row{gap:10px}
+/* v3: green only means success. Donors tabs, case box and the reason line are neutral / brand. */
+.d-tabs button.on{border-color:var(--brand)!important;color:var(--ink)!important;background:rgba(37,99,235,.14)!important}
+.d-case{border-color:var(--line)!important}
+.d-why{color:var(--mute)!important}
+
+/* =====================================================================
+   v4 — calm and grown-up. Mostly greys. The main button is plain white
+   with dark text (no bright blue). Green / amber / red are muted and
+   only used for success / warning / danger. Smaller corners.
+   ===================================================================== */
+:root{
+  --bg:#0d0f12;--card:#15181d;--card-2:#1c2026;--line:#272c34;--edge:#272c34;
+  --ink:#e6e8eb;--mute:#9ba2ac;--faint:#6b727c;
+  --brand:#e6e8eb;--brand-ink:#0d0f12;--brand-text:#e6e8eb;--brand-soft:rgba(230,232,235,.08);
+  --ok:#6fbf95;--ok-soft:rgba(111,191,149,.12);
+  --amber:#d6a650;--danger:#e8787a;--danger-soft:rgba(232,120,122,.1);
+  --r:10px;--r-sm:7px;
+}
+html,body{background:var(--bg)!important}
+.tn{background:rgba(13,15,18,.94)!important}
+/* Primary: white button, dark text. One per screen. */
+.btn.primary,.d-btn.hot,.p-hero .ask-btn,.sv-open,.chat-pill.give,.her .counter .plus{background:var(--brand)!important;border-color:var(--brand)!important;color:var(--brand-ink)!important}
+.btn.primary:hover:not(:disabled),.d-btn.hot:hover,.p-hero .ask-btn:hover{background:#fff!important}
+.btn.primary:disabled{background:var(--card-2)!important;border-color:var(--line)!important;color:var(--faint)!important}
+/* Notifications banner: important but not the main action of the page. */
+.alert-banner{border-color:var(--line)!important}
+.alert-cta{background:transparent!important;border:1px solid #4a515c!important;color:var(--ink)!important}
+/* Links: same text color, underline shows it is a link. */
+.sv-more,.d-case a,.link,.wa-tag,.sv-now{color:var(--ink)!important}
+.d-case a,.sv-more{text-decoration:underline;text-underline-offset:3px;text-decoration-color:#5a616b}
+:focus-visible{outline-color:#9ab0ff!important}
+.tn-tabs a.on{border-bottom-color:var(--ink)!important}
+.tn-logo{background:var(--ink)!important;color:var(--bg)!important}
+/* Progress ring: white on grey, no color. */
+.ring .ring-fill,.ring.good .ring-fill,.ring.warn .ring-fill,.prog-bar i{stroke:#d5d9de!important;background:#d5d9de!important}
+.ring.bad .ring-fill{stroke:var(--danger)!important}
+/* Status text: grey when normal, amber when late-ish, red when bad. */
+.status-main,.status-line.good,.status-line.idle{color:var(--mute)!important}
+.status-line.warn .status-main,.status-line.warn{color:var(--amber)!important}
+.status-line.bad .status-main,.status-line.bad{color:var(--danger)!important}
+/* "Open" is not success: neutral pill. Green pills only for done / copied. */
+.pill.live,.pill.new{background:var(--card-2)!important;color:var(--ink)!important;border:1px solid var(--line)}
+.old-switch.on b{background:var(--ink)!important;color:var(--bg)!important}
+/* Tabs and chips: grey, the selected one a little lighter. */
+.d-tabs button.on,.quick button.hot,button.hot:not(.d-btn){background:var(--card-2)!important;border-color:#4a515c!important;color:var(--ink)!important}
+.seg button.on{background:#262b33}
+/* Chat: her own bubbles in grey, not blue. */
+.bubble.me{background:#262b33!important;border-color:#262b33!important;color:var(--ink)!important}
+/* Smaller corners everywhere. */
+.box,.d-card,.sv-card,.wa-msg,.p-hero,.cs-row,.d-case,.d-stats>div,.alert-banner,.p-chat,.her-card,.counter-box,.sheet,details.d-ideas,.msg-box,.cbx-box,.act{border-radius:var(--r)!important}
+.btn,.d-btn,.d-tabs button,.d-more button,.ask-btn,.old-switch,.alert-cta,.chat-pill,.wa-actions>*{border-radius:var(--r-sm)!important}

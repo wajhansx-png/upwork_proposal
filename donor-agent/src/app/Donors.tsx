@@ -33,7 +33,6 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
   const [filter, setFilter] = useState<DonorStatus | "all">("all");
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState("");
-  const [opened, setOpened] = useState<string[]>([]);
   const [toast, setToast] = useState<{ id: string; text: string } | null>(null);
   const [ideas, setIdeas] = useState<{ list: string[]; by: string } | null>(null);
 
@@ -101,11 +100,10 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
   const copy = async (d: Donor, text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      setToast({ id: "", text: "Message copied. Paste it to the donor, then tap “Sent”." });
+      setToast({ id: "", text: "Message copied. Paste it to the donor, then tap “Mark as sent”." });
     } catch {
       prompt("Copy this message:", text);
     }
-    setOpened((o) => [...o, d.id]);
   };
 
   const rows = useMemo(() => {
@@ -143,8 +141,8 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
         <div className="her-hi">
           {entry === "teammate" && <Bot mood={busy ? "think" : "idle"} bot={bot} onTap={tapBot} />}
           <div>
-            <p className="p-eyebrow">Donors</p>
-            <h1 className="p-title">{s.total} donors</h1>
+            <h1 className="p-title">Donors</h1>
+            <p className="d-sub">{s.total} donors</p>
           </div>
         </div>
 
@@ -168,14 +166,14 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
         {tab === "today" ? (
           <>
             {data.role === "manager" && (
-              <section className="d-ideas">
-                <div className="d-ideas-top">
-                  <b>Ideas</b>
-                  <button className="text-btn" disabled={busy === "ideas"} onClick={getIdeas}>{busy === "ideas" ? "Thinking…" : "Ask AI"}</button>
-                </div>
+              <details className="d-ideas">
+                <summary>Ideas to get more gifts ({(ideas?.list ?? data.ideas ?? []).length})</summary>
                 <ul>{(ideas?.list ?? data.ideas ?? []).map((t, i) => <li key={i}>{t}</li>)}</ul>
-                {ideas && <p className="hint">{ideas.by === "ai" ? "From the AI, based only on your numbers." : "AI is not available. These come from your numbers."}</p>}
-              </section>
+                <div className="row">
+                  <button className="text-btn" disabled={busy === "ideas"} onClick={getIdeas}>{busy === "ideas" ? "Thinking…" : "Ask AI for more ideas"}</button>
+                  {ideas && <span className="hint">{ideas.by === "ai" ? "From the AI, based only on your numbers." : "AI is not available. These come from your numbers."}</span>}
+                </div>
+              </details>
             )}
             {data.case && (
               <section className="d-case">
@@ -185,12 +183,11 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
                 {data.role === "manager" && <a href="/manager/case">Open the case →</a>}
               </section>
             )}
-            {data.task && <p className="hint d-task">Task: {data.task.title} · {data.task.done} of {data.task.target} sent. “Sent” here adds 1.</p>}
+            {data.task && <p className="hint d-task">Task: {data.task.title} · {data.task.done} of {data.task.target} sent. “Mark as sent” adds 1.</p>}
             {!data.picks.length && <p className="p-empty">Nobody to message right now. Everyone is done or waiting.</p>}
             {data.picks.map((p) => {
               const d = byId.get(p.id);
               if (!d) return null;
-              const hot = opened.includes(d.id);
               return (
                 <article key={p.id} className={`d-card ${p.why}`}>
                   <div className="d-head">
@@ -201,11 +198,11 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
                   <p className="d-msg">{p.message}</p>
                   <div className="d-actions">
                     {d.phone ? (
-                      <a className="d-btn wa" href={waLink(d.phone, p.message)} target="_blank" rel="noreferrer" onClick={() => setOpened((o) => [...o, d.id])}>WhatsApp</a>
+                      <a className="d-btn hot" href={waLink(d.phone, p.message)} target="_blank" rel="noreferrer">Open in WhatsApp</a>
                     ) : (
                       <button className="d-btn" onClick={() => copy(d, p.message)}>Copy message</button>
                     )}
-                    <button className={`d-btn ${hot ? "hot" : ""}`} disabled={busy === d.id} onClick={() => mark(d, "sent")}>Sent ✓</button>
+                    <button className="d-btn" disabled={busy === d.id} onClick={() => mark(d, "sent")}>Mark as sent</button>
                   </div>
                   <div className="d-more">
                     <button disabled={busy === d.id} onClick={() => mark(d, "replied")}>Replied</button>

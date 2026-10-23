@@ -105,7 +105,7 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
   const keep = async (o: Card) => {
     try {
       await api("/api/saved", "POST", { action: "save", title: `${b?.name ?? "Case"} – ${KIND[o.kind]}`, text: o.text });
-      setToast("Saved to Messages. Areeba can see it.");
+      setToast("Saved in Messages for Areeba. She can see it now.");
     } catch (e) {
       setToast((e as Error).message);
     }
@@ -210,7 +210,7 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
                   <h2>Money came?</h2>
                   <form className="row" onSubmit={(e) => { e.preventDefault(); void send(`LEFT ${amount}`); }}>
                     <input ref={moneyRef} className="inp" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount still needed now" inputMode="numeric" />
-                    <button className="btn primary" disabled={!!busy || !amount.trim()}>{busy.startsWith("LEFT") ? "…" : "Update"}</button>
+                    <button className="btn" disabled={!!busy || !amount.trim()}>{busy.startsWith("LEFT") ? "…" : "Update"}</button>
                   </form>
                 </section>
               </>
@@ -236,9 +236,9 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
                 <p className="msg-where">Copy this and send it in <b>{where}</b></p>
                 <p className="msg-text">{shown.text}</p>
                 <div className="row msg-acts">
-                  <button className="btn primary" onClick={() => void copy(shown.text)}>Copy message</button>
-                  <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(shown.text)}`} target="_blank" rel="noreferrer">Open WhatsApp</a>
                   <button className="btn" onClick={() => void keep(shown)}>Save for Areeba</button>
+                  <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(shown.text)}`} target="_blank" rel="noreferrer">Open WhatsApp</a>
+                  <button className="btn primary" onClick={() => void copy(shown.text)}>Copy message</button>
                 </div>
               </>
             )}

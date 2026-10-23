@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { CaseFacts, CaseFile, CaseType } from "@/lib/types";
 import { api } from "./App";
 import CaseBrain from "./CaseBrain";
+import Saved from "./Saved";
 
 interface CaseRow { id: string; name: string; status: "open" | "closed"; amountLeft: number; createdAt: string; closedAt?: string; messages: number }
 interface Data { current: { case: CaseFile } | null; dropped?: string[] }
@@ -50,6 +51,8 @@ const parseItems = (s: string) =>
  */
 export default function CasePage() {
   const [selected, setSelected] = useState<string | null>(null);
+  // Two views in the Cases tab: the cases, and the messages saved for Areeba.
+  const [view, setView] = useState<"cases" | "messages">("cases");
   const [cases, setCases] = useState<CaseRow[] | null>(null);
   const [mode, setMode] = useState<"home" | "form">("home");
   const [details, setDetails] = useState("");
@@ -67,10 +70,16 @@ export default function CasePage() {
   }, []);
   useEffect(() => {
     const t = setTimeout(() => {
-      setSelected(new URLSearchParams(location.search).get("id"));
+      const q = new URLSearchParams(location.search);
+      setSelected(q.get("id"));
+      setView(q.get("view") === "messages" ? "messages" : "cases");
       void loadList();
     }, 0);
-    const back = () => setSelected(new URLSearchParams(location.search).get("id"));
+    const back = () => {
+      const q = new URLSearchParams(location.search);
+      setSelected(q.get("id"));
+      setView(q.get("view") === "messages" ? "messages" : "cases");
+    };
     addEventListener("popstate", back);
     return () => {
       clearTimeout(t);
@@ -82,9 +91,14 @@ export default function CasePage() {
     history.pushState(null, "", `/manager/case?id=${id}`);
     setSelected(id);
   };
+  const show = (v: "cases" | "messages") => {
+    history.pushState(null, "", v === "messages" ? "/manager/case?view=messages" : "/manager/case");
+    setView(v);
+  };
   const backToList = useCallback(() => {
     history.pushState(null, "", "/manager/case");
     setSelected(null);
+    setView("cases");
     setMode("home");
     void loadList();
   }, [loadList]);
@@ -179,6 +193,27 @@ export default function CasePage() {
       </main>
     );
 
+  const tabs = (
+    <div className="seg" role="tablist" aria-label="Cases tab">
+      <button role="tab" aria-selected={view === "cases"} className={view === "cases" ? "on" : ""} onClick={() => show("cases")}>Cases</button>
+      <button role="tab" aria-selected={view === "messages"} className={view === "messages" ? "on" : ""} onClick={() => show("messages")}>Messages</button>
+    </div>
+  );
+
+  if (view === "messages")
+    return (
+      <main className="pg">
+        <header className="pg-head">
+          <div>
+            <h1>Messages for Areeba</h1>
+            <p>Saved texts she can copy and post in the groups.</p>
+          </div>
+          {tabs}
+        </header>
+        <Saved embedded />
+      </main>
+    );
+
   return (
     <main className="pg">
       <header className="pg-head">
@@ -186,6 +221,7 @@ export default function CasePage() {
           <h1>Cases</h1>
           <p>Add a case once. Open it any time to write the next message.</p>
         </div>
+        {tabs}
       </header>
 
       <div className="cs-grid">

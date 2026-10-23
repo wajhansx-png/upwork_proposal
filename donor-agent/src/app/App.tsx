@@ -77,7 +77,7 @@ export default function App({ entry }: { entry: "manager" | "teammate" }) {
       document.head.appendChild(link);
       if (entry === "manager") {
         // Old private links (/manager?k=...) still open: just tidy the address.
-        if (location.search) history.replaceState(null, "", "/manager");
+        if (location.search && !location.search.includes("settings")) history.replaceState(null, "", "/manager");
         void reclaimAlerts();
       }
       await refresh();
@@ -455,13 +455,15 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
   // "Settings" in the top bar opens /manager?settings=1.
   useEffect(() => {
     const t = setTimeout(() => {
-      if (new URLSearchParams(location.search).get("settings")) {
-        setSettingsOpen(true);
-        history.replaceState(null, "", "/manager");
-      }
+      // The address keeps ?settings=1 until Settings is closed, so a reload of the screen cannot lose it.
+      if (new URLSearchParams(location.search).get("settings")) setSettingsOpen(true);
     }, 0);
     return () => clearTimeout(t);
   }, []);
+  const closeSettings = () => {
+    setSettingsOpen(false);
+    if (location.search.includes("settings")) history.replaceState(null, "", "/manager");
+  };
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -614,9 +616,11 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
             )}
           </div>
         )}
-        {canSwitch && !chatOpen && <p className="best-hint">{task!.oldDonors ? `Old donors ON: each old donor ${name} messages counts once.` : `Old donors OFF: only new donors count. Turn on for a task of old donors.`}</p>}
+        {canSwitch && !chatOpen && task!.oldDonors && <p className="best-hint">Old donors count too (each one once).</p>}
         {error && !chatOpen && <p role="alert" className="err">{error}</p>}
         {task && !chatOpen && (
+          <details className="more-menu">
+            <summary>More</summary>
           <div className="clean-row">
             {cleanAsk ? (
               <>
@@ -624,17 +628,18 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
                 <button className="text-btn" disabled={cleaning} onClick={() => setCleanAsk(false)}>Keep it</button>
               </>
             ) : (
-              <button className="text-btn clean-btn" onClick={() => setCleanAsk(true)}>Delete task</button>
+              <button className="danger-link" onClick={() => setCleanAsk(true)}>Delete this task</button>
             )}
           </div>
+          </details>
         )}
         {!open && !chatOpen && s.bestTime && (
-          <p className="best-hint">⏰ {name} sends most DMs {s.bestTime.label} ({Math.round((s.bestTime.sends / s.bestTime.total) * 100)}% of her last {s.bestTime.total} DMs, {s.bestTime.days} days). Give her tasks just before that.</p>
+          <p className="best-hint">{name} sends most DMs {s.bestTime.label} ({Math.round((s.bestTime.sends / s.bestTime.total) * 100)}% of her last {s.bestTime.total} DMs, {s.bestTime.days} days). Give her tasks just before that.</p>
         )}
       </section>
 
-      <button className={`chat-pill ${chatOpen ? "on" : ""}`} aria-expanded={chatOpen} onClick={() => setChatOpen(!chatOpen)}>
-        {chatOpen ? "Hide chat" : "Chat"}
+      <button className={`chat-pill ${chatOpen ? "on" : ""} ${!task || !open ? "give" : ""}`} aria-expanded={chatOpen} onClick={() => setChatOpen(!chatOpen)}>
+        {chatOpen ? "Hide chat" : !task || !open ? `Give ${name} a task` : "Chat"}
         <span aria-hidden>{chatOpen ? "▴" : "▾"}</span>
       </button>
 
@@ -655,9 +660,9 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
       )}
 
       {settingsOpen && (
-        <div className="modal-backdrop" onMouseDown={() => setSettingsOpen(false)}>
+        <div className="modal-backdrop" onMouseDown={() => closeSettings()}>
           <section className="settings-modal" role="dialog" aria-modal="true" aria-label="Settings" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="modal-title"><h2>Settings</h2><button autoFocus className="modal-close" aria-label="Close settings" onClick={() => setSettingsOpen(false)}>×</button></div>
+            <div className="modal-title"><h2>Settings</h2><button autoFocus className="modal-close" aria-label="Close settings" onClick={() => closeSettings()}>×</button></div>
             <ManagerSettings s={s} refresh={refresh} />
           </section>
         </div>
@@ -695,7 +700,7 @@ function ManagerSettings({ s, refresh }: { s: State; refresh: () => void }) {
     <div className="set-list">
       <div className="set-row">
         <span>Alerts on this phone</span>
-        <button className={a.subscribed ? "" : "primary"} onClick={a.enable}>{a.subscribed ? "On ✓" : "Turn on"}</button>
+        <button onClick={a.enable}>{a.subscribed ? "On ✓" : "Turn on"}</button>
       </div>
       <div className="set-row">
         <span>Test alerts</span>
@@ -754,7 +759,7 @@ function ClearPanel({ name, refresh }: { name: string; refresh: () => void }) {
     <div className="counter-box">
       <div className="set-row">
         <span>Clear all chats and tasks</span>
-        {ask ? <button className="danger-btn" disabled={busy} onClick={() => void clear()}>{busy ? "Clearing…" : "Yes, clear all"}</button> : <button onClick={() => setAsk(true)}>Clear</button>}
+        {ask ? <button className="danger-btn" disabled={busy} onClick={() => void clear()}>{busy ? "Clearing…" : "Yes, clear all"}</button> : <button className="danger-outline" onClick={() => setAsk(true)}>Clear</button>}
       </div>
       <p className="hint">{ask ? `This deletes every chat (yours and ${name}'s) and every task. Donors, cases and settings stay. It cannot be undone.` : "Starts fresh. Donors, cases and settings stay."}</p>
       {ask && <button className="text-btn" disabled={busy} onClick={() => setAsk(false)}>Cancel</button>}
@@ -789,7 +794,7 @@ function QuietPanel({ s, refresh }: { s: State; refresh: () => void }) {
     <div className="counter-box">
       <div className="set-row">
         <span>Quiet hours</span>
-        <button className={on ? "" : "primary"} disabled={busy} onClick={() => save({ quietEnabled: !on })}>{on ? "On ✓" : "Turn on"}</button>
+        <button disabled={busy} onClick={() => save({ quietEnabled: !on })}>{on ? "On ✓" : "Turn on"}</button>
       </div>
       <p className="hint">No pushes to {name} at night. A task that ends before the night ends is still pushed until its deadline.</p>
       {on && (
@@ -835,7 +840,7 @@ function CounterPanel({ s, refresh }: { s: State; refresh: () => void }) {
     <div className="counter-box">
       <div className="set-row">
         <span>WhatsApp counter</span>
-        <button className={c?.on ? "" : "primary"} disabled={busy} onClick={() => toggle(c?.on ? "off" : "on")}>{c?.on ? "On ✓" : "Turn on"}</button>
+        <button disabled={busy} onClick={() => toggle(c?.on ? "off" : "on")}>{c?.on ? "On ✓" : "Turn on"}</button>
       </div>
       <p className="hint">Counts donor DMs for you — she sends them by hand, it only watches. {c?.on ? lastSeen : "Off now."}{c?.on && (c?.sentToday ?? 0) > 0 ? ` · ${c!.sentToday} counted today.` : ""}</p>
       {c?.on && (
@@ -1021,14 +1026,14 @@ function Teammate({ s, refresh }: { s: State; refresh: () => void }) {
           <h1>Hi {name}</h1>
         </div>
         <div className="top-btns">
-          {alerts.subscribed && alerts.owner === "me" && <span className="bell-btn on">🔔 On ✓</span>}
-          {alerts.subscribed && alerts.owner === "manager" && <span className="bell-btn warn">🔔 Manager</span>}
+          {alerts.subscribed && alerts.owner === "me" && <span className="bell-btn on">Alerts on</span>}
+          {alerts.subscribed && alerts.owner === "manager" && <span className="bell-btn warn">Alerts: manager phone</span>}
         </div>
       </header>
       {alerts.subscribed === false && !typing && (
         <section className="alert-banner" aria-label="Notifications">
           <p><b>Notifications are off</b><span>Turn them on, so your manager&apos;s messages reach you even when the app is closed.</span></p>
-          <button className="alert-cta" onClick={alerts.enable}>🔔 Turn on notifications</button>
+          <button className="alert-cta" onClick={alerts.enable}>Turn on notifications</button>
         </section>
       )}
       {alerts.note && <p className="hint">{alerts.note}</p>}
