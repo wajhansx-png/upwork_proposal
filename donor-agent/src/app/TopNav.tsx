@@ -6,7 +6,7 @@ type Tab = { label: string; href: string };
 
 const MANAGER: Tab[] = [
   { label: "Areeba", href: "/manager" },
-  { label: "Cases", href: "/manager/case" },
+  { label: "Messages", href: "/manager/case" },
   { label: "Donors", href: "/manager/donors" },
 ];
 const TEAMMATE: Tab[] = [

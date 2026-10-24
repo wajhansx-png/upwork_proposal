@@ -222,6 +222,9 @@ label.chk { flex-direction: row; align-items: center; gap: 10px; color: var(--in
 
 /* ---------- Page frames ---------- */
 .pg, .wa-page { display: flex; flex-direction: column; gap: 16px; max-width: 1120px; margin: 0 auto; padding: 24px 20px 48px; }
+.pg.narrow { max-width: 760px; }
+.cs-add, .pg.narrow .sv-open { align-self: stretch; min-height: 48px; }
+.pg.narrow .sv-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .pg-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .pg-head p { margin-top: 4px; color: var(--mute); font-size: 14px; }
 @media (max-width: 760px) {
@@ -245,6 +248,11 @@ span.bell-btn:hover { background: transparent; }
 
 /* ---------- Areeba status screen (manager home) ---------- */
 .p-hero { display: flex; flex: 1; min-height: 0; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.p-hero:not(.compact) { flex: 0 1 auto; margin-top: auto; padding: 24px 16px; }
+.p-hero:not(.compact) ~ .chat-pill { margin-bottom: auto; }
+/* When the task is over, "Give Areeba a task" is the main button; "Ask for update" steps back. */
+.p-hero:has(~ .chat-pill.give) .ask-btn:not(:disabled) { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
+.p-hero:has(~ .chat-pill.give) .ask-btn:hover:not(:disabled) { background: var(--surface-2); opacity: 1; }
 .p-hero.compact { flex: none; flex-direction: row; justify-content: center; gap: 12px; padding: 8px 12px; }
 
 .ring { position: relative; flex: none; }
@@ -423,7 +431,8 @@ span.bell-btn:hover { background: transparent; }
 .d-toast button:hover:not(:disabled) { background: color-mix(in srgb, var(--on-ink) 28%, transparent); }
 
 /* ---------- Cases ---------- */
-.cs-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.cs-col { display: flex; flex-direction: column; gap: 16px; }
+.cs-list-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .cs-new textarea { min-height: 200px; }
 .cs-list { display: flex; flex-direction: column; gap: 8px; }
 .cs-list h2 { padding: 4px 0; }
@@ -433,10 +442,9 @@ span.bell-btn:hover { background: transparent; }
 .cs-main b { font-size: 16px; font-weight: 700; }
 .cs-main small { color: var(--mute); }
 .chev { color: var(--faint); font-size: 22px; }
-@media (max-width: 760px) { .cs-grid { grid-template-columns: 1fr; } }
 
 /* ---------- One case, live ---------- */
-.cbx { height: calc(100dvh - var(--navh)); padding-top: 16px; padding-bottom: 16px; overflow: hidden; }
+.cbx { max-width: 1040px; height: calc(100dvh - var(--navh)); padding-top: 16px; padding-bottom: 16px; overflow: hidden; }
 .cbx-head { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 12px; }
 .cbx-head h1 { font-size: 20px; }
 .cbx-amt { color: var(--mute); font-size: 14px; }

@@ -55,6 +55,7 @@ export default function CasePage() {
   const [view, setView] = useState<"cases" | "messages">("cases");
   const [cases, setCases] = useState<CaseRow[] | null>(null);
   const [mode, setMode] = useState<"home" | "form">("home");
+  const [adding, setAdding] = useState(false);
   const [details, setDetails] = useState("");
   const [form, setForm] = useState<Form>(toForm({}));
   const [notes, setNotes] = useState<string[]>([]);
@@ -145,7 +146,7 @@ export default function CasePage() {
 
   if (mode === "form")
     return (
-      <main className="pg">
+      <main className="pg narrow">
         <header className="pg-head">
           <div>
             <h1>New case</h1>
@@ -193,16 +194,17 @@ export default function CasePage() {
       </main>
     );
 
+  const showNew = adding || cases?.length === 0;
   const tabs = (
     <div className="seg" role="tablist" aria-label="Cases tab">
       <button role="tab" aria-selected={view === "cases"} className={view === "cases" ? "on" : ""} onClick={() => show("cases")}>Cases</button>
-      <button role="tab" aria-selected={view === "messages"} className={view === "messages" ? "on" : ""} onClick={() => show("messages")}>Messages</button>
+      <button role="tab" aria-selected={view === "messages"} className={view === "messages" ? "on" : ""} onClick={() => show("messages")}>For Areeba</button>
     </div>
   );
 
   if (view === "messages")
     return (
-      <main className="pg">
+      <main className="pg narrow">
         <header className="pg-head">
           <div>
             <h1>Messages for Areeba</h1>
@@ -215,7 +217,7 @@ export default function CasePage() {
     );
 
   return (
-    <main className="pg">
+    <main className="pg narrow">
       <header className="pg-head">
         <div>
           <h1>Cases</h1>
@@ -224,21 +226,23 @@ export default function CasePage() {
         {tabs}
       </header>
 
-      <div className="cs-grid">
-        <section className="box cs-new">
-          <h2>New case</h2>
-          <p className="sub">Paste your full post, or just the details.</p>
-          <textarea value={details} onChange={(e) => setDetails(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && details.trim().length >= 20) { e.preventDefault(); void saveOwn(); } }} placeholder={"Little Yousuf is only 2 years old…\n\nRs. 70,000 needed."} aria-label="Case post" />
-          {err && <p className="err-line">{err}</p>}
-          <div className="row">
-            <button className="btn primary" disabled={busy === "own" || details.trim().length < 20} onClick={() => void saveOwn()}>{busy === "own" ? "Saving…" : "Save my post"}</button>
-            <button className="btn" disabled={busy === "read" || details.trim().length < 10} onClick={() => void read()}>{busy === "read" ? "Reading…" : "Write it for me"}</button>
-          </div>
-          <p className="sub small">“Save my post” keeps every word<span className="kbd-hint"> (shortcut: <kbd className="kbd">Ctrl</kbd> + <kbd className="kbd">Enter</kbd>)</span>. “Write it for me” turns details into a post.</p>
-        </section>
-
+      <div className="cs-col">
+        {showNew && (
+          <section className="box cs-new">
+            <div className="cs-list-head"><h2>New case</h2>{!!cases?.length && <button className="btn" onClick={() => { setAdding(false); setDetails(""); }}>Cancel</button>}</div>
+            <p className="sub">Paste your full post, or just the details.</p>
+            <textarea value={details} onChange={(e) => setDetails(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && details.trim().length >= 20) { e.preventDefault(); void saveOwn(); } }} autoFocus={adding} placeholder={"Little Yousuf is only 2 years old…\n\nRs. 70,000 needed."} aria-label="Case post" />
+            {err && <p className="err-line">{err}</p>}
+            <div className="row">
+              <button className="btn primary" disabled={busy === "own" || details.trim().length < 20} onClick={() => void saveOwn()}>{busy === "own" ? "Saving…" : "Save my post"}</button>
+              <button className="btn" disabled={busy === "read" || details.trim().length < 10} onClick={() => void read()}>{busy === "read" ? "Reading…" : "Write it for me"}</button>
+            </div>
+            <p className="sub small">“Save my post” keeps every word<span className="kbd-hint"> (shortcut: <kbd className="kbd">Ctrl</kbd> + <kbd className="kbd">Enter</kbd>)</span>. “Write it for me” turns details into a post.</p>
+          </section>
+        )}
         <section className="cs-list">
-          <h2>Your cases</h2>
+          {!showNew && <button className="btn primary cs-add" onClick={() => setAdding(true)}>+ New case</button>}
+          {!!cases?.length && <h2>Your cases</h2>}
           {cases === null && <p className="sub">Loading…</p>}
           {cases?.length === 0 && <p className="sub">No cases yet. Add your first one.</p>}
           {cases?.map((c) => (
@@ -247,7 +251,7 @@ export default function CasePage() {
                 <b>{c.name}</b>
                 <small>{c.status === "open" ? `Rs ${Math.round(c.amountLeft).toLocaleString("en-US")} still needed` : `Complete${c.closedAt ? ` · ${day(c.closedAt)}` : ""}`} · {c.messages} {c.messages === 1 ? "message" : "messages"}</small>
               </span>
-              <span className={`pill ${c.status === "open" ? "live" : ""}`}>{c.status === "open" ? "Open" : "Done"}</span>
+              {c.status !== "open" && <span className="pill">Done</span>}
               <span className="chev" aria-hidden>›</span>
             </button>
           ))}
