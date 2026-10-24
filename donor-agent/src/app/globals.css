@@ -199,7 +199,9 @@ label.chk { flex-direction: row; align-items: center; gap: 10px; color: var(--in
 .tn { position: sticky; top: 0; z-index: 30; height: var(--navh); border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); }
 .tn-in { display: flex; align-items: center; gap: 24px; height: 100%; max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 .tn-brand { display: flex; align-items: center; gap: 10px; flex: none; font-weight: 700; }
-.tn-logo { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: var(--ink); color: var(--on-ink); font-size: 14px; font-weight: 700; }
+.tn-logo { display: block; width: 26px; height: 26px; flex: none; color: var(--ink); }
+.tn-name { font-size: 17px; font-weight: 400; letter-spacing: -0.02em; }
+.tn-name b { font-weight: 700; }
 .tn-tabs { display: flex; flex: 1; align-items: stretch; gap: 4px; height: 100%; overflow-x: auto; scrollbar-width: none; }
 .tn-tabs::-webkit-scrollbar { display: none; }
 .tn-tabs a { display: flex; align-items: center; gap: 6px; padding: 0 12px; border-bottom: 2px solid transparent; color: var(--mute); font-size: 14px; font-weight: 600; white-space: nowrap; }
