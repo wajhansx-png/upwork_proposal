@@ -333,6 +333,34 @@ export async function runCommand(b: Brain, cmd: Command, t: number): Promise<Bra
   return keep(await writeDry(b, b.left, t));
 }
 
+/**
+ * The same message written again, with a different angle and different words (the "Regenerate" button).
+ * Uses his writers, so the rules and the style stay the same. The "No donations" level does not go up.
+ * Null for kinds that have no writer here (the case post, the closing message).
+ */
+export async function regenerate(b: Brain, kind: BrainOut["kind"], at: string, t: number): Promise<BrainOut | null> {
+  const old = b.history.find((h) => h.kind === kind && h.at === at);
+  if (!old || b.left === undefined) return null;
+  const used = new Set(b.history.map((h) => h.text));
+  for (let i = 0; i < 4; i++) {
+    let out: BrainOut | undefined;
+    if (kind === "short") out = await writeShort(b, b.left, t);
+    else if (kind === "update") out = await writeUpdate(b, b.left, t);
+    else if (kind === "dry-main" || kind === "dry-groups") {
+      const level = b.dryLevel ?? 1;
+      b.dryLevel = Math.max(0, level - 1);
+      out = (await writeDry(b, b.left, t)).find((o) => o.kind === kind);
+      b.dryLevel = level;
+    } else return null;
+    if (out && !used.has(out.text)) {
+      old.text = out.text;
+      old.angle = out.angle;
+      return old;
+    }
+  }
+  return null;
+}
+
 export const newBrain = (p: Partial<Brain> & { name: string; total: number }): Brain => ({
   gender: "m",
   facts: [],

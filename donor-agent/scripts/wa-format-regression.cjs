@@ -47,3 +47,15 @@ eq('before\n```x```\nafter', 'before/[x]/after');
 // The real case post style (hadith + pay lines)
 eq('🤲 *Rs. 44,000 left.*\n\n03097458815 — Easypaisa / JazzCash', '🤲 b(Rs. 44,000 left.)//03097458815 — Easypaisa / JazzCash');
 console.log('PASS: WhatsApp formatting (bold, italic, strike, mono, nested, bullets, blocks; no formatting inside words, around spaces, or with lone marks).');
+
+// Selecting on the preview finds the raw lines (with their marks)
+const { linesOf } = require('../src/lib/wa-format.ts');
+const msg = '🤲 *One meal costs Rs. 2,000.*\n\n💔 Yousuf is still waiting.\n* _*Only 22 more people*_\n\n03097458815 — Easypaisa';
+assert.deepEqual(linesOf(msg, 'meal costs'), { from: 0, to: 0 });
+assert.deepEqual(linesOf(msg, 'Yousuf is still waiting.'), { from: 2, to: 2 });
+assert.deepEqual(linesOf(msg, 'Only 22 more'), { from: 3, to: 3 });
+assert.deepEqual(linesOf(msg, 'still waiting.\nOnly 22'), { from: 2, to: 3 });
+assert.deepEqual(linesOf(msg, '• Only 22 more people'), { from: 3, to: 3 });
+assert.equal(linesOf(msg, 'not in the message'), null);
+assert.equal(linesOf(msg, '   '), null);
+console.log('PASS: a selection on the preview maps to the right raw lines (marks, bullets, several lines).');

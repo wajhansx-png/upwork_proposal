@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Brain, BrainOut } from "@/lib/types";
 import { api } from "./App";
-import WaPreview from "./WaPreview";
+import WaPreview, { WaPreviewLine, type Picked } from "./WaPreview";
 
 type Card = Omit<BrainOut, "kind"> & { kind: BrainOut["kind"] | "post" };
 
@@ -29,6 +29,13 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
   const [view, setView] = useState(0);
   const [fresh, setFresh] = useState("");
   const moneyRef = useRef<HTMLInputElement>(null);
+  // Changing the shown message: the lines he selected, his instruction, the 5 versions, and one step of undo.
+  const [picked, setPicked] = useState<(Picked & { card: string }) | null>(null);
+  const [instr, setInstr] = useState("");
+  const [versions, setVersions] = useState<string[] | null>(null);
+  const [aiBusy, setAiBusy] = useState("");
+  const [aiErr, setAiErr] = useState("");
+  const [undo, setUndo] = useState<{ kind: string; at: string; text: string } | null>(null);
   
   const load = useCallback(async () => {
     try {
@@ -111,6 +118,74 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
     }
   };
 
+  const closePick = () => {
+    setPicked(null);
+    setInstr("");
+    setVersions(null);
+    setAiErr("");
+  };
+  /** Save new text for a shown message (the case post or a written one), with one step of undo. */
+  const saveText = async (card: Card, text: string, note: string, warnings: string[] = []) => {
+    const r = await api<{ brain: Brain }>("/api/brain", "POST", { action: "setText", caseId: b?.caseId, kind: card.kind, at: card.at, text });
+    setUndo({ kind: card.kind, at: card.at, text: card.text });
+    setB(r.brain);
+    if (card.kind === "post") setPost(text);
+    setToast(warnings.length ? `${note} Check: ${warnings.join(", ")}.` : note);
+  };
+  const partOf = (card: Card, p: Picked) => card.text.split("\n").slice(p.from, p.to + 1).join("\n");
+  const putPart = (card: Card, p: Picked, part: string) => {
+    const lines = card.text.split("\n");
+    lines.splice(p.from, p.to - p.from + 1, ...part.split("\n"));
+    return lines.join("\n");
+  };
+  const aiCall = async (key: string, fn: () => Promise<void>) => {
+    setAiBusy(key);
+    setAiErr("");
+    try {
+      await fn();
+    } catch (e) {
+      setAiErr((e as Error).message);
+    } finally {
+      setAiBusy("");
+    }
+  };
+  const editPicked = (card: Card) =>
+    picked && instr.trim() &&
+    aiCall("edit", async () => {
+      const r = await api<{ text: string; warnings: string[] }>("/api/brain", "POST", { action: "lineEdit", caseId: b?.caseId, message: card.text, line: partOf(card, picked), instruction: instr });
+      await saveText(card, putPart(card, picked, r.text), "Changed.", r.warnings);
+      closePick();
+    });
+  const fiveVersions = (card: Card) =>
+    picked &&
+    aiCall("versions", async () => {
+      setVersions((await api<{ versions: string[] }>("/api/brain", "POST", { action: "lineVersions", caseId: b?.caseId, message: card.text, line: partOf(card, picked) })).versions);
+    });
+  const pickVersion = (card: Card, v: string) =>
+    picked &&
+    aiCall("use", async () => {
+      await saveText(card, putPart(card, picked, v), "Changed.");
+      closePick();
+    });
+  const regen = (card: Card) =>
+    aiCall("regen", async () => {
+      closePick();
+      const r = await api<{ brain: Brain; text: string }>("/api/brain", "POST", { action: "regen", caseId: b?.caseId, kind: card.kind, at: card.at });
+      setUndo({ kind: card.kind, at: card.at, text: card.text });
+      setB(r.brain);
+      if (card.kind === "post") setPost(r.text);
+      setToast("Written again. Undo is under Copy.");
+    });
+  const undoLast = () =>
+    undo &&
+    aiCall("undo", async () => {
+      const r = await api<{ brain: Brain }>("/api/brain", "POST", { action: "setText", caseId: b?.caseId, kind: undo.kind, at: undo.at, text: undo.text });
+      setB(r.brain);
+      if (undo.kind === "post") setPost(undo.text);
+      setUndo(null);
+      setToast("Back to the old text.");
+    });
+
   // Newest first; one press's messages stay in order. The case post itself is always the last (oldest) card.
   const cards: Card[] = [];
   for (const o of b?.history ?? []) {
@@ -121,6 +196,20 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
   if (post) cards.push({ kind: "post", do: "Send this first in GiveLife Foundation with @all.", text: post, at: "" });
   const idx = Math.min(view, Math.max(0, cards.length - 1));
   const shown = cards[idx];
+
+  // A click outside the small edit box (and outside the message) closes it.
+  useEffect(() => {
+    if (!picked) return;
+    const off = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement).closest?.(".pick, .wa-bubble")) {
+        setPicked(null);
+        setVersions(null);
+        setAiErr("");
+      }
+    };
+    addEventListener("mousedown", off);
+    return () => removeEventListener("mousedown", off);
+  }, [picked]);
 
   // Keyboard: 1 / 2 / 3 write the next message, C copies, ← → move between messages, M jumps to the amount box.
   useEffect(() => {
@@ -220,22 +309,46 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
               <>
                 <div className="msg-top">
                   <div>
-                    <b>{KIND[shown.kind]}{shown.at && shown.at === fresh && <span className="pill live new">Copied</span>}</b>
-                    {cards.length > 1 && <small>{idx + 1} of {cards.length}</small>}
+                    <b>{KIND[shown.kind]}{shown.at && shown.at === fresh && <span className="pill live new">Copied</span>}{cards.length > 1 && <small className="msg-count"> · {idx + 1} of {cards.length}</small>}</b>
+                    <p className="msg-where">Send it in <b>{where}</b></p>
                   </div>
                   <div className="pager">
                     <button aria-label="Newer message (left arrow key)" title="Newer (←)" disabled={idx <= 0} onClick={() => setView(idx - 1)}>‹</button>
                     <button aria-label="Older message (right arrow key)" title="Older (→)" disabled={idx >= cards.length - 1} onClick={() => setView(idx + 1)}>›</button>
                   </div>
                 </div>
-                <p className="msg-where">Copy this and send it in <b>{where}</b></p>
                 <div className="msg-body">
-                  <WaPreview text={shown.text} />
+                  <WaPreview text={shown.text} onPick={(p) => { setPicked({ ...p, card: `${shown.kind}|${shown.at}` }); setVersions(null); setAiErr(""); }} />
                   <div className="row msg-acts">
                     <button className="btn" onClick={() => void keep(shown)}>Save for Areeba</button>
                     <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(shown.text)}`} target="_blank" rel="noreferrer">Open WhatsApp</a>
                     <button className="btn primary" onClick={() => void copy(shown.text)}>Copy message</button>
+                    <button className="btn" disabled={!!aiBusy} onClick={() => void regen(shown)}>{aiBusy === "regen" ? "Writing…" : "Regenerate"}</button>
+                    {undo && <button className="btn" disabled={!!aiBusy} onClick={() => void undoLast()}>Undo change</button>}
+                    <p className="msg-tip">Select a line in the message to change it with AI.</p>
+                    {aiErr && !picked && <p className="err-line" onClick={() => setAiErr("")}>{aiErr}</p>}
                   </div>
+                  {picked && picked.card === `${shown.kind}|${shown.at}` && (
+                    <div className="pick" role="dialog" aria-label="Change these lines" style={{ left: Math.max(12, Math.min(picked.rect.left, window.innerWidth - 432)), top: Math.min(picked.rect.bottom + 8, window.innerHeight - 330) }} onMouseDown={(e) => e.stopPropagation()}>
+                      <div className="pick-head">
+                        <span>{partOf(shown, picked)}</span>
+                        <button className="link" aria-label="Close" onClick={closePick}>✕</button>
+                      </div>
+                      <form className="row" onSubmit={(e) => { e.preventDefault(); void editPicked(shown); }}>
+                        <input className="inp" autoFocus value={instr} onChange={(e) => setInstr(e.target.value)} onKeyDown={(e) => e.key === "Escape" && closePick()} placeholder="What to change? e.g. make it more emotional" />
+                        <button className="btn primary" disabled={!!aiBusy || !instr.trim()}>{aiBusy === "edit" ? "…" : "Change"}</button>
+                      </form>
+                      <button className="btn" disabled={!!aiBusy} onClick={() => void fiveVersions(shown)}>{aiBusy === "versions" ? "Writing 5 versions…" : "Show 5 versions"}</button>
+                      {versions && (
+                        <div className="pick-list">
+                          {versions.map((v, i) => (
+                            <button key={i} className="pick-v" disabled={!!aiBusy} onClick={() => void pickVersion(shown, v)}><WaPreviewLine text={v} /></button>
+                          ))}
+                        </div>
+                      )}
+                      {aiErr && <p className="err-line">{aiErr}</p>}
+                    </div>
+                  )}
                 </div>
               </>
             )}

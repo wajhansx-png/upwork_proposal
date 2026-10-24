@@ -71,3 +71,24 @@ export function waFormat(text: string): WaNode[] {
   });
   return out;
 }
+
+/** A line as the reader sees it: no marks, no bullet sign, single spaces. */
+export const plainLine = (l: string) => l.replace(/^\s*[-*]\s+/, "").replace(/[*_~`]/g, "").replace(/\s+/g, " ").trim();
+
+/**
+ * Which raw lines a selection on the preview covers. The preview shows text without the marks, so the selected
+ * words are matched against each line without its marks. Null when the selection is not in the message.
+ */
+export function linesOf(raw: string, selected: string): { from: number; to: number } | null {
+  const lines = raw.split("\n");
+  const parts = selected.split("\n").map((s) => s.replace(/[•]/g, "").replace(/\s+/g, " ").trim()).filter(Boolean);
+  if (!parts.length) return null;
+  const find = (frag: string, start: number) => {
+    for (let i = start; i < lines.length; i++) if (plainLine(lines[i]).includes(frag)) return i;
+    return -1;
+  };
+  const from = find(parts[0], 0);
+  if (from < 0) return null;
+  const to = parts.length > 1 ? find(parts[parts.length - 1], from) : from;
+  return to < 0 ? null : { from, to };
+}

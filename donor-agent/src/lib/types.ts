@@ -302,6 +302,8 @@ export interface Brain {
   done?: boolean;
   /** Off: only the ready lines (no AI wording at all). */
   noAi?: boolean;
+  /** The case post after he changed it on the case screen (else the saved post is shown). */
+  postText?: string;
   history: BrainOut[];
 }
 
