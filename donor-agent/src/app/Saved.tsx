@@ -75,7 +75,7 @@ export default function Saved({ embedded = false }: { embedded?: boolean }) {
       setFocus(new URLSearchParams(location.search).get("m") ?? "");
       void load();
     }, 0);
-    const id = setInterval(load, 30_000);
+    const id = setInterval(load, 45_000);
     return () => {
       clearTimeout(first);
       clearInterval(id);
@@ -180,8 +180,6 @@ export default function Saved({ embedded = false }: { embedded?: boolean }) {
   return (
     <Root className={`wa-page wide ${embedded ? "embedded" : ""}`}>
       {!embedded && <header className="wa-top">
-        <a href={manager ? "/manager" : "/areeba"} aria-label="Back">←</a>
-        
         <div>
           <b>Saved messages</b>
           <small>{manager ? "Areeba sees this same list" : "From your manager · for the groups"}</small>

@@ -209,7 +209,7 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
                 <section className="box">
                   <h2>Money came?</h2>
                   <form className="row" onSubmit={(e) => { e.preventDefault(); void send(`LEFT ${amount}`); }}>
-                    <input ref={moneyRef} className="inp" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Amount still needed now" inputMode="numeric" />
+                    <input ref={moneyRef} className="inp" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="New amount left" inputMode="numeric" />
                     <button className="btn" disabled={!!busy || !amount.trim()}>{busy.startsWith("LEFT") ? "…" : "Update"}</button>
                   </form>
                 </section>

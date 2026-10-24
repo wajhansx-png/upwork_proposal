@@ -121,7 +121,8 @@ async function lock(): Promise<() => Promise<void>> {
   for (let i = 0; i < 60; i++) {
     if ((await redis(["SET", LOCK, id, "NX", "PX", 10_000])) === "OK")
       return async () => {
-        if ((await redis(["GET", LOCK])) === id) await redis(["DEL", LOCK]);
+        // Delete the lock only if it is still ours, in one command.
+        await redis(["EVAL", "if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) end return 0", 1, LOCK, id]);
       };
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -143,6 +144,7 @@ export function withDb<T>(fn: (db: Db) => T | Promise<T>): Promise<T> {
         const after = JSON.stringify(db);
         try {
           if (after !== before) await save(after, versions.get(db));
+          cached = { at: Date.now(), db: structuredClone(db) };
           return result;
         } catch (error) {
           if (!/precondition|etag mismatch/i.test(String(error)) || attempt === 7) throw error;
@@ -195,9 +197,18 @@ export async function kvGetImage(id: string): Promise<string | null> {
   }
 }
 
-/** Read without the lock. May be a moment stale, which is fine for display and planning. */
-export function readDb(): Promise<Db> {
-  return load();
+// Remote storage is billed per read. Screens poll often, so display reads share one copy for a few seconds.
+// Writes (withDb) always read fresh and refresh this copy.
+const READ_CACHE_MS = 3_000;
+let cached: { at: number; db: Db } | null = null;
+
+/** Read without the lock. May be a moment stale (a few seconds), which is fine for display and planning. */
+export async function readDb(): Promise<Db> {
+  if (!usingRedis() && !usingBlob()) return load();
+  if (cached && Date.now() - cached.at < READ_CACHE_MS) return structuredClone(cached.db);
+  const db = await load();
+  cached = { at: Date.now(), db: structuredClone(db) };
+  return db;
 }
 
 export const newId = () => crypto.randomUUID().slice(0, 8);

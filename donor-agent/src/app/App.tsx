@@ -83,7 +83,7 @@ export default function App({ entry }: { entry: "manager" | "teammate" }) {
       await refresh();
     };
     void start();
-    const t = setInterval(() => !document.hidden && void refresh(), 5_000);
+    const t = setInterval(() => !document.hidden && void refresh(), 15_000);
     const runner = setInterval(async () => {
       if (document.hidden) return;
       await api("/api/agent/run", "POST").catch(() => undefined);
@@ -596,7 +596,7 @@ function Manager({ s, refresh }: { s: State; refresh: () => void }) {
       </header>
 
       <section className={`p-hero ${chatOpen ? "compact" : ""}`} aria-live="polite">
-        <Ring value={sent} max={target} tone={tone} size={chatOpen ? 72 : 250}>
+        <Ring value={sent} max={target} tone={tone} size={chatOpen ? 72 : 208}>
           <strong className="ring-num">{sent}</strong>
           <span className="ring-of">of {target}</span>
         </Ring>

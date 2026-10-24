@@ -47,7 +47,7 @@ export default function Donors({ entry }: { entry: "manager" | "teammate" }) {
 
   useEffect(() => {
     const first = setTimeout(load, 0);
-    const t = setInterval(() => !document.hidden && void load(), 20_000);
+    const t = setInterval(() => !document.hidden && void load(), 30_000);
     return () => {
       clearTimeout(first);
       clearInterval(t);
