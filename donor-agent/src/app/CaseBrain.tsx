@@ -7,7 +7,6 @@ import { api } from "./App";
 type Card = Omit<BrainOut, "kind"> & { kind: BrainOut["kind"] | "post" };
 
 const money = (n: number) => Math.round(n).toLocaleString("en-US");
-const hhmm = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 const KIND: Record<Card["kind"], string> = { post: "Case post", update: "Update", short: "20 minutes passed", "dry-main": "No donations · main group", "dry-groups": "No donations · freelancer groups", done: "Case complete" };
 
 /**
@@ -149,8 +148,6 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
   if (!b) return null;
 
   const left = b.left;
-  const p2 = left ? Math.ceil(left / 2000) : 0;
-  const p1 = left ? Math.ceil(left / 1000) : 0;
   const where = shown?.do.replace(/^No donations · level \d+: /, "").replace(/^Send this (first )?in /i, "").replace(/\.$/, "");
 
   return (
@@ -158,8 +155,8 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
       <div className="cbx-head">
         <button className="link" onClick={onBack}>← All cases</button>
         <h1>{b.name}</h1>
-        <span className={`pill ${isOpen ? "live" : ""}`}>{isOpen ? "Open" : "Complete"}</span>
-        {left !== undefined && <span className="cbx-amt"><b>Rs {money(left)}</b> still needed · {p2} people × Rs 2,000 or {p1} × Rs 1,000</span>}
+        {!isOpen && <span className="pill">Complete</span>}
+        {left !== undefined && <span className="cbx-amt"><b>Rs {money(left)}</b> still needed</span>}
         {isOpen && <button className="btn sm" onClick={() => { setForm({ name: b.name, age: b.ageLabel ?? (b.age ? String(b.age) : ""), gender: b.gender, total: String(b.total), facts: b.facts.join("\n") }); setEditing(!editing); }}>{editing ? "Close" : "Edit facts"}</button>}
       </div>
 
@@ -194,15 +191,12 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
                   <div className="acts">
                     <button className="act" disabled={!!busy || left === undefined} onClick={() => void send("20 MIN")}>
                       <b>{busy === "20 MIN" ? "Writing…" : "20 minutes passed"}</b>
-                      <small>Write the next group update</small>
                     </button>
                     <button className="act" disabled={!!busy || left === undefined} onClick={() => void send("DRY")}>
                       <b>{busy === "DRY" ? "Writing…" : "No donations"}</b>
-                      <small>{b.dryLevel ? `Write a stronger message (level ${b.dryLevel + 1})` : "Write a stronger message"}</small>
                     </button>
                     <button className="act" disabled={!!busy} onClick={() => confirm(`Is ${b.name}'s case complete? It will be closed.`) && void send("DONE")}>
                       <b>{busy === "DONE" ? "Writing…" : "Case complete"}</b>
-                      <small>Write the thank-you message and close the case</small>
                     </button>
                   </div>
                 </section>
@@ -226,7 +220,7 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
                 <div className="msg-top">
                   <div>
                     <b>{KIND[shown.kind]}{shown.at && shown.at === fresh && <span className="pill live new">Copied</span>}</b>
-                    <small>{shown.at ? hhmm(shown.at) : "Your post"}{cards.length > 1 ? ` · ${idx + 1} of ${cards.length}` : ""}</small>
+                    {cards.length > 1 && <small>{idx + 1} of {cards.length}</small>}
                   </div>
                   <div className="pager">
                     <button aria-label="Newer message (left arrow key)" title="Newer (←)" disabled={idx <= 0} onClick={() => setView(idx - 1)}>‹</button>
