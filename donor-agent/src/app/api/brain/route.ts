@@ -3,7 +3,7 @@ import { readBody } from "@/lib/http";
 import { getRole } from "@/lib/auth";
 import { readDb, withDb } from "@/lib/db";
 import { newBrain, parseCommand, regenerate, runCommand, type BrainResult } from "@/lib/brain";
-import { editLine, lineVersions, rewriteMessage } from "@/lib/brain-edit";
+import { editLine, lineVersions, rewriteMessage, rewriteWithInstruction } from "@/lib/brain-edit";
 import { brainFromCase, casePost } from "@/lib/brain-case";
 import { openCase } from "@/lib/agent";
 import type { Brain, BrainOut, CaseFile, Db } from "@/lib/types";
@@ -66,6 +66,7 @@ export async function GET(req: NextRequest) {
  * { action: "setText", kind, at, text } save his change · { action: "regen", kind, at } write it again
  * { action: "lineEdit", message, line, instruction } one part changed as he asks (not saved; the screen saves it)
  * { action: "lineVersions", message, line } 5 versions of one part
+ * { action: "rewrite", message, instruction } the whole message changed as he asks (not saved; the screen saves it)
  */
 export async function POST(req: NextRequest) {
   if ((await getRole(req)) !== "manager") return NextResponse.json({ error: "Managers only" }, { status: 403 });
@@ -120,6 +121,11 @@ export async function POST(req: NextRequest) {
     const instruction = String(body.instruction ?? "").trim().slice(0, 500);
     if (!line.trim() || !instruction) return NextResponse.json({ error: "Select a line and write what to change." }, { status: 400 });
     return editLine(prev, message, line, instruction).then((r) => NextResponse.json(r), fail);
+  }
+  if (body.action === "rewrite") {
+    const instruction = String(body.instruction ?? "").trim().slice(0, 800);
+    if (!message.trim() || !instruction) return NextResponse.json({ error: "Write how the message should change." }, { status: 400 });
+    return rewriteWithInstruction(prev, message, instruction).then((r) => NextResponse.json(r), fail);
   }
   if (body.action === "lineVersions") {
     if (!line.trim()) return NextResponse.json({ error: "Select a line first." }, { status: 400 });

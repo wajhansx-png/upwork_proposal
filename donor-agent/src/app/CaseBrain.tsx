@@ -35,6 +35,7 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
   const [versions, setVersions] = useState<string[] | null>(null);
   const [aiBusy, setAiBusy] = useState("");
   const [aiErr, setAiErr] = useState("");
+  const [whole, setWhole] = useState("");
   const [undo, setUndo] = useState<{ kind: string; at: string; text: string } | null>(null);
   
   const load = useCallback(async () => {
@@ -166,6 +167,14 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
     aiCall("use", async () => {
       await saveText(card, putPart(card, picked, v), "Changed.");
       closePick();
+    });
+  const rewriteWhole = (card: Card) =>
+    whole.trim() &&
+    aiCall("whole", async () => {
+      closePick();
+      const r = await api<{ text: string; warnings: string[] }>("/api/brain", "POST", { action: "rewrite", caseId: b?.caseId, message: card.text, instruction: whole });
+      await saveText(card, r.text, "Rewritten as you asked. Undo is under Copy.", r.warnings);
+      setWhole("");
     });
   const regen = (card: Card) =>
     aiCall("regen", async () => {
@@ -317,6 +326,11 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
                     <button aria-label="Older message (right arrow key)" title="Older (→)" disabled={idx >= cards.length - 1} onClick={() => setView(idx + 1)}>›</button>
                   </div>
                 </div>
+                <form className="row msg-ask" onSubmit={(e) => { e.preventDefault(); void rewriteWhole(shown); }}>
+                  <input className="inp" value={whole} onChange={(e) => setWhole(e.target.value)} placeholder="Change the whole message… e.g. add urgency, make it more emotional, make it shorter" aria-label="How to change the whole message" />
+                  <button className="btn" disabled={!!aiBusy || !whole.trim()}>{aiBusy === "whole" ? "Rewriting…" : "Rewrite"}</button>
+                </form>
+                {aiErr && !picked && <p className="err-line" onClick={() => setAiErr("")}>{aiErr}</p>}
                 <div className="msg-body">
                   <WaPreview text={shown.text} onPick={(p) => { setPicked({ ...p, card: `${shown.kind}|${shown.at}` }); setVersions(null); setAiErr(""); }} />
                   <div className="row msg-acts">
@@ -326,7 +340,6 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
                     <button className="btn" disabled={!!aiBusy} onClick={() => void regen(shown)}>{aiBusy === "regen" ? "Writing…" : "Regenerate"}</button>
                     {undo && <button className="btn" disabled={!!aiBusy} onClick={() => void undoLast()}>Undo change</button>}
                     <p className="msg-tip">Select a line in the message to change it with AI.</p>
-                    {aiErr && !picked && <p className="err-line" onClick={() => setAiErr("")}>{aiErr}</p>}
                   </div>
                   {picked && picked.card === `${shown.kind}|${shown.at}` && (
                     <div className="pick" role="dialog" aria-label="Change these lines" style={{ left: Math.max(12, Math.min(picked.rect.left, window.innerWidth - 432)), top: Math.min(picked.rect.bottom + 8, window.innerHeight - 330) }} onMouseDown={(e) => e.stopPropagation()}>

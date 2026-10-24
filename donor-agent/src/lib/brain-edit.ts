@@ -93,3 +93,30 @@ export async function rewriteMessage(b: Brain, message: string): Promise<string>
   if (text.length < message.length * 0.5 || text.length > message.length * 1.6) throw new Error("The AI changed the length too much. Press Regenerate again.");
   return text;
 }
+
+/**
+ * The whole message changed the way he asks ("more urgent", "more dangerous", "shorter", anything).
+ * His instruction wins over the usual style limits (banned words, tone). Facts stay true: the AI is told
+ * never to invent a medical fact, a danger or a number, and anything that looks invented comes back as a
+ * warning (shown, not blocked). Payment and hadith lines are kept unless he asks to change them.
+ */
+export async function rewriteWithInstruction(b: Brain, message: string, instruction: string): Promise<{ text: string; warnings: string[] }> {
+  const fixed = message.split("\n").filter((l) => /\d{7,}|Easypaisa|JazzCash|GiveLife Foundation$|Sahih|Bukhari|Muslim\b/.test(l));
+  const r = await llm(
+    "You rewrite WhatsApp donation messages for GiveLife Foundation (Pakistan) in the manager's voice: very easy English, short lines, *bold* for the key line, his emojis (🤲 💔 🚨).\n" +
+      "Follow the manager's instruction fully and exactly, for the WHOLE message. If he asks for more urgency, more danger, more emotion, shorter, longer, a different opening, " +
+      "you may use strong and urgent words to do it. His instruction is more important than any usual style rule.\n" +
+      "Only one hard limit: every fact must stay true. Use only the facts, numbers and medical words already in the message, the facts list or his case post. " +
+      "Never invent a new illness, danger, time limit, number or amount.\n" +
+      `Keep these lines word for word unless his instruction is about them: ${JSON.stringify(fixed)}.\n` +
+      'Return ONLY JSON: {"text":"the whole new message"}',
+    `${context(b, message)}\n\nTHE MANAGER'S INSTRUCTION FOR THE WHOLE MESSAGE:\n${instruction}`,
+    { json: true },
+  );
+  const text = clean(parseJson<{ text?: unknown }>(r.text)?.text);
+  if (!text) throw aiFail(r);
+  // Style words he asked for are not warned about; invented facts and dropped payment lines are.
+  const warnings = editProblems(text, b, message).filter((p) => !p.startsWith("banned word"));
+  if (fixed.some((l) => /\d{7,}|Easypaisa|JazzCash/.test(l)) && !fixed.filter((l) => /\d{7,}|Easypaisa|JazzCash/.test(l)).every((l) => text.includes(l.trim()))) warnings.push("the payment line changed");
+  return { text, warnings };
+}

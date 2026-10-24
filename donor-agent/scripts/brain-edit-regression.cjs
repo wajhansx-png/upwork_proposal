@@ -12,7 +12,7 @@ Module._load = function (name, parent, ...rest) {
   if (/[\\/]llm(\.ts)?$/.test(name) || name === './llm') return { ...real, llm: async () => ({ text: status === 'ok' ? answer : null, status }) };
   return real;
 };
-const { editProblems, editLine, lineVersions, rewriteMessage } = require('../src/lib/brain-edit.ts');
+const { editProblems, editLine, lineVersions, rewriteMessage, rewriteWithInstruction } = require('../src/lib/brain-edit.ts');
 
 const b = { name: 'Yousuf', age: 2, gender: 'm', total: 70000, left: 44000, facts: ['Fluid is filling his brain.', 'His kidneys are swollen.'], source: 'Little Yousuf has a hernia and needed a blood transfusion.', angles: [], history: [] };
 const msg = '🤲 *Rs. 44,000 left. 22 people at Rs. 2,000.*\n\n💔 He cannot tell his mother where it hurts.\n\n"Charity does not decrease wealth." (Sahih Muslim)\n\n03097458815 — Easypaisa / JazzCash\nWajdan Khan — GiveLife Foundation';
@@ -53,10 +53,23 @@ const msg = '🤲 *Rs. 44,000 left. 22 people at Rs. 2,000.*\n\n💔 He cannot t
   answer = JSON.stringify({ text: fresh.replace('44,000', '40,000') });
   await assert.rejects(rewriteMessage(b, msg), /rules/);
 
+  // Whole message by his instruction: strong words he asked for pass; invented facts / changed payment are warned
+  const urgent = msg.replace('💔 He cannot tell his mother where it hurts.', '🚨 *This is critical. Yousuf needs help right now.*');
+  answer = JSON.stringify({ text: urgent });
+  let w = await rewriteWithInstruction(b, msg, 'add urgency, more dangerous');
+  assert.equal(w.text, urgent);
+  assert.deepEqual(w.warnings, [], 'words he asked for are not warned');
+  answer = JSON.stringify({ text: msg.replace('💔 He cannot tell his mother where it hurts.', '🚨 He may need surgery in 3 days.') });
+  w = await rewriteWithInstruction(b, msg, 'more dangerous');
+  assert.ok(w.warnings.some((x) => x.includes('surgery')) && w.warnings.some((x) => x.includes('new number 3')), 'invented facts warned');
+  answer = JSON.stringify({ text: msg.replace('03097458815 — Easypaisa / JazzCash', 'Send now') });
+  w = await rewriteWithInstruction(b, msg, 'shorter');
+  assert.ok(w.warnings.includes('the payment line changed'));
+
   // AI off / limit: a plain reason
   status = 'off';
   await assert.rejects(editLine(b, msg, 'x', 'y'), /AI is off/);
   status = 'limit';
   await assert.rejects(rewriteMessage(b, msg), /limit/);
-  console.log('PASS: AI message changes (rule checks, line edit with warnings, 5 versions filtered, regenerate keeps fixed lines and numbers, AI off/limit reasons).');
+  console.log('PASS: AI message changes (whole message by instruction, rule checks, line edit with warnings, 5 versions filtered, regenerate keeps fixed lines and numbers, AI off/limit reasons).');
 })().catch((e) => { console.error(e); process.exitCode = 1; });
