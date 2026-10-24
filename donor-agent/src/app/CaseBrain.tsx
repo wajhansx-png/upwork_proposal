@@ -229,11 +229,13 @@ export default function CaseBrain({ caseId, onBack }: { caseId?: string; onBack:
                   </div>
                 </div>
                 <p className="msg-where">Copy this and send it in <b>{where}</b></p>
-                <WaPreview text={shown.text} />
-                <div className="row msg-acts">
-                  <button className="btn" onClick={() => void keep(shown)}>Save for Areeba</button>
-                  <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(shown.text)}`} target="_blank" rel="noreferrer">Open WhatsApp</a>
-                  <button className="btn primary" onClick={() => void copy(shown.text)}>Copy message</button>
+                <div className="msg-body">
+                  <WaPreview text={shown.text} />
+                  <div className="row msg-acts">
+                    <button className="btn" onClick={() => void keep(shown)}>Save for Areeba</button>
+                    <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(shown.text)}`} target="_blank" rel="noreferrer">Open WhatsApp</a>
+                    <button className="btn primary" onClick={() => void copy(shown.text)}>Copy message</button>
+                  </div>
                 </div>
               </>
             )}
