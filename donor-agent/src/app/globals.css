@@ -28,6 +28,9 @@
   --danger-bg: #fbe9e7;
   --focus: #2563eb;
   --overlay: rgba(15, 18, 24, 0.5);
+  --wa-bg: #efeae2;
+  --wa-out: #d9fdd3;
+  --wa-ink: #111b21;
   --r: 12px;
   --r-sm: 8px;
   --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -51,6 +54,9 @@
     --danger-bg: rgba(240, 138, 138, 0.13);
     --focus: #8fb0ff;
     --overlay: rgba(0, 0, 0, 0.62);
+    --wa-bg: #0b141a;
+    --wa-out: #005c4b;
+    --wa-ink: #e9edef;
   }
 }
 
@@ -453,7 +459,14 @@ span.bell-btn:hover { background: transparent; }
 .pager button { width: 40px; padding: 0; font-size: 18px; }
 .msg-where { flex: none; color: var(--mute); font-size: 14px; }
 .msg-where b { color: var(--ink); }
-.msg-text { flex: 1; min-height: 0; padding: 12px 16px; overflow: auto; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--bg); white-space: pre-wrap; word-break: break-word; font-size: 15px; line-height: 1.55; user-select: text; }
+.wa-chat { flex: 1; min-height: 0; padding: 16px; overflow: auto; border-radius: var(--r-sm); background: var(--wa-bg); }
+.wa-bubble { position: relative; width: fit-content; max-width: 100%; margin-left: auto; padding: 7px 10px 8px; border-radius: 8px 0 8px 8px; background: var(--wa-out); color: var(--wa-ink); box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13); font: 400 15px/1.32 "Segoe UI", "Helvetica Neue", Helvetica, "Lucida Grande", Arial, Ubuntu, Cantarell, "Fira Sans", sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.wa-bubble::before { content: ""; position: absolute; top: 0; right: -8px; border-left: 8px solid var(--wa-out); border-bottom: 8px solid transparent; }
+.wa-bubble b { font-weight: 700; }
+.wa-bubble code, .wa-bubble pre { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 0.92em; }
+.wa-bubble pre { margin: 2px 0; white-space: pre-wrap; }
+.wa-li { display: block; padding-left: 1.2em; text-indent: -0.9em; }
+.wa-li::before { content: "•"; display: inline-block; width: 0.9em; text-indent: 0; }
 .msg-acts { flex: none; flex-wrap: nowrap; }
 .msg-acts > * { flex: 1 1 0; }
 @media (max-width: 760px) {
@@ -470,7 +483,11 @@ span.bell-btn:hover { background: transparent; }
   .act b { font-size: 13px; }
   .act small { display: none; }
   .msg { padding: 12px; }
-  .msg-text { font-size: 14px; }
+  /* Phone: the page scrolls (not the message box); Copy stays at the bottom of the screen. */
+  .cbx { height: auto; min-height: calc(100dvh - var(--navh)); overflow: visible; }
+  .cbx-main { grid-template-rows: auto auto; }
+  .wa-chat { flex: none; padding: 12px; overflow: visible; }
+  .msg-acts { position: sticky; bottom: 0; margin: 0 -12px -12px; padding: 8px 12px 12px; border-top: 1px solid var(--line); border-radius: 0 0 var(--r) var(--r); background: var(--surface); }
   .msg-acts { flex-wrap: wrap; }
   .msg-acts > * { min-width: 0; padding: 0 8px; font-size: 13px; }
   .msg-acts > .primary { flex-basis: 100%; order: 2; }
