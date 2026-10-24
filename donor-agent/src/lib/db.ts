@@ -53,8 +53,13 @@ function normalize(raw: Partial<Db> | null): Db {
 
 // ---- storage: Upstash/Vercel KV over REST when configured, else a local file ----
 
-const REST_URL = () => process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
-const REST_TOKEN = () => process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+// Vercel's Upstash connect can add a prefix to the names (like "myprefix_KV_REST_API_URL"), so accept any prefix.
+const withSuffix = (suffix: string) => {
+  const key = Object.keys(process.env).find((k) => k.endsWith(suffix) && process.env[k]);
+  return key ? process.env[key] : undefined;
+};
+const REST_URL = () => process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL || withSuffix("_KV_REST_API_URL");
+const REST_TOKEN = () => process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN || withSuffix("_KV_REST_API_TOKEN");
 export const usingRedis = () => !!(REST_URL() && REST_TOKEN());
 const usingBlob = () => !!process.env.BLOB_STORE_ID;
 export const usingPersistentStore = () => usingRedis() || usingBlob();

@@ -13,6 +13,7 @@ const server = http.createServer((req, res) => {
   let body = '';
   req.on('data', (c) => (body += c));
   req.on('end', () => {
+    if (req.headers.authorization !== 'Bearer test') return res.writeHead(401).end(JSON.stringify({ error: 'wrong token' }));
     const cmd = JSON.parse(body);
     log.push(cmd[0]);
     let result = null;
@@ -34,8 +35,10 @@ const server = http.createServer((req, res) => {
 
 (async () => {
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
-  process.env.KV_REST_API_URL = `http://127.0.0.1:${server.address().port}`;
-  process.env.KV_REST_API_TOKEN = 'test';
+  // Prefixed names, as Vercel's Upstash connect can create them. A read-only token must not be picked.
+  process.env.dsad_KV_REST_API_URL = `http://127.0.0.1:${server.address().port}`;
+  process.env.dsad_KV_REST_API_READ_ONLY_TOKEN = 'read-only';
+  process.env.dsad_KV_REST_API_TOKEN = 'test';
   delete process.env.BLOB_STORE_ID;
   const { withDb, readDb } = require('../src/lib/db.ts');
 
