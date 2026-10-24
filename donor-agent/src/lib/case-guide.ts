@@ -22,7 +22,8 @@ export const VERSES = [
 ];
 
 /** Words that sound like begging or a form (Part 9). */
-export const BANNED = /\b(?:kindly|request(?:ing)? you|generous|contribution|needy)\b/i;
+/** Words he never uses (checked against his WhatsApp export: he does say "request" and "contribution"). */
+export const BANNED = /\b(?:kindly|generous|needy)\b/i;
 /** Time words: only allowed when the case has a real deadline (Part 10, check 4). */
 export const DEADLINE_WORDS = /\b(?:\d+\s*hours?|hours? left|tonight only|by \d{1,2}\s*(?:am|pm)\b|by (?:today|tomorrow|tonight)|within \d+|\d+\s*days? left|only \d+\s*(?:days?|hours?))/i;
 /** Strong claims: allowed only when the same word is in the facts the manager gave (Part 10, check 5). */

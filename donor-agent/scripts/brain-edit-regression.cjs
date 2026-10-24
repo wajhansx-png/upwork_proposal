@@ -25,7 +25,8 @@ const msg = '🤲 *Rs. 44,000 left. 22 people at Rs. 2,000.*\n\n💔 He cannot t
   assert.ok(editProblems('He may need surgery', b, msg).some((p) => p.includes('surgery')));
   assert.deepEqual(editProblems('His kidneys hurt and his brain too', b, msg), [], 'words from the facts are fine');
   assert.deepEqual(editProblems('He needed a transfusion', b, msg), [], 'words from his post are fine');
-  assert.ok(editProblems('He is dying', b, msg).some((p) => p.includes('banned')));
+  assert.ok(editProblems('Kindly help him', b, msg).some((p) => p.includes('banned')));
+  assert.deepEqual(editProblems('He is in extreme pain, please help urgently', b, msg), [], 'his own strong words are fine');
   assert.deepEqual(editProblems('', b, msg), ['empty']);
 
   // Edit one line: the change is returned with warnings, never blocked
@@ -38,10 +39,10 @@ const msg = '🤲 *Rs. 44,000 left. 22 people at Rs. 2,000.*\n\n💔 He cannot t
   assert.ok(r.warnings.length >= 1, 'a new number is warned about');
 
   // 5 versions: bad and duplicate ones dropped
-  answer = JSON.stringify({ versions: ['💔 He can only cry.', '💔 He can only cry.', '💔 He is dying.', '💔 Only 9 people.', '💔 His mother can only watch.', '💔 He does not know why it hurts.', '💔 He waits for you.', '💔 One more fresh line.'] });
+  answer = JSON.stringify({ versions: ['💔 He can only cry.', '💔 He can only cry.', '💔 Kindly help him.', '💔 Only 9 people.', '💔 His mother can only watch.', '💔 He does not know why it hurts.', '💔 He waits for you.', '💔 One more fresh line.'] });
   const v = await lineVersions(b, msg, '💔 He cannot tell his mother where it hurts.');
   assert.deepEqual(v, ['💔 He can only cry.', '💔 His mother can only watch.', '💔 He does not know why it hurts.', '💔 He waits for you.', '💔 One more fresh line.']);
-  answer = JSON.stringify({ versions: ['💔 He is dying.'] });
+  answer = JSON.stringify({ versions: ['💔 Kindly help.'] });
   await assert.rejects(lineVersions(b, msg, 'x'), /broke your rules/);
 
   // Regenerate: the fixed lines must stay word for word, numbers must not change

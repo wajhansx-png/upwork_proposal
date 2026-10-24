@@ -46,6 +46,8 @@ export async function brainFromCase(c: CaseFile, now = Date.now()): Promise<Brai
     gender: (c.ownText ? read?.gender : undefined) ?? f.gender ?? "m",
     facts,
     source,
+    type: f.type,
+    risk: f.riskWord || undefined,
   });
   if (left) {
     b.left = left;

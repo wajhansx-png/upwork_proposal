@@ -1,21 +1,18 @@
 /**
  * Changing a written message on the case screen: edit one line from the manager's instruction, 5 versions of a line,
  * and regenerate the whole message. The AI writes; code checks every result against his facts and his rules:
- * no new numbers, no medical words that are not in his post, none of his banned words.
+ * no new numbers, no medical words that are not in his post, none of the words he never uses.
  */
 import { llm, parseJson, type LlmResult } from "./llm";
+import { styleBlock } from "./style";
 import type { Brain } from "./types";
 
-/** How he writes. Every AI call here gets it. */
-const STYLE =
-  "You write WhatsApp donation messages for GiveLife Foundation (Pakistan) exactly in the manager's style: " +
-  "very easy English a 10-year-old understands, short lines, warm and emotional but never scary, " +
-  "talks to the reader as 'you', the child by name. WhatsApp marks: *bold* for the key line. His emojis only, used sparingly: 🤲 💔 🚨. " +
-  "Never use: dying, death, die, life-threatening, extreme pain, critical, last chance, deadline, hours left, before it's too late, kindly, generous, contribution, needy. " +
-  "Never add a medical fact, a danger, a time or a number that is not already in the facts or the message.";
+/** How he writes: his guide and real messages (style.ts). Every AI call here gets it. */
+const STYLE = styleBlock();
 
-const NEVER = /\b(?:dying|die|dies|death|life[- ]threatening|extreme pain|critical|last chance|deadline|hours? left|days? left|before it'?s too late|kindly|generous|contribution|needy)\b/i;
-const MEDICAL = /\b(?:surgery|surgeries|operation|ventilator|icu|cancer|tumou?r|infection|fever|bleeding|seizures?|coma|oxygen|blind\w*|paraly\w*|dialysis|transplant|brain|kidneys?|hernia|transfusion|blood|fluid|swollen|lungs?|heart|liver|pain\w*|eyesight)\b/gi;
+/** Words he never uses (from his WhatsApp export). */
+const NEVER = /\b(?:kindly|generous|needy)\b/i;
+const MEDICAL = /\b(?:surgery|surgeries|operation|ventilator|icu|cancer|tumou?r|infection|fever|bleeding|seizures?|coma|oxygen|blind\w*|paraly\w*|dialysis|transplant|brain|kidneys?|hernia|transfusion|blood|fluid|swollen|lungs?|heart|liver|eyesight|amputat\w*)\b/gi;
 const nums = (s: string) => new Set([...s.matchAll(/\d[\d,]*/g)].map((m) => m[0].replace(/,/g, "").replace(/^0+(?=\d)/, "")));
 
 /** Problems with new text, judged against what is allowed: the message it lives in, his facts and his post. [] = fine. */
@@ -103,7 +100,7 @@ export async function rewriteMessage(b: Brain, message: string): Promise<string>
 export async function rewriteWithInstruction(b: Brain, message: string, instruction: string): Promise<{ text: string; warnings: string[] }> {
   const fixed = message.split("\n").filter((l) => /\d{7,}|Easypaisa|JazzCash|GiveLife Foundation$|Sahih|Bukhari|Muslim\b/.test(l));
   const r = await llm(
-    "You rewrite WhatsApp donation messages for GiveLife Foundation (Pakistan) in the manager's voice: very easy English, short lines, *bold* for the key line, his emojis (🤲 💔 🚨).\n" +
+    `${STYLE}\n\nYou rewrite one of his messages.\n` +
       "Follow the manager's instruction fully and exactly, for the WHOLE message. If he asks for more urgency, more danger, more emotion, shorter, longer, a different opening, " +
       "you may use strong and urgent words to do it. His instruction is more important than any usual style rule.\n" +
       "Only one hard limit: every fact must stay true. Use only the facts, numbers and medical words already in the message, the facts list or his case post. " +

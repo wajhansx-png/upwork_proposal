@@ -300,6 +300,14 @@ export interface Brain {
   you?: number;
   fact?: number;
   done?: boolean;
+  /** The kind of case (child, adult, death, orphans, needs): picks the words, the hadith and the closing message. */
+  type?: CaseType;
+  /** One word at risk, like LEG (from the case form), for his "keeps his LEG or loses it" hook. */
+  risk?: string;
+  /** Rotations: 20-minute presses (short / full repost), quick-post and update styles. */
+  ticks?: number;
+  quick?: number;
+  upd?: number;
   /** Off: only the ready lines (no AI wording at all). */
   noAi?: boolean;
   /** The case post after he changed it on the case screen (else the saved post is shown). */

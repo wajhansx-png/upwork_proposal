@@ -5,6 +5,7 @@
  * or begging words, and fills gaps with ready-made lines.
  */
 import { llm, parseJson } from "./llm";
+import { styleBlock } from "./style";
 import { BANNED, CLAIM_WORDS, DEADLINE_WORDS, PAY_SHORT, REFERENCE, TYPE_LABEL } from "./case-guide";
 import { fitAsk, k, numbersIn, reminderText, similarity } from "./case";
 import type { CaseFacts, CaseFile, Db } from "./types";
@@ -76,7 +77,6 @@ export function emotionalProblems(text: string, f: CaseFacts, others: string[] =
     const n = raw.endsWith("k") ? String(Math.round(Number(raw.slice(0, -1)) * 1000)) : raw;
     if (!allowed.has(n)) p.push(`number ${m[0]} not in the facts`);
   }
-  if (/[*_~]/.test(t)) p.push("formatting marks");
   if (Object.values(REFERENCE).flat().some((r) => similarity(r, t) >= 0.8)) p.push("copied from an old case");
   if (others.some((o) => similarity(o, t) >= 0.7)) p.push("too close to another version");
   return [...new Set(p)];
@@ -105,10 +105,11 @@ export async function emotionalLines(c: CaseFile, used: string[] = []): Promise<
   const f = c.facts;
   const ownCase = c.ownText;
   const r = await llm(
-    "You write short follow-up texts for WhatsApp groups for GiveLife Foundation (Pakistan), run by Wajdan Khan. The full case was already posted; donations are slow. " +
+    `${styleBlock()}\n\n` +
+      "Now write short follow-up texts for his WhatsApp groups. The full case was already posted; donations are slow. " +
       "Each text must make a busy reader stop, feel it in the heart, and give NOW.\n" +
       "ENGLISH: extremely easy. Words a 10-year-old knows. 2 or 3 short lines. Each line 3 to 12 words. Present tense.\n" +
-      "VOICE: warm, Muslim, direct, like a brother talking to brothers and sisters. You may use 'Allah', 'dua', 'Muslims', 'brothers/sisters'. At most ONE emoji per text (💔 or 🤲), at the end of a line.\n" +
+      "VOICE: warm, Muslim, direct, like a brother talking to brothers and sisters. You may use 'Allah', 'dua', 'Muslims', 'brothers/sisters'. Use his marks and emojis the way the examples do (*bold*, _italic_, 💔 🤲 🚨).\n" +
       "Write 5 texts. Each uses a different trigger:\n" +
       "1. waiting: the person is still waiting while we scroll.\n" +
       "2. mirror: imagine it was your own mother/child/family.\n" +
@@ -116,7 +117,7 @@ export async function emotionalLines(c: CaseFile, used: string[] = []): Promise<
       "4. chance: Allah gives this chance; reward and dua.\n" +
       "5. small: how small each person's part is next to what it saves.\n" +
       "HONESTY (strict): use ONLY the facts given. Never add a claim, a time, a number, a danger or a feeling not in the facts. No deadline unless the facts give one. " +
-      "Never use: kindly, request, generous, contribution, needy. No * or _ marks. Do NOT write the payment number or the amount; the app adds that line.\n" +
+      "Never use: kindly, generous, needy. Do NOT write the payment number or the amount; the app adds that line.\n" +
       "The style examples are from OLD cases: learn the style, NEVER copy them. Do not repeat the texts already used.\n" +
       'Return ONLY JSON: {"texts":["line 1\\nline 2", ...]}',
     JSON.stringify({ facts: f, ...(ownCase ? { case_post_already_sent_use_only_these_facts: ownCase } : {}), case_type: TYPE_LABEL[f.type], style_examples_do_not_copy: REFERENCE[f.type], already_used_do_not_repeat: used }),
