@@ -90,16 +90,24 @@ const pron = (b: Brain) => (b.gender === "f" ? { he: "she", He: "She", him: "her
 /** "2-year-old", "8-month-old baby", "child". */
 export const kidWord = (b: Brain) => (b.age ? `${b.age}-year-old` : b.ageLabel ? `${b.ageLabel.replace(/s$/, "").replace(" ", "-")}-old baby` : "child");
 
-/** The words that change with the kind of case. */
+const poss = (x: string) => (/s$/i.test(x) ? `${x}'` : `${x}'s`);
+const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+
+/**
+ * The words that change with the kind of case. subj = who is waiting, is/needs = the verb for it (plural names like
+ * "these orphans" get are/need), hard = whose hardship, the = "this helpless child" etc.
+ */
 function words(b: Brain) {
   const N = b.name;
   const type = b.type ?? "child";
   const baby = !!b.ageLabel || (b.age !== undefined && b.age < 1);
-  if (type === "death") return { who: "family", goal: `complete ${N}'s Janazah`, need: "Janazah", kid: false, win: "A RESPECTFUL JANAZAH" };
-  if (type === "orphans") return { who: "orphans", goal: "help these orphans", need: "help", kid: false, win: "ORPHANS HELPED TODAY" };
-  if (type === "needs") return { who: "family", goal: "help this family", need: "help", kid: false, win: "A FAMILY HELPED TODAY" };
-  if (type === "adult") return { who: "person", goal: `save ${N}`, need: "treatment", kid: false, win: "ONE LIFE GIVEN A CHANCE" };
-  return { who: baby ? "baby" : "child", goal: `save ${N}`, need: "treatment", kid: true, win: "ONE LIFE GIVEN A CHANCE" };
+  const many = /^these\b/i.test(N) || (type === "orphans" && /s$/i.test(N));
+  const v = { is: many ? "are" : "is", needs: many ? "need" : "needs" };
+  if (type === "death") return { who: "family", goal: `complete ${N}'s Janazah`, need: "a respectful Janazah", kid: false, win: "A RESPECTFUL JANAZAH", subj: `${poss(N)} family`, is: "is", needs: "needs", hard: "this grieving family's", the: "this grieving family" };
+  if (type === "orphans") return { who: "orphans", goal: "help these orphans", need: "help", kid: false, win: "ORPHANS HELPED TODAY", subj: N, ...v, hard: poss(N), the: "these helpless orphans" };
+  if (type === "needs") return { who: "family", goal: "help this family", need: "help", kid: false, win: "A FAMILY HELPED TODAY", subj: N, ...v, hard: poss(N), the: "this helpless family" };
+  if (type === "adult") return { who: "person", goal: `save ${N}`, need: "treatment", kid: false, win: "ONE LIFE GIVEN A CHANCE", subj: N, ...v, hard: poss(N), the: N };
+  return { who: baby ? "baby" : "child", goal: `save ${N}`, need: "treatment", kid: true, win: "ONE LIFE GIVEN A CHANCE", subj: N, ...v, hard: poss(N), the: `this helpless ${baby ? "baby" : "child"}` };
 }
 
 /** In Pakistan time: Fajr (4–6 am) gets his "Fajr time reminder". */
@@ -122,9 +130,9 @@ function readyHook(b: Brain, a: Angle): string {
     case "someoneElse": return `💔 ${ub("Please don't think someone else will help.")}`;
     case "cannotTell": return `🥺 *This little ${w.who} cannot even tell anyone how much pain ${p.he} is in.*`;
     case "notMoney": return `*💔 This is not about money. This is about whether a child keeps ${p.his} ${(b.risk ?? "").toUpperCase()} or loses it. You decide.*`;
-    case "lunch": return `💔 *Rs. 2,000 might be one lunch for us, but for ${N}, it could mean ${w.need}.*`;
-    case "blessed": return `💔 *Allah has blessed us with so much, while ${N} is still waiting for ${w.need}.*`;
-    case "deal": return `🚨 ${ub("IT IS YOUR DEAL WITH ALLAH")}: help relieve ${N}'s hardship.`;
+    case "lunch": return `💔 *Rs. 2,000 might be one lunch for us, but for ${w.subj}, it could mean ${w.need === "help" ? "so much" : w.need}.*`;
+    case "blessed": return `💔 *Allah has blessed us with so much, while ${w.subj} ${w.is} still waiting for ${w.need}.*`;
+    case "deal": return `🚨 ${ub("IT IS YOUR DEAL WITH ALLAH")}: help relieve ${w.hard} hardship.`;
     case "muslims": return `* *As Muslims, we should unite to help ${N} by donating whatever we can, brothers/sisters.*`;
     case "someonesChild": return `💔 ${ub("IF YOU'RE SEEING THIS, THIS IS SOMEONE'S CHILD.")}`;
     case "burden": return `*Nobody has to carry this burden alone.* 🤲`;
@@ -275,17 +283,17 @@ function writeQuick(b: Brain, left: number, t: number): string {
   const fajr = isFajr(t) ? "Fajr time reminder\n\n" : "";
   const list = [
     `*_Just 2000 by ${p2} kind ${plural(p2)} can ${w.goal}${night ? " tonight" : ""}_*\n\nAllah has given you a chance to ${w.goal} ${ALL}`,
-    `Just ${k} is left, please come forward all and donate for this helpless ${w.who} ${ALL}`,
+    `Just ${k} is left, please come forward all and donate for ${w.the} ${ALL}`,
     `Just ${k} left.\n\n${p2} ${plural(p2)} donating 2000 will ${w.goal} 💔\n\nYour 10 seconds can bring someone peace ${ALL}`,
     `*${p15} ${plural(p15)} donating 1500 will ${w.goal}*\n\n${PAY_SHORT} ${ALL}`,
-    `🚨 Just ${k} remaining. ${N} is still waiting for ${w.need}.\n\nJust 1000 - 2000 from your end can ${w.goal}\n\n*Donate Now*:\n${PHONE} - Easypaisa/JazzCash - Wajdan Khan (GiveLife Foundation account) ${ALL}`,
+    `🚨 Just ${k} remaining. ${cap(w.subj)} ${w.is} still waiting for ${w.need}.\n\nJust 1000 - 2000 from your end can ${w.goal}\n\n*Donate Now*:\n${PHONE} - Easypaisa/JazzCash - Wajdan Khan (GiveLife Foundation account) ${ALL}`,
     `🤲 The Prophet ﷺ said:\n${QUOTES.relieve}\n\nPlease come forward and help ${N}\n\n${PAY_SHORT}`,
     `_Just ${k} left for ${N}, we request all to please put part and share it if you know a group or person who can help_ ${ALL}`,
     `*_Just ${k} is left, which ${p15} ${plural(p15)} by donating 1500 can complete right now_*\n\n_Be the one to ${w.goal}_ ${ALL}`,
     `${ub(`JUST ${p2} PEOPLE DONATING Rs. 2,000 CAN RAISE THE FULL AMOUNT.`)}\n\nPlease don't think someone else will do it. ${ub(`You can be one of those ${p2}.`)} 🤲💔\n\n${ENDING} ${ALL}\n\n✅ Verified by Admins`,
     `${k} left.\n\n${p.He} needs your support as this is a deal with Allah 🤲💔\n\nPlease send ss when you put part ${ALL}`,
   ];
-  if (!w.kid) list[9] = `${k} left.\n\nThis ${w.who} needs your support as this is a deal with Allah 🤲💔\n\nPlease send ss when you put part ${ALL}`;
+  if (!w.kid) list[9] = `${k} left.\n\n${cap(w.the)} ${w.needs} your support as this is a deal with Allah 🤲💔\n\nPlease send ss when you put part ${ALL}`;
   // After every round of his short pushes, the next round adds one of his closing lines, so nothing repeats.
   const closers = ["Please send ss when you put part", "✅ Verified by admins", "Requesting all donors to please consider asap", "Your 10 seconds can bring someone peace", "It takes only 10 seconds to donate", "_Allah is giving you this chance._"];
   const q = (b.quick = (b.quick ?? -1) + 1);
@@ -301,9 +309,9 @@ async function writeUpdate(b: Brain, left: number, t: number): Promise<BrainOut>
   const collected = b.total > left ? b.total - left : 0;
   const v = turn(b, "upd", collected ? 4 : 3);
   const styles = [
-    `*ONLY Rs. ${money(left)} Remaining.*\n\n${N} is still waiting for ${w.need}.💔\n\n* _*Only ${p2} more ${plural(p2)} donating Rs. 2,000, or ${p1} at Rs. 1,000, can finish this. Be the next one.*_🤲\n\n${ENDING} ${ALL}`,
+    `*ONLY Rs. ${money(left)} Remaining.*\n\n${cap(w.subj)} ${w.is} still waiting for ${w.need}.💔\n\n* _*Only ${p2} more ${plural(p2)} donating Rs. 2,000, or ${p1} at Rs. 1,000, can finish this. Be the next one.*_🤲\n\n${ENDING} ${ALL}`,
     `${kAmount(left)} remaining ${ALL}\n\n🤲 *Just Rs. 2,000 from you can be one of those ${p2}.*\n\n_Be the one to ${w.goal}_\n\n📲 *${PHONE}* — Easypaisa / JazzCash\n👤 Wajdan Khan — GiveLife Foundation`,
-    `🚨 ${ub("UPDATE:")} ${ub(`Rs. ${money(left)} IS STILL PENDING`)} for ${N}.\n\nNobody has to carry this burden alone.\n\n* _*${ub(`JUST Rs. 2000 FROM ${p2} PEOPLE`)} can complete the amount and ${w.goal}. 🤲*_\n\nIt takes only ${ub("10 SECONDS")} to donate\n\n${ub("IT IS YOUR DEAL WITH ALLAH")}: help relieve ${N}'s hardship.\n\n${ENDING} ${ALL}`,
+    `🚨 ${ub("UPDATE:")} ${ub(`Rs. ${money(left)} IS STILL PENDING`)} for ${N}.\n\nNobody has to carry this burden alone.\n\n* _*${ub(`JUST Rs. 2000 FROM ${p2} PEOPLE`)} can complete the amount and ${w.goal}. 🤲*_\n\nIt takes only ${ub("10 SECONDS")} to donate\n\n${ub("IT IS YOUR DEAL WITH ALLAH")}: help relieve ${w.hard} hardship.\n\n${ENDING} ${ALL}`,
     `*Collected : ${kAmount(collected)}*\n*Remaining : ${kAmount(left)}*\n\n_${N} needs YOU — ${p2} ${plural(p2)} × Rs. 2,000 can ${w.goal}_💔\n\nDonate Now:\n${PHONE} - Easypaisa/JazzCash - Wajdan Khan (GiveLife Foundation account)\n\nVerified by admins ✅ ${ALL}`,
   ];
   return { kind: "update", do: `Send this in ${MAIN} with @all`, text: styles[v], angle: undefined, at: now_(t) };
@@ -332,16 +340,36 @@ async function writeDry(b: Brain, left: number, t: number): Promise<BrainOut[]> 
   const { p2, p1 } = people(left);
   const k = kAmount(left);
   const facts = factsLine(b);
-  let main: string;
-  if (level === 1)
-    main = `Sadly, no donations yet\n\n${k} still remaining for ${N}.\n\n${w.kid || b.type === "adult" ? p.He : "This " + w.who} needs your contribution as this is a deal with Allah 🤲💔\n\nCome forward and contribute now\n\n${PHONE} - Easypaisa/JazzCash - Wajdan Khan (GiveLife Foundation account) ${ALL}`;
-  else if (level === 2)
-    main = `💔 Sadly, no one has put part yet\n\n_*For us, Rs. 1,000 can disappear in a day. For ${N}, ${p1} such people can change what tonight looks like.*_\n\n🤲 Help ${N} as a Muslim today ${ALL}`;
-  else if (level === 3)
-    main = [`💔 ${ub("PLEASE DON'T THINK SOMEONE ELSE WILL HELP.")}`, "", ...(facts ? [facts, ""] : []), `🚨 ${ub(`ONLY Rs. ${money(left)} LEFT.`)}`, `${ub(`${p2} PEOPLE × Rs. 2,000 = ${w.win}.`)} 🤲`, "", `${ub(`YOU CAN BE ONE OF THOSE ${p2}.`)} ${ub("PLEASE DON'T SCROLL PAST.")}`, "", ENDING, "", `✅ Verified by Admins ${ALL}`].join("\n");
-  else if (level % 2 === 0)
-    main = [`💔 ${ub(`WE ARE MUSLIMS — IT'S HEARTBREAKING THAT ${N.toUpperCase()} IS STILL WAITING FOR JUST Rs. ${money(left)}.`)}`, "", w.kid ? `This is someone's ${w.who}. ${p.His} ${w.need} can go on if we raise this amount.` : `This is someone's family. They can get through this if we raise this amount.`, "", `🚨 ${ub(`JUST ${p2} PEOPLE DONATING Rs. 2,000 EACH = Rs. ${money(left)}.`)}`, "", quote(b), "", `🤲 Please be one of the ${p2}. Don't let ${N} keep waiting because we didn't act. ${ALL}`].join("\n");
-  else main = `Sadly, no one has come forward for ${N}. Just imagine ${w.kid ? `${p.his} family's` : "their"} pain, May Allah save us.\n\n${k} still remaining. Your small support can end this one stress.\n\n*_Just 2000 by ${p2} ${plural(p2)} can ${w.goal}_*🤲\n\n${PAY_SHORT} ${ALL}`;
+  const He = w.kid || b.type === "adult" ? p.He : cap(w.the);
+  const heNeeds = w.kid || b.type === "adult" ? "needs" : w.needs;
+  // His wordings for each step; Regenerate (dryAlt) moves to the next one of the same step.
+  const steps: string[][] = [
+    [
+      `Sadly, no donations yet\n\n${k} still remaining for ${N}.\n\n${He} ${heNeeds} your contribution as this is a deal with Allah 🤲💔\n\nCome forward and contribute now\n\n${PHONE} - Easypaisa/JazzCash - Wajdan Khan (GiveLife Foundation account) ${ALL}`,
+      `Sadly, no funds collected yet. Please take it urgent and support ${N}.\n\n${k} is still remaining. *_Just 2000 by ${p2} ${plural(p2)} can ${w.goal}_* 🤲\n\n${PAY_SHORT} ${ALL}`,
+      `💔 Sadly, no one has come forward yet for ${N}.\n\nJust ${k} left. Your small support can change this today.\n\n${PAY_SHORT} ${ALL}`,
+    ],
+    [
+      `💔 Sadly, no one has put part yet\n\n_*For us, Rs. 1,000 can disappear in a day. For ${N}, ${p1} such people can change what tonight looks like.*_\n\n🤲 Help ${N} as a Muslim today ${ALL}`,
+      `💔 Sadly, no one has put part yet\n\n_*Rs. 2,000 might be one lunch for us. For ${w.subj}, ${p2} such people can mean ${w.need === "help" ? "so much" : w.need}.*_\n\n🤲 Please be one of them today ${ALL}`,
+      `💔 Sadly, still no donations.\n\n_*${p1} people giving just Rs. 1,000 can ${w.goal}. That is all it takes.*_\n\n🤲 Help as a Muslim today ${ALL}`,
+    ],
+    [
+      [`💔 ${ub("PLEASE DON'T THINK SOMEONE ELSE WILL HELP.")}`, "", ...(facts ? [facts, ""] : []), `🚨 ${ub(`ONLY Rs. ${money(left)} LEFT.`)}`, `${ub(`${p2} PEOPLE × Rs. 2,000 = ${w.win}.`)} 🤲`, "", `${ub(`YOU CAN BE ONE OF THOSE ${p2}.`)} ${ub("PLEASE DON'T SCROLL PAST.")}`, "", ENDING, "", `✅ Verified by Admins ${ALL}`].join("\n"),
+      [`💔 ${ub("Please don't think someone else will help.")}`, "", `If everyone waits for someone else, ${w.subj} ${w.is.replace("are", "keep").replace("is", "keeps")} waiting for the ${w.need === "help" ? "help" : w.need.replace(/^a /, "")} ${w.kid ? `${p.he} urgently needs` : "they urgently need"}.`, "", `🤲 If you can help, please step forward today. Even Rs. 2,000 can make a difference.`, "", `🚨 ${ub(`ONLY Rs. ${money(left)} LEFT.`)}`, "", ENDING, "", `✅ Verified by Admins ${ALL}`].join("\n"),
+    ],
+    [
+      [`💔 ${ub(`WE ARE MUSLIMS — IT'S HEARTBREAKING THAT ${w.subj.toUpperCase()} ${w.is.toUpperCase()} STILL WAITING FOR JUST Rs. ${money(left)}.`)}`, "", w.kid ? `This is someone's ${w.who}. ${p.His} ${w.need} can go on if we raise this amount.` : `This is someone's family. They can get through this if we raise this amount.`, "", `🚨 ${ub(`JUST ${p2} PEOPLE DONATING Rs. 2,000 EACH = Rs. ${money(left)}.`)}`, "", quote(b), "", `🤲 Please be one of the ${p2}. Don't let ${w.subj} keep waiting because we didn't act.`, "", `${ENDING} ${ALL}`].join("\n"),
+      [`💔 ${ub(`IF YOU'RE SEEING THIS, THIS IS SOMEONE'S ${w.kid ? w.who.toUpperCase() : "FAMILY"}.`)}`, "", ...(facts ? [facts, ""] : []), `🚨 ${ub(`ONLY Rs. ${money(left)} LEFT.`)}`, `${ub(`${p2} PEOPLE × Rs. 2,000 = ${w.win}.`)} 🤲`, "", `${ub(`YOU CAN BE ONE OF THOSE ${p2}. PLEASE DON'T SCROLL PAST.`)}`, "", ENDING, "", `✅ Verified by Admins ${ALL}`].join("\n"),
+    ],
+    [
+      `Sadly, no one has come forward for ${N}. Just imagine ${w.kid ? `${p.his} family's` : "their"} pain, May Allah save us.\n\n${k} still remaining. Your small support can end this one stress.\n\n*_Just 2000 by ${p2} ${plural(p2)} can ${w.goal}_*🤲\n\n${PAY_SHORT} ${ALL}`,
+      `Requesting all donors to please consider asap 🤲\n\n${k} is still left for ${N}. *_Just 2000 by ${p2} ${plural(p2)} can ${w.goal}_*\n\n${PAY_SHORT} ${ALL}`,
+    ],
+  ];
+  // Steps 1-3, then 4 and 5 take turns ("We are Muslims…" / "Sadly, no one has come forward…").
+  const step = steps[level <= 3 ? level - 1 : level % 2 === 0 ? 3 : 4];
+  const main = step[(b.dryAlt ?? 0) % step.length];
   const groups = await writeFull(b, left, t, { all: false });
   const tag = `No donations · level ${level}`;
   return [
@@ -442,9 +470,11 @@ export async function runCommand(b: Brain, cmd: Command, t: number): Promise<Bra
     return keep(await unique(async () => [await writeShort(b, b.left!, t, full)]));
   }
   const level = b.dryLevel ?? 0;
+  b.dryAlt = -1;
   return keep(
     await unique(async () => {
       b.dryLevel = level;
+      b.dryAlt = (b.dryAlt ?? -1) + 1; // a repeat moves to his next wording of the same step
       return writeDry(b, b.left!, t);
     }),
   );
@@ -472,6 +502,7 @@ export async function regenerate(b: Brain, kind: BrainOut["kind"], at: string, t
     else if (kind === "dry-main" || kind === "dry-groups") {
       const level = b.dryLevel ?? 1;
       b.dryLevel = Math.max(0, level - 1);
+      b.dryAlt = (b.dryAlt ?? 0) + 1;
       out = (await writeDry(b, b.left, t)).find((o) => o.kind === kind);
       b.dryLevel = level;
     } else return null;

@@ -306,6 +306,8 @@ export interface Brain {
   risk?: string;
   /** Rotations: 20-minute presses (short / full repost), quick-post and update styles. */
   ticks?: number;
+  /** Which of his wordings of the current "No donations" step (Regenerate moves to the next). */
+  dryAlt?: number;
   quick?: number;
   upd?: number;
   /** Off: only the ready lines (no AI wording at all). */
